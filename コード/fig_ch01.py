@@ -6,7 +6,7 @@ import numpy as np
 from pws_common import setup_japanese_font, savefig
 plt = setup_japanese_font()
 from matplotlib.patches import FancyBboxPatch, Polygon
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 # ---- 共通スタイル（スライドの terracotta パレットに合わせる）----
 C_MAIN, C_ACC, C_SEC, C_GREY, C_LIGHT = "#7C332A", "#B85042", "#5C7268", "#6E6A60", "#DCD8CC"
@@ -267,10 +267,28 @@ def fig_myth():
         note="どれも「今より良くなるはず」という直感ではなく、比の物理（カルノー・ベッツ）で上限を語る。")
 
 
+# ==================================================== カルノー効率の導出（段階開示）
+def fig_deriv_carnot():
+    """1 段ずつ見せる 3 枚。スライドで順に出すと、板書と同じ順で追える。"""
+    steps = [
+        ("① エントロピー収支", r"$\dfrac{Q_H}{T_H} = \dfrac{Q_L}{T_L}$",
+         "可逆サイクルは 1 周で元に戻る。\n高温で受けた分と低温で捨てた分が釣り合う"),
+        ("② エネルギー保存", r"$W = Q_H - Q_L$",
+         "仕事は受けた熱と捨てた熱の差。\n①より Q_L は正なので、ゼロにはできない"),
+        ("③ 効率の定義に入れる", r"$\eta = \dfrac{W}{Q_H} = 1 - \dfrac{Q_L}{Q_H}$",
+         "①を使って Q_L を消すと、\n熱量が全部消えて温度だけが残る"),
+    ]
+    result = (r"$\eta_C = 1 - \dfrac{T_L}{T_H}$",
+              "効率は温度の「比」だけで決まる")
+    for i in (1, 2, 3):
+        derivation_figure(f"ch01_deriv_carnot_{i}.png", steps=steps,
+                          result=result, reveal=i, width=11.6, height=5.8)
+
+
 if __name__ == "__main__":
     e = fig_chain(); fig_carnot_curve(); fig_carnot_ts(); fig_methods(); fig_hydro()
     vr, A = fig_wind(); fig_betz(); u = fig_pv_spectrum(); fig_quality(); fig_units()
-    fig_analogy(); fig_myth()
+    fig_analogy(); fig_myth(); fig_deriv_carnot()
     TL = 303.15
     print(f"連鎖の総合効率 {e[-1]/100:.4f}")
     for th in (285, 540, 600, 1400, 1600):

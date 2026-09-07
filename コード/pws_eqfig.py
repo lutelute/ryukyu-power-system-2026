@@ -81,14 +81,22 @@ def eq_figure(fname, latex, terms, read=None, note=None, title=None,
     plt.close(fig)
 
 
-def derivation_figure(fname, steps, title=None, width=11.0, height=5.6, result=None):
+def derivation_figure(fname, steps, title=None, width=11.0, height=5.6, result=None,
+                     reveal=None):
     """導出を 3〜4 段の帯で描く（sections + build の図版）
 
     steps : [(見出し, 式(latex または文字列), 説明), ...]
     result: 最後に強調する結論（任意）
+    reveal: 何段目まで見せるか（1 起点）。指定すると、それより先の段と結論を
+            薄く（ゴースト）描く。1, 2, 3 と変えた図を並べれば、スライドの
+            段階開示になる。None なら全部を濃く描く。
     """
     fig, ax = plt.subplots(figsize=(width, height))
     ax.axis("off"); ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+
+    def alpha_of(i):
+        """i 段目（0 起点）の濃さ。まだ出していない段は薄く"""
+        return 1.0 if reveal is None or i < reveal else 0.16
     if title:
         ax.text(0.5, 0.96, title, ha="center", va="top", fontsize=15, color=C_MAIN, weight="bold")
     n = len(steps)
@@ -98,36 +106,40 @@ def derivation_figure(fname, steps, title=None, width=11.0, height=5.6, result=N
     cols = [C_SEC, C_WARM, C_MAIN, C_ACC]
     for i, (head, eq, desc) in enumerate(steps):
         y = top - i * h
+        a = alpha_of(i)
         ax.add_patch(FancyBboxPatch((0.04, y - h + 0.02), 0.92, h - 0.035,
                                     boxstyle="round,pad=0.008", fc="#FBFAF6",
-                                    ec=cols[i % 4], lw=1.6, transform=ax.transAxes))
+                                    ec=cols[i % 4], lw=1.6, alpha=a, transform=ax.transAxes))
         ax.add_patch(FancyBboxPatch((0.045, y - h + 0.025), 0.035, h - 0.045,
                                     boxstyle="round,pad=0.004", fc=cols[i % 4],
-                                    ec="none", transform=ax.transAxes))
+                                    ec="none", alpha=a, transform=ax.transAxes))
         ax.text(0.0625, y - h / 2 + 0.01, str(i + 1), ha="center", va="center",
-                fontsize=15, color="white", weight="bold")
+                fontsize=15, color="white", weight="bold", alpha=a)
         ax.text(0.095, y - 0.035, head, ha="left", va="top", fontsize=12.5,
-                color=cols[i % 4], weight="bold")
+                color=cols[i % 4], weight="bold", alpha=a)
         ax.text(0.42, y - h / 2 + 0.005, eq, ha="center", va="center",
-                fontsize=17, color="#1A1A17")
+                fontsize=17, color="#1A1A17", alpha=a)
         ax.text(0.70, y - h / 2 + 0.005, desc, ha="left", va="center",
-                fontsize=10.5, color=C_GREY)
+                fontsize=10.5, color=C_GREY, alpha=a)
         if i < n - 1:
             ax.annotate("", xy=(0.5, y - h + 0.012), xytext=(0.5, y - h + 0.030),
                         xycoords="axes fraction",
-                        arrowprops=dict(arrowstyle="-|>", color=C_GREY, lw=1.6))
+                        arrowprops=dict(arrowstyle="-|>", color=C_GREY, lw=1.6,
+                                        alpha=min(a, alpha_of(i + 1))))
     if result:
+        ar = 1.0 if reveal is None or reveal >= n else 0.16
         ax.add_patch(FancyBboxPatch((0.04, 0.025), 0.92, 0.105,
                                     boxstyle="round,pad=0.010", fc=C_MAIN,
-                                    ec="none", alpha=0.90, transform=ax.transAxes))
+                                    ec="none", alpha=0.90 * ar, transform=ax.transAxes))
         if isinstance(result, tuple):          # (数式, 添え書き) で渡すと 2 段に描く
             eq_r, note_r = result
-            ax.text(0.065, 0.078, eq_r, ha="left", va="center", fontsize=17, color="white")
+            ax.text(0.065, 0.078, eq_r, ha="left", va="center", fontsize=17,
+                    color="white", alpha=ar)
             ax.text(0.945, 0.078, note_r, ha="right", va="center", fontsize=12.5,
-                    color="white", weight="bold")
+                    color="white", weight="bold", alpha=ar)
         else:
             ax.text(0.5, 0.078, result, ha="center", va="center", fontsize=14,
-                    color="white", weight="bold")
+                    color="white", weight="bold", alpha=ar)
     savefig(fig, fname)
     plt.close(fig)
 

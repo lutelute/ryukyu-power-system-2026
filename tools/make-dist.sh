@@ -15,7 +15,7 @@ done
 find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 find "$STAGE" -name '.DS_Store' -delete 2>/dev/null || true
 cat > "$STAGE/はじめに.txt" <<'TXT'
-電力エネルギーシステム解析の基礎と応用配布資料
+電力エネルギーシステム解析の基礎と応用（ 集中講義）配布資料
 
 開き方
   1. この zip を展開する（展開せずに中を開くと動きません）
