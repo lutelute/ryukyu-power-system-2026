@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第14回 経済負荷配分と OPF — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第14回 経済負荷配分と OPF — 全員の限界費用が揃ったときが最安</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch14.html">📖 講義ノート（第14回）</a><a class="e" href="../ex/ch14.html">✍ 演習で確かめる</a></div>
+  <div class="lead">第8回の ELD（経済負荷配分運転）は「どの発電機にどれだけ発電させるか」を決めます。答えは<b>等 λ 法</b>：全発電機の限界費用が同じ値 λ に揃う配分が最安です。この λ が電力市場の値段の正体であり、送電線が混雑すると<b>場所ごとに値段が分かれる</b>（LMP）ことを、3 ノードの直流法 OPF をその場で解いて確かめます。前提は<a href="ai.html">第13回</a>、次は<a href="island.html">第15回 統合演習</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「安い発電機から順に使う」は正しいが、なぜそれが最適か・限界はどこかを式で言えないと、市場価格の動きも出力抑制の理由も説明できません。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>次の 1 MW を一番安く作れる機に足す、を突き詰めると全員の追加コストが揃う。それが λ ＝市場価格。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>中央給電指令所の ELD、JEPX スポット市場のエリアプライス、EMS の OPF・起動停止計画。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>需要 <input type="range" id="pdRange" min="220" max="950" step="10" value="700"> <span id="pdVal">700</span> MW</label>
+      <label>炭素価格 <input type="range" id="cpRange" min="0" max="20000" step="500" value="0"> <span id="cpVal">0</span> 円/t</label>
+      <label>線路 1–2 容量 <input type="range" id="capRange" min="40" max="200" step="10" value="60"> <span id="capVal">60</span> MW</label>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>電力市場の値段は誰かが決めた数字ではなく、<b>最適化問題の影の値段（ラグランジュ乗数）</b>が市場に顔を出したものです。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>需要を各発電機に均等に割り振れば公平で、費用もそう変わらない。</div>
+    <div class="row"><span class="o">✓</span>均等配分は安い機を余らせ高い機を使うので必ず割高です。図の A/B で、等 λ 法との費用差を実計算しています。<b>限界費用が揃っていない配分には、必ずもっと安い配分が存在します</b>。</div>
+    <div class="row"><span class="x">✗</span>同じ電気なのだから、どのノードでも値段は同じはず。</div>
+    <div class="row"><span class="o">✓</span>混雑がなければ同じ（=λ）。送電線が上限に達すると、安い電源が届かないノードの<b>追加 1 MW は高い電源で賄うしかなく</b>、そのノードの値段（LMP）だけ跳ね上がります。日本のエリアプライスが分かれる仕組みです。</div>
+  </div>
+  <details><summary>もっと詳しく：ラグランジュ導出・損失考慮・UC・AI 高速化</summary><div class="det">
+    ℒ = Σ<i>C<sub>i</sub></i>(<i>P<sub>Gi</sub></i>) + λ(<i>P<sub>D</sub></i> − Σ<i>P<sub>Gi</sub></i>) を <i>P<sub>Gi</sub></i> で偏微分して 0 と置くと d<i>C<sub>i</sub></i>/d<i>P<sub>Gi</sub></i> = λ（全 <i>i</i>）。2 次費用なら <i>P<sub>Gi</sub></i> = (λ − <i>b<sub>i</sub></i>)/2<i>a<sub>i</sub></i>、需給式に代入して λ = (<i>P<sub>D</sub></i> + Σ<i>b<sub>i</sub></i>/2<i>a<sub>i</sub></i>)/Σ(1/2<i>a<sub>i</sub></i>)。上下限に当たった機は固定して残りで再計算します（第5回の Q 限界処理と同じ発想）。
+    損失を含めるとペナルティ係数 <i>L<sub>i</sub></i> = 1/(1 − ∂<i>P<sub>L</sub></i>/∂<i>P<sub>Gi</sub></i>) が掛かり、需要地から遠い機が不利になります。
+    ユニットコミットメント（起動停止計画）は二値変数を含む MILP で NP 困難。再エネの不確実性・ランプ・最低出力制約がさらに難しくします。AI による高速化は「直接予測（制約違反リスク）」「アクティブ制約予測」「warm start」「サロゲートでスクリーニング」の 4 系統で、後 3 者は厳密解法が最終解を出すので実行可能性が保たれます。
+    <b>限界：</b>費用の単位は千円/h・千円/MWh（b=7.5 は 7.5 円/kWh）の概算値です。DC-OPF は電圧・無効電力・損失を扱えません（第4回）。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+/* ---- 発電機（費用 千円/h、P [MW]）---- */
+const GENS = [{ n: '石炭', a: .0080, b: 7.50, c: 480, mn: 80, mx: 350, ef: 0.86 }, { n: 'LNG-CC', a: .0125, b: 9.80, c: 320, mn: 60, mx: 280, ef: 0.35 }, { n: 'LNG汽力', a: .0180, b: 11.2, c: 250, mn: 40, mx: 200, ef: 0.42 }, { n: '石油', a: .0300, b: 15.5, c: 180, mn: 20, mx: 120, ef: 0.70 }];
+let PD = 700, CP = 0, CAP = 60;
+const gens = () => GENS.map(g => ({ ...g, b: g.b + CP * g.ef / 1000 }));
+const cost = (g, P) => g.a * P * P + g.b * P + g.c, ic = (g, P) => 2 * g.a * P + g.b;
+function eld(pd, G = gens()) { const P = Array(G.length).fill(0), free = G.map(() => true); let lam = 0; for (let it = 0; it < 30; it++) { let num = pd, den = 0; G.forEach((g, i) => { if (free[i]) { num += g.b / (2 * g.a); den += 1 / (2 * g.a); } else num -= P[i]; }); lam = num / den; let viol = false; G.forEach((g, i) => { if (!free[i]) return; P[i] = (lam - g.b) / (2 * g.a); if (P[i] > g.mx) { P[i] = g.mx; free[i] = false; viol = true; } else if (P[i] < g.mn) { P[i] = g.mn; free[i] = false; viol = true; } }); if (!viol) break; } return { P, lam, total: G.reduce((s, g, i) => s + cost(g, P[i]), 0) }; }
+function equalSplit(pd, G = gens()) { const P = G.map(g => Math.max(g.mn, Math.min(g.mx, pd / G.length))); let rem = pd - P.reduce((s, v) => s + v, 0); for (let it = 0; it < 20 && Math.abs(rem) > 1e-6; it++) { const room = G.map((g, i) => rem > 0 ? g.mx - P[i] : P[i] - g.mn); const tot = room.reduce((s, v) => s + v, 0); if (tot < 1e-9) break; G.forEach((g, i) => { const d = rem * room[i] / tot; P[i] += d; }); rem = pd - P.reduce((s, v) => s + v, 0); } return { P, total: G.reduce((s, g, i) => s + cost(g, P[i]), 0) }; }
+/* ---- 3 ノード DC-OPF ---- */
+const NL = [{ a: 0, b: 1, x: .10 }, { a: 1, b: 2, x: .15 }, { a: 0, b: 2, x: .20 }]; const CAPS = () => [CAP, 150, 110]; const PRICE = [6.0, 18.0], GMAX = [250, 200]; let LOAD = 180;
+function dcflow(inj) { const Bp = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; NL.forEach(l => { const y = 1 / l.x; Bp[l.a][l.a] += y; Bp[l.b][l.b] += y; Bp[l.a][l.b] -= y; Bp[l.b][l.a] -= y; }); const a = Bp[1][1], b = Bp[1][2], c = Bp[2][1], d = Bp[2][2], det = a * d - b * c; const th = [0, (inj[1] * d - b * inj[2]) / det, (a * inj[2] - c * inj[1]) / det]; return NL.map(l => (th[l.a] - th[l.b]) / l.x); }
+function dispatch(loads) { const L = loads.reduce((s, v) => s + v, 0); const caps = CAPS(); for (let g1 = Math.min(GMAX[0], L); g1 >= 0; g1 -= .25) { const g2 = L - g1; if (g2 > GMAX[1] || g2 < 0) continue; const inj = [g1 - loads[0], g2 - loads[1], -loads[2]]; const fl = dcflow(inj); if (fl.every((f, k) => Math.abs(f) <= caps[k] + 1e-9)) return { g1, g2, fl, cost: PRICE[0] * g1 + PRICE[1] * g2, ok: true }; } return { ok: false }; }
+function lmp() { const base = dispatch([0, 0, LOAD]); if (!base.ok) return null; const out = []; for (let i = 0; i < 3; i++) { const ld = [0, 0, LOAD]; ld[i] += 1; const d = dispatch(ld); out.push(d.ok ? d.cost - base.cost : NaN); } return { base, lmp: out }; }
+const f0 = x => x.toFixed(0), f1 = x => x.toFixed(1), f2 = x => x.toFixed(2), f3 = x => x.toFixed(3);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 等 λ 法', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ OPF と LMP', c: 'var(--loss)', start: 8 }, { t: 'Ⅳ UC・AI・まとめ', c: 'var(--accent)', start: 11 } ];
+const SLIDES = [
+  { legend: '4 台の発電機と需要 P_D。どう分けるのが一番安いか',
+    html() { return '<h3>問題：需要 ' + PD + ' MW を 4 台にどう分ける？</h3><div class="eq curr">min Σ <i>C<sub>i</sub></i>(<i>P<sub>Gi</sub></i>)　s.t.　Σ <i>P<sub>Gi</sub></i> = <i>P<sub>D</sub></i>,　<i>P<sub>Gi</sub></i><sup>min</sup> ≤ <i>P<sub>Gi</sub></i> ≤ <i>P<sub>Gi</sub></i><sup>max</sup><span class="read">読み：燃料費の合計を最小にする。ただし合計は需要に等しく、各機は上下限の中。</span></div><div class="desc">石炭・LNG コンバインド・LNG 汽力・石油の 4 台です。「安い順に使う」が直感ですが、費用は出力の 2 次関数なので、<b>安い機も出力を上げるほど追加 1 MW の費用が上がります</b>。どこで切り替えるのが最適かを、次の章で式から導きます。需要スライダで条件を変えられます。</div>'; },
+    draw() { drawGensIntro(); caption('安い順、だけでは決まらない'); } },
+  { legend: '燃料費関数 C(P) = aP² + bP + c（曲線）と限界費用 dC/dP（傾き）',
+    html() { const G = gens(); return '<h3>燃料費関数と「限界費用」</h3><div class="eq curr"><i>C<sub>i</sub></i> = <i>a<sub>i</sub>P</i>² + <i>b<sub>i</sub>P</i> + <i>c<sub>i</sub></i>　⇒　限界費用 d<i>C<sub>i</sub></i>/d<i>P</i> = 2<i>a<sub>i</sub>P</i> + <i>b<sub>i</sub></i>　（石炭 <i>b</i>=' + f2(G[0].b) + ', 石油 <i>b</i>=' + f2(G[3].b) + ' 千円/MWh）<span class="read">読み：限界費用は「次の 1 MWh を作るのに追加でかかる費用」。曲線の傾き。出力を上げるほど傾きも上がる。</span></div><div class="desc">石炭は基本料金 <i>b</i> が安いが <i>a</i> は小さく傾きが緩やか、石油は <i>b</i> が高い。<b>最適化で比べるべきは総費用ではなく限界費用</b>です。次のスライドで、その理由をラグランジュの未定乗数法で示します。</div>'; },
+    draw() { drawCostCurves(); caption('比べるのは「傾き」= 限界費用'); } },
+
+  { legend: 'ラグランジュ関数を各 P_Gi で偏微分すると、全機の限界費用 = λ',
+    html() { return '<h3>導出：限界費用が全機で等しいとき最安（等 λ 法）</h3><div class="eq curr">ℒ = Σ<i>C<sub>i</sub></i> + λ(<i>P<sub>D</sub></i> − Σ<i>P<sub>Gi</sub></i>),　∂ℒ/∂<i>P<sub>Gi</sub></i> = 0　⇒　<span class="frac"><span>d<i>C</i><sub>1</sub></span><span>d<i>P</i><sub>1</sub></span></span> = <span class="frac"><span>d<i>C</i><sub>2</sub></span><span>d<i>P</i><sub>2</sub></span></span> = … = λ<span class="read">読み：需給の等式制約を乗数 λ で取り込み、各出力で微分してゼロ。すると全機の限界費用が同じ λ に揃う。</span></div><div class="desc">直感でも分かります：もし機 1 の限界費用が機 2 より安ければ、<b>機 1 を 1 MW 増やし機 2 を 1 MW 減らすだけで総費用が下がる</b>。この改善ができなくなるのは、全員の限界費用が揃ったときだけです。λ は「需要が 1 MW 増えたときの費用増」＝市場価格の理論値です。</div>'; },
+    draw() { drawEqualLambda(); caption('揃っていなければ、まだ安くできる'); } },
+  { legend: '需要 P_D（スライダ）に対する等 λ 法の解。棒=各機の出力、水平線=λ',
+    mini: () => { const r = eld(PD); return '<div>λ <b>' + f2(r.lam) + '</b> 千円/MWh</div><div>総費用 <b>' + f0(r.total) + '</b> 千円/h</div>'; },
+    html() { const r = eld(PD), G = gens(); return '<h3>実解：需要 ' + PD + ' MW → λ = ' + f2(r.lam) + ' 千円/MWh</h3><div class="eq curr">' + G.map((g, i) => g.n + ' <b class="res">' + f1(r.P[i]) + '</b>' + (Math.abs(r.P[i] - g.mx) < 1e-6 ? '(上限)' : (Math.abs(r.P[i] - g.mn) < 1e-6 ? '(下限)' : ''))).join('　') + '　総費用 <b class="res">' + f0(r.total) + '</b> 千円/h<span class="read">読み：上下限に当たっていない機の限界費用はすべて λ に等しい。当たった機はその値に固定して残りで再計算。</span></div><div class="desc">需要スライダを動かしてください。需要が増えると λ が上がり、<b>安い機から順に上限に張り付き</b>、次の機が立ち上がります。上下限に当たった機の限界費用は λ と違ってよい（それ以上増やせない/減らせないから）— 第5回の PV 母線の Q 限界処理と同じ考え方です。</div>'; },
+    draw() { drawELD(); caption('自由な機の限界費用は全部 λ'); } },
+  { legend: 'A/B：均等配分（橙）vs 等 λ 法（緑）。同じ需要での総費用',
+    mini: () => { const a = equalSplit(PD), b = eld(PD); return '<div>均等 <b>' + f0(a.total) + '</b></div><div>等λ <b>' + f0(b.total) + '</b></div><div>差 <b>' + f0(a.total - b.total) + '</b> 千円/h</div>'; },
+    html() { const a = equalSplit(PD), b = eld(PD); return '<h3>A/B：均等配分より ' + f0(a.total - b.total) + ' 千円/h 安い（' + ((1 - b.total / a.total) * 100).toFixed(1) + '%）</h3><div class="eq curr">均等配分：<b class="res">' + f0(a.total) + '</b> 千円/h　／　等 λ 法：<b class="res">' + f0(b.total) + '</b> 千円/h　→　年間 ' + ((a.total - b.total) * 8760 / 1e5).toFixed(1) + ' 億円<span class="read">読み：需要を 4 等分して各機に割り振った場合との比較。等 λ 法は安い機を多く、高い機を少なく使う。</span></div><div class="desc">「公平に均等」は<b>安い石炭を余らせて高い石油を使う</b>ので割高です。この差は毎時間積み上がり、年間では億円単位になります。第10回の予測精度の話と同じく、<b>数学的な最適化がそのまま燃料費</b>になります。</div>'; },
+    draw() { drawABsplit(); caption('揃えるだけで年 ' + ((equalSplit(PD).total - eld(PD).total) * 8760 / 1e5).toFixed(1) + ' 億円'); } },
+  { legend: 'メリットオーダー：需要 220→950 MW での各機の配分（積み上げ）',
+    html() { return '<h3>メリットオーダー：安い順に上限まで使い、次へ</h3><div class="eq curr">需要↑ → λ↑ → 安い機が上限に達する → 次に安い機が立ち上がる<span class="read">読み：需要を横軸に取ると、配分は「安い順の階段」になる。これがメリットオーダー曲線。</span></div><div class="desc">積み上げ図で、石炭が最初に満杯になり、LNG コンバインド、汽力、最後に石油が動く様子が見えます。<b>市場の供給曲線はこの図そのもの</b>で、需要曲線との交点が約定価格＝λ です。</div>'; },
+    draw() { drawMeritOrder(); caption('供給曲線 = 限界費用の階段'); } },
+  { legend: 'λ（限界費用）の需要依存。折れ点は「ある機が上限に達した」瞬間',
+    html() { return '<h3>λ は市場価格：折れ点の意味</h3><div class="eq curr">λ(<i>P<sub>D</sub></i>) は連続だが折れる　←　上限に達した機が抜け、残りの機で λ が決まるため<span class="read">読み：需要を増やしていくと λ の傾きが段階的に急になる。安い機が使い切られ、限界費用の高い機で調整する場面に移るから。</span></div><div class="desc">図の λ 曲線の折れ点は、順に石炭・LNG-CC・汽力が上限に達した需要です。<b>需要のピーク時に価格が跳ねる</b>のは、限界費用の高い機（石油）だけで調整するしかなくなるからです。JEPX のスポット価格が夏の夕方に上がる仕組みの理論的な説明です。</div>'; },
+    draw() { drawLambdaCurve(); caption('折れ点 = 誰かが満杯になった瞬間'); } },
+  { legend: 'A/B：炭素価格（スライダ）で石炭の b が上がり、配分が LNG へ移る',
+    mini: () => { const r = eld(PD); return '<div>石炭 <b>' + f1(r.P[0]) + '</b></div><div>LNG-CC <b>' + f1(r.P[1]) + '</b></div><div>λ <b>' + f2(r.lam) + '</b></div>'; },
+    html() { const cp0 = CP; CP = 0; const base = eld(PD); CP = cp0; const r = eld(PD); const cross = (GENS[1].b - GENS[0].b) / ((GENS[0].ef - GENS[1].ef) / 1000); return '<h3>A/B：炭素価格 ' + CP.toLocaleString() + ' 円/t で石炭 ' + f1(base.P[0]) + ' → ' + f1(r.P[0]) + ' MW</h3><div class="eq curr">石炭の <i>b</i>：7.50 + ' + CP + ' × 0.86 / 1000 = <b class="res">' + f2(gens()[0].b) + '</b>　LNG-CC の <i>b</i>：9.80 + ' + CP + ' × 0.35 / 1000 = <b class="res">' + f2(gens()[1].b) + '</b>　→　石炭 <b class="res">' + f1(r.P[0]) + '</b>、LNG-CC <b class="res">' + f1(r.P[1]) + '</b>、λ = <b class="res">' + f2(r.lam) + '</b><span class="read">読み：排出係数（石炭 0.86、LNG 0.35 t-CO₂/MWh）× 炭素価格を燃料費に上乗せ。排出の多い石炭ほど値上がりし、等 λ 法が自動的に配分を移す。</span></div><div class="desc">炭素価格スライダを上げてください。<b>石炭と LNG-CC の <i>b</i> が入れ替わるのは約 ' + f0(cross) + ' 円/t</b> です（計算値）。制度側が価格を 1 つ置くだけで、最適化が勝手に電源構成を変えるのがカーボンプライシングの仕組みで、同時に λ（電力価格）も ' + f2(base.lam) + ' → ' + f2(r.lam) + ' に上がります。</div>'; },
+    draw() { drawELD(); caption('価格 1 つで電源構成が動く'); } },
+  { legend: 'OPF = ELD ＋ 潮流方程式 ＋ 運用制約（電圧・容量・Q 限界・相差角）',
+    html() { return '<h3>OPF：経済性に「系統の約束」を足す</h3><div class="eq curr">min <i>f</i>(<b>x</b>,<b>u</b>)　s.t.　<b>g</b>(<b>x</b>,<b>u</b>) = 0（電力方程式）,　<b>h</b>(<b>x</b>,<b>u</b>) ≤ 0（<i>V</i>, |<i>S<sub>ij</sub></i>|, <i>Q<sub>G</sub></i>, θ の限界）<span class="read">読み：ELD は系統を見ていない。線路の過負荷や電圧逸脱を制約として加え、潮流方程式の上で最適化するのが OPF。</span></div><div class="desc">等 λ 法の解が線路を過負荷にしたら運用できません。<b>AC-OPF は非凸</b>で大域最適の保証が難しく、実務の主力は第4回の直流法に基づく <b>DC-OPF</b>（線形計画・必ず解ける・双対変数がそのまま LMP）です。次のスライドで 3 ノードの DC-OPF をその場で解きます。</div>'; },
+    draw() { drawOPFtable(); caption('経済性 × 安全性 = OPF'); } },
+  { legend: '3 ノード DC-OPF：ノード 1 安い電源（6）、ノード 2 高い電源（18）、ノード 3 需要 180 MW。線路 2–3 cap 150、1–3 cap 110、1–2 はスライダ',
+    mini: () => { const r = lmp(); return r ? '<div>G1 <b>' + f1(r.base.g1) + '</b></div><div>G2 <b>' + f1(r.base.g2) + '</b></div><div>費用 <b>' + f0(r.base.cost) + '</b></div>' : '<div>解なし</div>'; },
+    html() { const r = lmp(); if (!r) return '<h3>解なし</h3><div class="desc">容量が小さすぎて需要を満たせません。</div>'; const cong = r.base.fl.findIndex((f, k) => Math.abs(Math.abs(f) - CAPS()[k]) < 1e-6); return '<h3>DC-OPF の実解：線路容量 ' + CAP + ' MW で G1 = ' + f1(r.base.g1) + ', G2 = ' + f1(r.base.g2) + '</h3><div class="eq curr">min 6<i>G</i><sub>1</sub> + 18<i>G</i><sub>2</sub>　s.t.　<i>P<sub>ij</sub></i> = (θ<sub>i</sub>−θ<sub>j</sub>)/<i>x<sub>ij</sub></i>,　|<i>P<sub>ij</sub></i>| ≤ cap　→　潮流 ' + r.base.fl.map((f, k) => 'L' + (NL[k].a + 1) + (NL[k].b + 1) + ' ' + f1(f)).join(', ') + (cong >= 0 ? '　<b class="res">★ L' + (NL[cong].a + 1) + (NL[cong].b + 1) + ' が上限</b>' : '　（混雑なし）') + '<span class="read">読み：安い G1 をできるだけ使いたいが、線路が容量に達すると G1 を増やせず、高い G2 で補う。</span></div><div class="desc">線路 1–2 の容量スライダを動かしてください。容量が十分なら G1 だけで賄えます。容量を絞ると<b>安い電源が「届かなく」なり</b>、G2 が立ち上がって費用が増えます。この状態で各ノードの値段がどうなるかが次のスライドです。</div>'; },
+    draw() { drawDCOPF(); caption('容量を絞ると安い電源が届かない'); } },
+  { legend: 'LMP：各ノードで需要が 1 MW 増えたときの費用増。混雑があると分裂する',
+    mini: () => { const r = lmp(); return r ? r.lmp.map((v, i) => '<div>N' + (i + 1) + ' <b>' + f1(v) + '</b></div>').join('') : ''; },
+    html() { const r = lmp(); if (!r) return '<h3>解なし</h3>'; const spread = Math.max(...r.lmp) - Math.min(...r.lmp); return '<h3>LMP：' + (spread < 1e-6 ? '混雑なし → 全ノード ' + f1(r.lmp[0]) : '混雑あり → ノード価格が ' + f1(Math.min(...r.lmp)) + '〜' + f1(Math.max(...r.lmp)) + ' に分裂') + '</h3><div class="eq curr">LMP<sub>i</sub> = ∂(総費用)/∂(ノード <i>i</i> の需要)　→　N1 <b class="res">' + f1(r.lmp[0]) + '</b>　N2 <b class="res">' + f1(r.lmp[1]) + '</b>　N3 <b class="res">' + f1(r.lmp[2]) + '</b> 千円/MWh<span class="read">読み：そのノードで 1 MW 余計に使うと総費用がいくら増えるか。混雑がなければ安い電源の価格（6）で全ノード同じ。混雑すると高い電源で賄うノードだけ 18 に跳ねる。</span></div><div class="desc">' + (spread < 1e-6 ? '容量に余裕があるので全ノード同じ価格＝第 4 スライドの λ と一致します。容量スライダを絞ってみてください。' : '線路が混雑しているため、安い電源が届かないノードの追加需要は高い電源が担い、<b>価格差 ' + f1(spread) + ' 千円/MWh（混雑成分）</b>が生じています。これが日本のエリアプライスが分かれる仕組みで、<b>第4回の直流法潮流が電力市場を支えている</b>ということです。') + '</div>'; },
+    draw() { drawLMP(); caption('価格差 = 混雑の悲鳴'); } },
+
+  { legend: 'UC（起動停止計画）：二値変数・最小運転時間・ランプ・予備力',
+    html() { return '<h3>ユニットコミットメント：どの機を「起動」するかは整数問題</h3><div class="eq curr">min Σ<sub>t</sub>Σ<sub>i</sub> [<i>C<sub>i</sub></i>(<i>P<sub>i,t</sub></i>)<i>u<sub>i,t</sub></i> + <i>SU<sub>i</sub>y<sub>i,t</sub></i>]　<i>u<sub>i,t</sub></i> ∈ {0,1}　⇒　MILP（NP 困難）<span class="read">読み：OPF は起動中の機の配分。どれを起動するかは 0/1 の変数で、組合せは 2^(N×T)。最小運転時間・ランプ・予備力の制約も乗る。</span></div><div class="desc">再エネはこれをさらに難しくします：不確実性（シナリオが増える）、ダックカーブのランプ（追従できる機が要る）、昼に火力を止め夕方に起動する<b>起動停止の頻発</b>、そして<b>最低出力を割ると出力抑制</b>。第15回の統合演習で沖縄のケースを扱います。</div>'; },
+    draw() { drawUC(); caption('起動するか否か = 組合せ爆発'); } },
+  { legend: 'AI による OPF 高速化の 4 系統。厳密解法が最終解を出す構成が安全',
+    html() { return '<h3>AI で速くする：実行可能性だけは妥協しない</h3><div class="eq curr">①直接予測（違反リスク）　②アクティブ制約の予測 → 縮小問題を厳密に解く　③warm start　④サロゲートでスクリーニング<span class="read">読み：最適解では多数の制約のうち一部だけが有効。どれが有効かを分類器で当てれば問題が劇的に小さくなり、しかも厳密に解ける。</span></div><div class="desc">「費用誤差 0.5% だが 3% のケースで容量違反」のモデルは運用できません。<b>最適性は妥協できても、実行可能性（制約充足）は妥協できない</b>。②③④はいずれも最終解を厳密解法が出すので安全です。第13回の「AI はスクリーニング、厳密計算で確認」と同じ結論です。</div>'; },
+    draw() { drawAI4(); caption('最終解は厳密解法に出させる'); } },
+  { legend: 'EMS の流れ：計測 → 状態推定 → 想定事故 → OPF → ELD/LFC。本講義の各回が対応する',
+    html() { return '<h3>まとめ：EMS の中に、この講義の全部がある</h3><div class="eq curr">SCADA/PMU → 状態推定（13）→ N-1 解析（15）→ OPF/SCOPF（14）→ ELD/LFC（8）→ 発電機・調相設備<span class="read">読み：中央給電指令所のシステムは、この講義で学んだ計算をこの順に毎時間回している。</span></div><div class="desc">等 λ 法（限界費用を揃える）→ OPF（系統の約束を足す）→ DC-OPF と LMP（市場価格の正体）→ UC（整数の壁）→ AI 高速化（実行可能性は死守）。次回は<b>統合演習</b>：沖縄本島系統に太陽光を何 MW まで入れられるかを、第1回からの全道具で決めます。</div>'; },
+    draw() { drawEMS(); caption('次回：全部つないで、沖縄の連系可能量を出す'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif'; const GC = ['--warm', '--accent', '--upd', '--neg'];
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function arrow(x0, y0, x1, y1, color, w = 2) { line([[x0, y0], [x1, y1]], color, w); const a = Math.atan2(y1 - y0, x1 - x0); line([[x1, y1], [x1 - 9 * Math.cos(a - .4), y1 - 9 * Math.sin(a - .4)]], color, w); line([[x1, y1], [x1 - 9 * Math.cos(a + .4), y1 - 9 * Math.sin(a + .4)]], color, w); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawGensIntro() { const G = gens(); G.forEach((g, i) => { const x = 45 + i * 78; ctx.save(); ctx.strokeStyle = getCSS('--text'); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, 130, 24, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = getCSS(GC[i]); ctx.globalAlpha = .3; ctx.fill(); ctx.restore(); txt('G', x, 136, { align: 'center', size: 14, bold: true }); txt(g.n, x, 175, { align: 'center', size: 10, bold: true }); txt(g.mn + '〜' + g.mx + ' MW', x, 191, { align: 'center', size: 9, mono: true, color: getCSS('--muted') }); txt('b=' + f1(g.b), x, 206, { align: 'center', size: 9, mono: true }); line([[x, 154], [x, 240]], getCSS('--text'), 1.5); }); line([[45, 240], [279, 240]], getCSS('--text'), 4); line([[162, 240], [162, 280]], getCSS('--text'), 2); ctx.save(); ctx.strokeStyle = getCSS('--text'); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(148, 280); ctx.lineTo(176, 280); ctx.lineTo(162, 300); ctx.closePath(); ctx.stroke(); ctx.restore(); txt('需要 ' + PD + ' MW', 162, 320, { align: 'center', size: 12, bold: true }); txt('？ ？ ？ ？', 162, 100, { align: 'center', size: 14, bold: true, color: getCSS('--neg') }); }
+function drawCostCurves() { const G = gens(); const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, 'P [MW]', '限界費用 [千円/MWh]'); const xOf = p => L + p / 350 * (R - L), yOf = v => B - (v - 5) / 20 * (B - T); G.forEach((g, i) => { line([[xOf(g.mn), yOf(ic(g, g.mn))], [xOf(g.mx), yOf(ic(g, g.mx))]], getCSS(GC[i]), 2.5); txt(g.n, xOf(g.mx) + 3, yOf(ic(g, g.mx)) + 4, { size: 9.5, color: getCSS(GC[i]), bold: true }); }); [0, 100, 200, 300].forEach(p => txt(p, xOf(p), B + 14, { align: 'center', size: 9, mono: true })); [5, 10, 15, 20, 25].forEach(v => txt(v, L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); txt('傾き 2a：出力を上げるほど限界費用が上がる', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawEqualLambda() { const L = 50, T = 40, R = 335, B = 280; axes(L, T, R, B, 'P [MW]', '限界費用'); const G = gens(); const r = eld(PD); const xOf = p => L + p / 350 * (R - L), yOf = v => B - (v - 5) / 20 * (B - T); G.forEach((g, i) => { line([[xOf(g.mn), yOf(ic(g, g.mn))], [xOf(g.mx), yOf(ic(g, g.mx))]], getCSS(GC[i]), 2); dot(xOf(r.P[i]), yOf(ic(g, r.P[i])), 6, getCSS(GC[i])); }); line([[L, yOf(r.lam)], [R, yOf(r.lam)]], getCSS('--neg'), 2, [5, 4]); txt('λ = ' + f2(r.lam), R - 4, yOf(r.lam) - 6, { align: 'right', size: 11, mono: true, bold: true, color: getCSS('--neg') }); txt('●がすべて λ の線上に乗る（上下限の機を除く）', CW / 2, 320, { align: 'center', size: 10.5 }); txt('乗っていない機があれば、まだ安くできる', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawELD() { const r = eld(PD), G = gens(); const L = 60, T = 50, R = 335, B = 300; axes(L, T, R, B, '', 'MW'); const yOf = p => B - p / 360 * (B - T); G.forEach((g, i) => { const x = L + 15 + i * 65; rect(x, yOf(g.mx), 45, B - yOf(g.mx), getCSS(GC[i]), .15); rect(x, yOf(r.P[i]), 45, B - yOf(r.P[i]), getCSS(GC[i]), .85); txt(g.n, x + 22, B + 14, { align: 'center', size: 9 }); txt(f0(r.P[i]), x + 22, yOf(r.P[i]) - 6, { align: 'center', size: 10, mono: true, bold: true }); if (Math.abs(r.P[i] - g.mx) < 1e-6) txt('上限', x + 22, yOf(g.mx) - 18, { align: 'center', size: 8.5, color: getCSS('--neg') }); }); [0, 100, 200, 300].forEach(p => txt(p, L - 4, yOf(p) + 4, { align: 'right', size: 9, mono: true })); txt('λ = ' + f2(r.lam) + ' 千円/MWh　総費用 ' + f0(r.total) + ' 千円/h', CW / 2, 340, { align: 'center', size: 10.5, mono: true, bold: true }); }
+function drawABsplit() { const a = equalSplit(PD), b = eld(PD), G = gens(); const L = 60, T = 50, R = 335, B = 280; axes(L, T, R, B, '', 'MW'); const yOf = p => B - p / 360 * (B - T); G.forEach((g, i) => { const x = L + 12 + i * 66; rect(x, yOf(a.P[i]), 22, B - yOf(a.P[i]), getCSS('--warm'), .8); rect(x + 26, yOf(b.P[i]), 22, B - yOf(b.P[i]), getCSS('--accent'), .8); txt(g.n, x + 24, B + 14, { align: 'center', size: 9 }); }); txt('橙=均等 ' + f0(a.total) + '  緑=等λ ' + f0(b.total) + ' 千円/h', CW / 2, 320, { align: 'center', size: 10.5, mono: true }); txt('差 ' + f0(a.total - b.total) + ' 千円/h', CW / 2, 345, { align: 'center', size: 12, bold: true, color: getCSS('--accent') }); }
+function drawMeritOrder() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '需要 [MW]', 'MW'); const xOf = d => L + (d - 220) / 730 * (R - L), yOf = p => B - p / 950 * (B - T); const steps = []; for (let d = 220; d <= 950; d += 10) steps.push({ d, P: eld(d).P }); for (let i = 3; i >= 0; i--) { ctx.save(); ctx.fillStyle = getCSS(GC[i]); ctx.globalAlpha = .75; ctx.beginPath(); steps.forEach((s, k) => { const cum = s.P.slice(0, i + 1).reduce((q, v) => q + v, 0); k ? ctx.lineTo(xOf(s.d), yOf(cum)) : ctx.moveTo(xOf(s.d), yOf(cum)); }); for (let k = steps.length - 1; k >= 0; k--) ctx.lineTo(xOf(steps[k].d), B); ctx.closePath(); ctx.fill(); ctx.restore(); } gens().forEach((g, i) => txt(g.n, R - 4, yOf(eld(950).P.slice(0, i + 1).reduce((q, v) => q + v, 0)) + 12, { align: 'right', size: 9, bold: true, color: '#fff' })); line([[xOf(PD), T], [xOf(PD), B]], getCSS('--text'), 1.5, [4, 3]); txt('P_D=' + PD, xOf(PD) + 4, T + 12, { size: 9.5, mono: true }); [220, 500, 750, 950].forEach(d => txt(d, xOf(d), B + 14, { align: 'center', size: 9, mono: true })); }
+function drawLambdaCurve() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '需要 [MW]', 'λ [千円/MWh]'); const xOf = d => L + (d - 220) / 730 * (R - L), yOf = v => B - (v - 8) / 16 * (B - T); const pts = []; for (let d = 220; d <= 950; d += 5) pts.push([xOf(d), yOf(eld(d).lam)]); line(pts, getCSS('--neg'), 2.5); const r = eld(PD); dot(xOf(PD), yOf(r.lam), 7, getCSS('--neg')); txt('P_D=' + PD + ' → λ=' + f2(r.lam), xOf(PD) + (PD > 700 ? -10 : 10), yOf(r.lam) - 12, { align: PD > 700 ? 'right' : 'left', size: 10.5, bold: true, color: getCSS('--neg') }); [220, 500, 750, 950].forEach(d => txt(d, xOf(d), B + 14, { align: 'center', size: 9, mono: true })); [8, 12, 16, 20, 24].forEach(v => txt(v, L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); txt('折れ点 = ある機が上限に達した需要', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawOPFtable() { const rows = [['等式', '電力方程式 P_i, Q_i', '第4回'], ['不等式', 'P_G, Q_G の上下限', '第5回'], ['不等式', '電圧 0.95〜1.05', '第6回'], ['不等式', '線路容量 |S_ij|', '第2回'], ['不等式', '相差角 |θ_ij|', '第7回']]; txt('種類', 30, 60, { size: 10, color: getCSS('--muted') }); txt('制約', 110, 60, { size: 10, color: getCSS('--muted') }); txt('由来', 270, 60, { size: 10, color: getCSS('--muted') }); rows.forEach(([a, b, c], i) => { const y = 92 + i * 46; rect(20, y - 20, 325, 38, getCSS(i === 0 ? '--upd' : '--accent'), .1); txt(a, 30, y + 4, { size: 10.5, bold: true }); txt(b, 110, y + 4, { size: 10, mono: true }); txt(c, 270, y + 4, { size: 10, color: getCSS('--muted') }); }); txt('ELD + これら = OPF', CW / 2, 345, { align: 'center', size: 11, bold: true }); }
+const NP3 = [[70, 110], [290, 110], [180, 280]];
+function drawDCOPF() { const r = lmp(); const caps = CAPS(); const c = getCSS('--text'); NL.forEach((l, k) => { const [x0, y0] = NP3[l.a], [x1, y1] = NP3[l.b]; const f = r ? r.base.fl[k] : 0, cong = r && Math.abs(Math.abs(f) - caps[k]) < 1e-6; line([[x0, y0], [x1, y1]], cong ? getCSS('--neg') : c, 1.5 + Math.abs(f) / 40, null); const mx = (x0 + x1) / 2, my = (y0 + y1) / 2; txt('cap ' + caps[k], mx + (k === 0 ? 0 : (k === 2 ? -36 : 36)), my - (k === 0 ? 10 : -4), { align: 'center', size: 9, mono: true, color: cong ? getCSS('--neg') : getCSS('--muted') }); if (r) { const dir = f >= 0 ? 1 : -1; arrow(mx - dir * (x1 - x0) * .08, my - dir * (y1 - y0) * .08, mx + dir * (x1 - x0) * .08, my + dir * (y1 - y0) * .08, cong ? getCSS('--neg') : getCSS('--accent'), 2.5); txt(f1(Math.abs(f)), mx + (k === 0 ? 0 : (k === 2 ? -36 : 36)), my + (k === 0 ? 24 : 20), { align: 'center', size: 9.5, mono: true, bold: true, color: cong ? getCSS('--neg') : getCSS('--accent') }); } }); NP3.forEach(([x, y], i) => { dot(x, y, 15, getCSS(['--accent', '--warm', '--upd'][i]), c); txt(i + 1, x, y + 4, { align: 'center', size: 11, bold: true, color: '#fff' }); }); txt('G1 ¥6' + (r ? ' → ' + f1(r.base.g1) : ''), 70, 80, { align: 'center', size: 10, mono: true, bold: true }); txt('G2 ¥18' + (r ? ' → ' + f1(r.base.g2) : ''), 290, 80, { align: 'center', size: 10, mono: true, bold: true }); txt('需要 ' + LOAD, 180, 312, { align: 'center', size: 10, mono: true, bold: true }); if (r) txt('総費用 ' + f0(r.base.cost) + ' 千円/h', CW / 2, 345, { align: 'center', size: 10.5, mono: true }); }
+function drawLMP() { const r = lmp(); if (!r) return; const L = 70, T = 60, R = 335, B = 280; axes(L, T, R, B, '', 'LMP [千円/MWh]'); const yOf = v => B - v / 22 * (B - T); r.lmp.forEach((v, i) => { const x = L + 25 + i * 80; rect(x, yOf(v), 55, B - yOf(v), getCSS(['--accent', '--warm', '--upd'][i]), .85); txt('N' + (i + 1), x + 27, B + 14, { align: 'center', size: 10.5 }); txt(f1(v), x + 27, yOf(v) - 6, { align: 'center', size: 11, mono: true, bold: true }); }); [0, 6, 12, 18].forEach(v => txt(v, L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); const spread = Math.max(...r.lmp) - Math.min(...r.lmp); txt(spread < 1e-6 ? '混雑なし：全ノード同じ価格' : '混雑あり：価格差 ' + f1(spread), CW / 2, 320, { align: 'center', size: 11, bold: true, color: getCSS(spread < 1e-6 ? '--accent' : '--neg') }); txt('線路 1–2 容量 ' + CAP + ' MW', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawUC() { const L = 40, T = 60, R = 335, B = 300; axes(L, T, R, B, '時刻', ''); const hours = 24; const xOf = h => L + h / hours * (R - L); const units = [['石炭', h => 1, '--warm'], ['LNG-CC', h => (h < 10 || h > 15) ? 1 : 0, '--accent'], ['汽力', h => (h >= 17 && h <= 21) ? 1 : 0, '--upd'], ['石油', h => (h >= 18 && h <= 20) ? 1 : 0, '--neg']]; units.forEach(([n, f, c], i) => { const y = T + 20 + i * 55; txt(n, L - 4, y + 18, { align: 'right', size: 9.5 }); for (let h = 0; h < hours; h++) rect(xOf(h), y, (R - L) / hours - 1, 28, getCSS(c), f(h) ? .85 : .12); }); [0, 6, 12, 18, 24].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); txt('u_{i,t} ∈ {0,1}：昼に止め、夕方に起動（起動費・最小運転時間）', CW / 2, 340, { align: 'center', size: 9.5, color: getCSS('--muted') }); }
+function drawAI4() { const rows = [['① 直接予測', '速いが制約違反リスク', '--neg'], ['② アクティブ制約予測', '縮小問題を厳密に解く', '--accent'], ['③ warm start', '初期値だけ AI、解は厳密', '--accent'], ['④ サロゲート', 'ふるい → 危険ケースだけ厳密', '--accent']]; rows.forEach(([a, b, c], i) => { const y = 75 + i * 68; rect(20, y - 24, 325, 54, getCSS(c), .14); txt(a, 40, y + 4, { size: 11, bold: true, color: getCSS(c) }); txt(b, 190, y + 4, { size: 10 }); }); }
+function drawEMS() { const steps = [['計測 SCADA/PMU', ''], ['状態推定', '第13回'], ['想定事故 N-1', '第15回'], ['OPF / SCOPF', '第14回'], ['ELD / LFC', '第8回']]; steps.forEach(([a, b], i) => { const y = 55 + i * 62; rect(60, y - 18, 240, 40, getCSS(i === 3 ? '--accent' : '--upd'), i === 3 ? .35 : .15); txt(a, 180, y + 6, { align: 'center', size: 11, bold: true }); if (b) txt(b, 300, y + 6, { align: 'right', size: 9.5, color: getCSS('--muted') }); if (i < 4) txt('▼', 180, y + 34, { align: 'center', size: 10, color: getCSS('--faint') }); }); txt('→ 発電機・調相設備・タップ', CW / 2, 380, { align: 'center', size: 10.5 }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur2 = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur2 ? 'active' : (i < cur2 ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur2 ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+function sync() { document.getElementById('pdVal').textContent = PD; document.getElementById('cpVal').textContent = CP.toLocaleString(); document.getElementById('capVal').textContent = CAP; }
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; PD = 700; CP = 0; CAP = 60; document.getElementById('pdRange').value = 700; document.getElementById('cpRange').value = 0; document.getElementById('capRange').value = 60; sync(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('pdRange').oninput = e => { PD = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('cpRange').oninput = e => { CP = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('capRange').oninput = e => { CAP = +e.target.value; sync(); renderAll(); draw_(); };
+sync(); goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

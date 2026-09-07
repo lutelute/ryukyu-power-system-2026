@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第8回 演習 — 周波数と系統定数</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第8回: 系統定数 K・速度調定率・連系系統・AR・RoCoF。教科書（加藤・田岡 第7章）の記号と単位に合わせる。
+// 単位の約束: %K は %MW/0.1Hz（教科書の慣習）。K [MW/Hz] = %K × S / 10。ΔP は発電余剰を正、ΔP_T は A→B を正。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+
+EX.page({
+  ch: 8,
+  intro: '周波数は系統全体で 1 つの値です。需給の差 ΔP が系統定数 K で割られて周波数偏差 ΔF になる、という 1 本の式（ΔP = KΔF）を、単位換算・連系・地域要求量・慣性の順に手を動かして確かめます。',
+  problems: [
+    {
+      id: 'k-convert', title: '系統定数の単位換算', tags: ['8.2.5', '教科書 問題7.1'],
+      gen(rng) {
+        const S = pick(rng, [500, 800, 1000, 1200, 1500, 2000]);
+        const pK = pick(rng, [0.8, 1.0, 1.2, 1.5]);
+        const K = pK * S / 10;
+        const S2 = pick(rng, [300, 500, 600, 900]);
+        const K2 = pick(rng, [30, 45, 54, 72, 90]);
+        const pK2 = 10 * K2 / S2;
+        return {
+          given: [['系統容量 S', S + ' MW'], ['系統定数 %K', pK + ' %MW/0.1Hz'], ['別の系統: 容量 S′', S2 + ' MW'], ['別の系統: K′', K2 + ' MW/Hz']],
+          q: '(a) 系統容量 S の系統の系統定数 <b>K</b> を MW/Hz で求めよ。<br>(b) 別の系統（容量 S′、K′）の <b>%K′</b> を %MW/0.1Hz で求めよ。',
+          answers: [
+            { key: 'K', label: '(a) K', unit: 'MW/Hz', value: K },
+            { key: 'pK2', label: '(b) %K′', unit: '%MW/0.1Hz', value: pK2 },
+          ],
+          steps: [
+            '「' + pK + ' %MW/0.1Hz」は、周波数が 0.1 Hz 動くと需給が容量の ' + pK + '% 変わるという意味。1 Hz なら 10 倍で ' + (pK * 10) + '%。',
+            '(a) ' + eq('K = (' + pK + ' × 10 / 100) × ' + S + ' = ' + fmt(K) + ' MW/Hz') + '。覚え方は <b>K = %K × S / 10</b>。',
+            '(b) 逆算: ' + eq('%K′ = 10 K′ / S′ = 10 × ' + K2 + ' / ' + S2 + ' = ' + fmt(pK2) + ' %MW/0.1Hz') + '。',
+          ],
+          insight: '%MW/Hz と %MW/0.1Hz は 10 倍違う。教科書と試験は 0.1 Hz 基準なので、換算を式より先に確認する癖をつけてください。',
+        };
+      },
+    },
+    {
+      id: 'trip', title: '電源脱落と周波数低下', tags: ['8.2.5', '教科書 問題7.2'],
+      gen(rng) {
+        const S = pick(rng, [800, 1000, 1500, 2000, 3000]);
+        const pK = pick(rng, [0.8, 1.0, 1.2, 1.5, 2.0]);
+        const trip = pick(rng, [50, 100, 150, 200, 250]);
+        const K = pK * S / 10;
+        const dF = -trip / K;
+        const F = 60 + dF;
+        const dF2 = -pick(rng, [0.3, 0.5, 0.6, 0.9]);
+        const pK2 = 10 * (trip / -dF2) / S;
+        return {
+          given: [['系統容量 S', S + ' MW'], ['系統定数 %K', pK + ' %MW/0.1Hz'], ['定格周波数 F<sub>N</sub>', '60 Hz'], ['脱落した発電機', trip + ' MW']],
+          q: '(a) ' + trip + ' MW の発電機がトリップした直後（LFC が動く前）の定常的な<b>周波数偏差 ΔF</b>（低下は負）と<b>到達周波数 F</b> を求めよ。<br>(b) 同じ脱落で実測の周波数低下が ' + fmt(-dF2, 1) + ' Hz だったとすると、この系統の <b>%K</b> はいくらか。',
+          answers: [
+            { key: 'dF', label: '(a) ΔF', unit: 'Hz', value: dF, abs: 0.01 },
+            { key: 'F', label: '(a) 到達周波数 F', unit: 'Hz', value: F, tol: 0.002 },
+            { key: 'pK2', label: '(b) %K', unit: '%MW/0.1Hz', value: pK2 },
+          ],
+          steps: [
+            eq('K = %K × S / 10 = ' + pK + ' × ' + S + ' / 10 = ' + fmt(K) + ' MW/Hz') + '。',
+            '発電機が抜けたので需給アンバランスは <b>発電不足</b>: ' + eq('ΔP = −' + trip + ' MW') + '（発電余剰を正にとる約束）。',
+            eq('ΔF = ΔP / K = −' + trip + ' / ' + fmt(K) + ' = ' + fmt(dF) + ' Hz') + ' → ' + eq('F = 60 + (' + fmt(dF) + ') = ' + fmt(F, 2) + ' Hz') + '。',
+            '(b) 逆算: ' + eq('K = ' + trip + ' / ' + fmt(-dF2, 1) + ' = ' + fmt(trip / -dF2) + ' MW/Hz') + ' → ' + eq('%K = 10 K / S = ' + fmt(pK2) + ' %MW/0.1Hz') + '。',
+          ],
+          insight: 'ΔF は「脱落量 ÷ 系統の大きさ」で決まる。同じ 100 MW でも 1,500 MW の沖縄系統では 15,000 MW の九州系統の 10 倍近く周波数が動きます。',
+        };
+      },
+    },
+    {
+      id: 'droop', title: '速度調定率と発電力特性', tags: ['8.2.3', '教科書 例題7.1'],
+      gen(rng) {
+        const eps = pick(rng, [3, 4, 5]);
+        const GN = pick(rng, [100, 150, 200, 250, 300, 500, 600]);
+        const FN = pick(rng, [50, 60]);
+        const drop = pick(rng, [0.1, 0.15, 0.2, 0.3, 0.4]);
+        const pKG = 10000 / (eps * FN);
+        const KG = pKG / 100 * GN;
+        const dG = KG * drop;
+        return {
+          given: [['速度調定率 ε', eps + ' %'], ['定格出力 G<sub>N</sub>', GN + ' MW'], ['定格周波数 F<sub>N</sub>', FN + ' Hz'], ['周波数低下', drop + ' Hz（' + FN + ' → ' + fmt(FN - drop, 2) + ' Hz）']],
+          q: '(a) 発電力特性 <b>%K<sub>G</sub></b> を %MW/Hz で求めよ。<br>(b) <b>K<sub>G</sub></b> を MW/Hz で求めよ。<br>(c) 周波数が ' + drop + ' Hz 低下したときの<b>出力増加量 ΔG</b> を求めよ。',
+          answers: [
+            { key: 'pKG', label: '(a) %K_G', unit: '%MW/Hz', value: pKG },
+            { key: 'KG', label: '(b) K_G', unit: 'MW/Hz', value: KG },
+            { key: 'dG', label: '(c) ΔG', unit: 'MW', value: dG },
+          ],
+          steps: [
+            '速度調定率の定義 ' + eq('ε = (F<sub>0</sub> − F<sub>N</sub>) / F<sub>N</sub> × 100') + ' より、無負荷から全負荷までの周波数幅は ' + eq('F<sub>0</sub> − F<sub>N</sub> = ε F<sub>N</sub> / 100 = ' + fmt(eps * FN / 100) + ' Hz') + '。',
+            'この幅で出力が 0 → 100% 動くので、1 Hz あたりでは ' + eq('%K<sub>G</sub> = 100 / (F<sub>0</sub> − F<sub>N</sub>) = 10000 / (ε F<sub>N</sub>) = ' + fmt(pKG) + ' %MW/Hz') + '。',
+            '(b) 定格出力に掛けて MW にする: ' + eq('K<sub>G</sub> = ' + fmt(pKG) + '/100 × ' + GN + ' = ' + fmt(KG) + ' MW/Hz') + '。',
+            '(c) 周波数が下がると出力は<b>増える</b>（ΔG = −K<sub>G</sub> ΔF、ΔF &lt; 0）: ' + eq('ΔG = ' + fmt(KG) + ' × ' + drop + ' = ' + fmt(dG) + ' MW') + '。',
+          ],
+          insight: 'ε が小さいほど K_G は大きく、わずかな周波数変化で出力が激しく動く。4〜5% に落ち着いているのは「効きすぎ」と「効かなすぎ」の妥協点です。',
+        };
+      },
+    },
+    {
+      id: 'tie', title: '連系系統の周波数と連系線潮流', tags: ['8.2.7', '教科書 例題7.2'],
+      gen(rng) {
+        const SA = pick(rng, [300, 500, 1000, 1500]);
+        const SB = pick(rng, [500, 1000, 2000, 5000]);
+        const pK = pick(rng, [1.0, 1.2, 1.5]);
+        const L = pick(rng, [30, 50, 80, 100, 150]);
+        const KA = pK * SA / 10, KB = pK * SB / 10;
+        const dPA = -L, dPB = 0;
+        const dF = (dPA + dPB) / (KA + KB);
+        const dPT = (KB * dPA - KA * dPB) / (KA + KB);
+        const dFalone = dPA / KA;
+        return {
+          given: [['A 系統容量 S<sub>A</sub>', SA + ' MW'], ['B 系統容量 S<sub>B</sub>', SB + ' MW'], ['両系統の %K', pK + ' %MW/0.1Hz'], ['A 系統の負荷増加', L + ' MW（B 系統は変化なし）']],
+          q: 'A 系統で負荷が ' + L + ' MW 増えた。<br>(a) 連系後の<b>周波数偏差 ΔF</b> を求めよ。<br>(b) <b>連系線潮流の変化 ΔP<sub>T</sub></b>（A→B を正）を求めよ。<br>(c) もし A 系統が単独（連系なし）だったときの <b>ΔF<sub>単独</sub></b> を求めよ。',
+          answers: [
+            { key: 'dF', label: '(a) ΔF', unit: 'Hz', value: dF, abs: 0.005 },
+            { key: 'dPT', label: '(b) ΔP_T（A→B 正）', unit: 'MW', value: dPT, abs: 1 },
+            { key: 'dFalone', label: '(c) ΔF（A 単独）', unit: 'Hz', value: dFalone, abs: 0.01 },
+          ],
+          steps: [
+            eq('K<sub>A</sub> = ' + pK + ' × ' + SA + ' / 10 = ' + fmt(KA) + ' MW/Hz,  K<sub>B</sub> = ' + fmt(KB) + ' MW/Hz') + '。',
+            '負荷増は発電不足なので ' + eq('ΔP<sub>A</sub> = −' + L + ' MW,  ΔP<sub>B</sub> = 0') + '。',
+            '(a) 連系系統は 1 つの系統として周波数が決まる: ' + eq('ΔF = (ΔP<sub>A</sub> + ΔP<sub>B</sub>) / (K<sub>A</sub> + K<sub>B</sub>) = −' + L + ' / ' + fmt(KA + KB) + ' = ' + fmt(dF) + ' Hz') + '。',
+            '(b) ' + eq('ΔP<sub>T</sub> = (K<sub>B</sub>ΔP<sub>A</sub> − K<sub>A</sub>ΔP<sub>B</sub>) / (K<sub>A</sub> + K<sub>B</sub>) = ' + fmt(dPT) + ' MW') + '。負なので<b>B から A へ</b>応援が流れている。',
+            '(c) 単独なら ' + eq('ΔF<sub>単独</sub> = ΔP<sub>A</sub> / K<sub>A</sub> = ' + fmt(dFalone) + ' Hz') + '。連系で ' + fmt(dFalone / dF, 1) + ' 分の 1 に縮む。',
+          ],
+          insight: '連系線は「周波数の応援線」。沖縄本島にはこれが無いので、ΔF はいつも (c) の値です。',
+        };
+      },
+    },
+    {
+      id: 'ar', title: '地域要求量 AR（TBC）', tags: ['8.2.9', '教科書 例題7.4'],
+      gen(rng) {
+        const SA = pick(rng, [300, 500, 1000]);
+        const SB = pick(rng, [500, 1000, 2000]);
+        const pK = pick(rng, [1.0, 1.2, 1.5]);
+        const dF = -pick(rng, [0.05, 0.1, 0.15, 0.2]);
+        const dPT = pick(rng, [-60, -40, -20, 20, 40, 50, 80]);
+        const KA = pK * SA / 10, KB = pK * SB / 10;
+        const ARA = KA * dF + dPT, ARB = KB * dF - dPT;
+        return {
+          given: [['K<sub>A</sub>（S<sub>A</sub>=' + SA + ' MW, %K=' + pK + '）', fmt(KA) + ' MW/Hz'], ['K<sub>B</sub>（S<sub>B</sub>=' + SB + ' MW, %K=' + pK + '）', fmt(KB) + ' MW/Hz'], ['測定した周波数偏差 ΔF', dF + ' Hz'], ['測定した連系線潮流変化 ΔP<sub>T</sub>（A→B 正）', dPT + ' MW']],
+          q: '両系統が TBC（周波数バイアス連系線電力制御）を行っている。測定値から各系統の<b>地域要求量 AR<sub>A</sub>, AR<sub>B</sub></b>（= その系統で生じている需給アンバランス、発電余剰を正）を求めよ。',
+          answers: [
+            { key: 'ARA', label: 'AR_A', unit: 'MW', value: ARA, abs: 1 },
+            { key: 'ARB', label: 'AR_B', unit: 'MW', value: ARB, abs: 1 },
+          ],
+          steps: [
+            '連系系統の関係式 ' + eq('ΔP<sub>A</sub> = K<sub>A</sub>ΔF + ΔP<sub>T</sub>,  ΔP<sub>B</sub> = K<sub>B</sub>ΔF − ΔP<sub>T</sub>') + ' をそのまま使う。TBC はこの ΔP を各系統が自分で打ち消す方式。',
+            eq('AR<sub>A</sub> = ' + fmt(KA) + ' × (' + dF + ') + (' + dPT + ') = ' + fmt(ARA) + ' MW') + '。',
+            eq('AR<sub>B</sub> = ' + fmt(KB) + ' × (' + dF + ') − (' + dPT + ') = ' + fmt(ARB) + ' MW') + '。',
+            '符号の読み: 負なら発電不足 → その系統の LFC が出力を上げる。' + (Math.abs(ARB) < 1e-9 ? 'AR_B ≈ 0 は「B は自分のアンバランスが無く、応援を出しているだけ」。' : '両方負なら両系統で負荷が増えている。'),
+          ],
+          insight: 'K を正しく知らないと AR を誤り、自分の系統のせいでない周波数低下にまで出力を上げてしまう。ガバナカット試験で K を測る理由がここにあります。',
+        };
+      },
+    },
+    {
+      id: 'rocof', title: '慣性応答と RoCoF', tags: ['8.2.6', '第7回との接続'],
+      gen(rng) {
+        const S = pick(rng, [1000, 1500, 2000, 5000]);
+        const H = pick(rng, [2.5, 3, 4, 4.5, 5, 6]);
+        const trip = pick(rng, [100, 150, 180, 200, 250]);
+        const f0 = 60;
+        const rocof = -trip * f0 / (2 * H * S);
+        const tTo59 = 1.0 / -rocof;
+        return {
+          given: [['系統容量 S', S + ' MW'], ['系統慣性定数 H<sub>sys</sub>', H + ' s（S 基準）'], ['定格周波数 f<sub>0</sub>', f0 + ' Hz'], ['脱落電源', trip + ' MW']],
+          q: 'ガバナも LFC もまだ動かない脱落直後を考える。<br>(a) <b>RoCoF</b>（周波数変化率、低下は負）を求めよ。<br>(b) この変化率が続くとして、周波数が 59.0 Hz（1.0 Hz 低下）に達するまでの<b>時間 t</b> を求めよ。',
+          answers: [
+            { key: 'rocof', label: '(a) RoCoF', unit: 'Hz/s', value: rocof, abs: 0.02 },
+            { key: 't', label: '(b) t', unit: 's', value: tTo59 },
+          ],
+          steps: [
+            '動揺方程式を系統全体で書くと ' + eq('(2H<sub>sys</sub>S / f<sub>0</sub>) · df/dt = ΔP') + '。慣性は「勢いの貯金」で、貯金が少ないほど周波数は速く落ちる。',
+            '(a) ' + eq('RoCoF = ΔP f<sub>0</sub> / (2 H<sub>sys</sub> S) = −' + trip + ' × ' + f0 + ' / (2 × ' + H + ' × ' + S + ') = ' + fmt(rocof) + ' Hz/s') + '。',
+            '(b) ' + eq('t = 1.0 / ' + fmt(-rocof) + ' = ' + fmt(tTo59) + ' s') + '。この間にガバナが応答を始めないと UFR（負荷遮断）に至る。',
+          ],
+          insight: '太陽光を増やして同期機を止めると H_sys が下がり、RoCoF は H に反比例して大きくなる。第9回の合成慣性・第15回の連系可能量はこの式から出発します。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

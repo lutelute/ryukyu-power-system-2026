@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第4回 演習 — Y_bus と直流法潮流</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第4回: Y_bus の要素、未知数の数、直流法潮流、注入電力、疎性。線路は R = 0（純リアクタンス）で扱う。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+const R2D = 180 / Math.PI;
+
+EX.page({
+  ch: 4,
+  intro: '系統の配線を Y_bus に、需給を電力方程式に写す練習です。3 母線の小さな系統で、行列の要素・未知数の数・直流法の解・注入電力を手で出します。',
+  problems: [
+    {
+      id: 'ybus', title: 'Y_bus の要素を組む（3 母線）', tags: ['4.2.1', '4.2.2'],
+      gen(rng) {
+        const x12 = pick(rng, [0.1, 0.2, 0.25, 0.4]);
+        const x13 = pick(rng, [0.2, 0.25, 0.5]);
+        const x23 = pick(rng, [0.1, 0.125, 0.2, 0.25]);
+        const y12 = 1 / x12, y13 = 1 / x13, y23 = 1 / x23;
+        const B11 = -(y12 + y13), B22 = -(y12 + y23), B12 = y12;
+        return {
+          given: [['線路 1–2', 'x = j' + x12 + ' p.u.'], ['線路 1–3', 'x = j' + x13 + ' p.u.'], ['線路 2–3', 'x = j' + x23 + ' p.u.'], ['抵抗・対地容量', '無視（純リアクタンス）']],
+          q: 'Y<sub>bus</sub> の要素を虚部の値（B、単位 p.u.）で答えよ。<br>(a) 対角要素 <b>Y<sub>11</sub></b> の虚部<br>(b) 対角要素 <b>Y<sub>22</sub></b> の虚部<br>(c) 非対角要素 <b>Y<sub>12</sub></b> の虚部',
+          answers: [
+            { key: 'B11', label: '(a) Im(Y_11)', unit: 'p.u.', value: B11 },
+            { key: 'B22', label: '(b) Im(Y_22)', unit: 'p.u.', value: B22 },
+            { key: 'B12', label: '(c) Im(Y_12)', unit: 'p.u.', value: B12 },
+          ],
+          steps: [
+            '線路アドミタンス y = 1/(jx) = −j/x: ' + eq('y<sub>12</sub> = −j' + fmt(y12) + ', y<sub>13</sub> = −j' + fmt(y13) + ', y<sub>23</sub> = −j' + fmt(y23)) + '。',
+            '対角はその母線につながる線路の和: ' + eq('Y<sub>11</sub> = y<sub>12</sub> + y<sub>13</sub> = −j' + fmt(-B11) + ',  Y<sub>22</sub> = y<sub>12</sub> + y<sub>23</sub> = −j' + fmt(-B22)) + '。',
+            '非対角は符号を反転: ' + eq('Y<sub>12</sub> = −y<sub>12</sub> = +j' + fmt(B12)) + '。対称なので Y<sub>21</sub> も同じ。',
+          ],
+          insight: '線路を 1 本足すたびに 4 か所を更新するだけ。プログラムなら 10 行で組める。',
+        };
+      },
+    },
+    {
+      id: 'unknowns', title: '未知数と方程式の数', tags: ['4.2.5', '4.2.6'],
+      gen(rng) {
+        const N = pick(rng, [6, 9, 12, 14, 30]);
+        const NPV = pick(rng, [1, 2, 3, 4]);
+        const NPQ = N - 1 - NPV;
+        const n = NPV + 2 * NPQ;
+        return {
+          given: [['母線数 N', String(N)], ['スラック母線', '1'], ['PV 母線 N<sub>PV</sub>', String(NPV)], ['PQ 母線 N<sub>PQ</sub>', String(NPQ)]],
+          q: '(a) 未知数の総数 <b>N<sub>PV</sub> + 2N<sub>PQ</sub></b><br>(b) ヤコビアン行列の要素数（n × n）',
+          answers: [
+            { key: 'n', label: '(a) 未知数', unit: '個', value: n },
+            { key: 'n2', label: '(b) ヤコビアンの要素数', unit: '個', value: n * n },
+          ],
+          steps: [
+            '各母線は (P, Q, V, θ) の 4 量のうち 2 つを与える。PV 母線は θ が未知（1 個）、PQ 母線は V と θ が未知（2 個）、スラックは両方既知。',
+            eq('n = ' + NPV + ' + 2 × ' + NPQ + ' = ' + n) + '。方程式の数も同じ（PV は P の式、PQ は P と Q の式）。',
+            'ヤコビアンは n × n: ' + eq(n + '² = ' + n * n) + '。ただし非零要素は線路数に比例し、大部分は 0（疎）。',
+          ],
+          insight: 'スラック母線は 1 つだけ。損失を引き受け、位相の基準にもなる。',
+        };
+      },
+    },
+    {
+      id: 'dc-flow', title: '直流法潮流（3 母線）', tags: ['4.2.7', '教科書 例題4.4'],
+      gen(rng) {
+        const x12 = pick(rng, [0.1, 0.2, 0.25]);
+        const x13 = pick(rng, [0.2, 0.25, 0.4]);
+        const x23 = pick(rng, [0.1, 0.2, 0.25]);
+        const P2 = pick(rng, [-0.5, -0.8, -1.0, 0.5, 0.8]);
+        const P3 = pick(rng, [-0.4, -0.6, -1.0, -1.2]);
+        // B' θ = P（母線 2, 3。母線 1 はスラック θ1 = 0）
+        const a = 1 / x12 + 1 / x23, b = -1 / x23, c = 1 / x13 + 1 / x23;
+        const det = a * c - b * b;
+        const th2 = (c * P2 - b * P3) / det;
+        const th3 = (a * P3 - b * P2) / det;
+        const P12 = (0 - th2) / x12;
+        const P23 = (th2 - th3) / x23;
+        return {
+          given: [['線路 1–2, 1–3, 2–3 の x', x12 + ', ' + x13 + ', ' + x23 + ' p.u.'], ['母線 1', 'スラック（θ₁ = 0）'], ['母線 2 の注入 P<sub>2</sub>', P2 + ' p.u.（発電 − 負荷）'], ['母線 3 の注入 P<sub>3</sub>', P3 + ' p.u.']],
+          q: '直流法（|V| = 1、R = 0、sin θ ≈ θ）で解け。<br>(a) <b>θ<sub>2</sub></b>、(b) <b>θ<sub>3</sub></b>（度）<br>(c) 線路 1→2 の潮流 <b>P<sub>12</sub> = (θ<sub>1</sub> − θ<sub>2</sub>)/x<sub>12</sub></b>',
+          answers: [
+            { key: 'th2', label: '(a) θ_2', unit: 'deg', value: th2 * R2D, abs: 0.1 },
+            { key: 'th3', label: '(b) θ_3', unit: 'deg', value: th3 * R2D, abs: 0.1 },
+            { key: 'P12', label: '(c) P_12', unit: 'p.u.', value: P12, abs: 0.01 },
+          ],
+          steps: [
+            'B′ 行列（母線 2, 3）: 対角は 1/x の和、非対角は −1/x: ' + eq('B′ = [[' + fmt(a) + ', ' + fmt(b) + '], [' + fmt(b) + ', ' + fmt(c) + ']]') + '。',
+            'B′ θ = P を解く: ' + eq('θ<sub>2</sub> = ' + fmt(th2) + ' rad = ' + fmt(th2 * R2D) + '°,  θ<sub>3</sub> = ' + fmt(th3) + ' rad = ' + fmt(th3 * R2D) + '°') + '。',
+            '線路潮流は角度差 ÷ x: ' + eq('P<sub>12</sub> = (0 − ' + fmt(th2) + ') / ' + x12 + ' = ' + fmt(P12) + ',  P<sub>23</sub> = ' + fmt(P23)) + '。スラックが注入 −(P₂+P₃) を引き受ける。',
+          ],
+          insight: '連立一次方程式を 1 回解くだけ。市場の混雑計算や N-1 の絞り込みはこの速さで回っている。',
+        };
+      },
+    },
+    {
+      id: 'injection', title: '電力方程式で注入電力を計算する（2 母線）', tags: ['4.2.3', '4.3.3'],
+      gen(rng) {
+        const V2 = pick(rng, [0.95, 0.97, 1.0, 1.02]);
+        const deg = pick(rng, [-5, -10, -15, -20]);
+        const x = pick(rng, [0.1, 0.2, 0.25]);
+        const th = deg * Math.PI / 180;
+        const B = 1 / x; // Y12 = +jB, Y22 = −jB
+        const P2 = V2 * 1.0 * B * Math.sin(th);
+        const Q2 = V2 * (V2 - 1.0 * Math.cos(th)) / x;
+        return {
+          given: [['母線 1', 'V₁ = 1.0∠0° p.u.'], ['母線 2', 'V₂ = ' + V2 + '∠' + deg + '° p.u.'], ['線路 1–2', 'x = j' + x + ' p.u.（G = 0）']],
+          q: '電力方程式 P<sub>i</sub> = V<sub>i</sub>ΣV<sub>j</sub>(G<sub>ij</sub>cos θ<sub>ij</sub> + B<sub>ij</sub>sin θ<sub>ij</sub>) 等で母線 2 の注入電力を求めよ。<br>(a) <b>P<sub>2</sub></b>（負なら負荷）<br>(b) <b>Q<sub>2</sub></b>',
+          answers: [
+            { key: 'P2', label: '(a) P_2', unit: 'p.u.', value: P2, abs: 0.01 },
+            { key: 'Q2', label: '(b) Q_2', unit: 'p.u.', value: Q2, abs: 0.01 },
+          ],
+          steps: [
+            'Y<sub>bus</sub>: Y<sub>22</sub> = −j' + fmt(B) + '（B<sub>22</sub> = −' + fmt(B) + '）、Y<sub>21</sub> = +j' + fmt(B) + '（B<sub>21</sub> = +' + fmt(B) + '）。G はすべて 0。',
+            eq('P<sub>2</sub> = V<sub>2</sub>V<sub>1</sub>B<sub>21</sub> sin(θ<sub>2</sub> − θ<sub>1</sub>) = ' + V2 + ' × 1.0 × ' + fmt(B) + ' × sin(' + deg + '°) = ' + fmt(P2) + ' p.u.') + '。位相が遅れているので P は負（負荷）。',
+            eq('Q<sub>2</sub> = V<sub>2</sub>[−V<sub>1</sub>B<sub>21</sub> cos θ<sub>21</sub> − V<sub>2</sub>B<sub>22</sub>] = ' + V2 + ' × (' + V2 + ' − cos ' + deg + '°) / ' + x + ' = ' + fmt(Q2) + ' p.u.') + '。',
+          ],
+          insight: '与えられる P, Q をこの式に合わせるのが潮流計算。V の積と sin/cos が非線形の正体。',
+        };
+      },
+    },
+    {
+      id: 'sparsity', title: 'Y_bus の疎性', tags: ['4.3.2'],
+      gen(rng) {
+        const N = pick(rng, [14, 30, 118, 300, 1000, 3000]);
+        const ratio = pick(rng, [1.3, 1.5, 1.8]);
+        const L = Math.round(N * ratio);
+        const nz = N + 2 * L;
+        const density = nz / (N * N) * 100;
+        return {
+          given: [['母線数 N', String(N)], ['線路数 L', String(L) + '（≈ ' + ratio + ' N）']],
+          q: '(a) Y<sub>bus</sub> の非零要素の数（対角 N 個 ＋ 線路ごとに 2 個）<br>(b) 全要素 N² に対する密度 [%]',
+          answers: [
+            { key: 'nz', label: '(a) 非零要素', unit: '個', value: nz },
+            { key: 'd', label: '(b) 密度', unit: '%', value: density },
+          ],
+          steps: [
+            eq('非零 = N + 2L = ' + N + ' + 2 × ' + L + ' = ' + nz) + '。',
+            eq('密度 = ' + nz + ' / ' + N + '² = ' + fmt(density) + ' %') + '。',
+            'N が 10 倍になると全要素は 100 倍、非零は 10 倍。だから密行列で解くと計算量が爆発し、疎行列技法が必須になる。',
+          ],
+          insight: '実系統の Y_bus は 99% 以上が 0。EMS が数分ごとに潮流を回せるのはこの疎性のおかげ。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

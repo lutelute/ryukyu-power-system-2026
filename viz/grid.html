@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第2回 電力システムの構成 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第2回 電力システムの構成 — 損失は電圧の 2 乗に反比例する</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch02.html">📖 講義ノート（第2回）</a><a class="e" href="../ex/ch02.html">✍ 演習で確かめる</a></div>
+  <div class="lead">発電所で作った電気を数百 km 先まで運ぶとき、<b>なぜ 500 kV もの高電圧にするのか</b>。答えは損失の式 1 本にあります。あわせて系統の「形」（放射状かループか）が停電の起きやすさをどう変えるかを、シード付きの実計算で確かめます。前提は<a href="energy.html">第1回</a>、次は<a href="acpower.html">第3回 P と Q の分離</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「電圧を上げると危ないだけ」と思うと、送電の根本設計（昇圧・力率改善・HVDC）の理由が全部見えなくなります。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>同じ電力なら電圧を 2 倍にすると損失は 1/4。だから発電所の出口で一気に昇圧する。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>沖縄本島の 132 kV 基幹系統、本土の 500 kV 送電線、北海道–本州の直流連系（HVDC）。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>電圧 <select id="vSel"><option value="66">66 kV</option><option value="110">110 kV</option><option value="154">154 kV</option><option value="275" selected>275 kV</option><option value="500">500 kV</option></select></label>
+      <label>力率 <input type="range" id="pfRange" min="0.70" max="1.00" step="0.01" value="0.95"> <span id="pfVal">0.95</span></label>
+      <button id="diceBtn">🎲 再抽選</button>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>送電線の「太さ」より「電圧」を変えるほうが桁で効く — 損失は電流の 2 乗、電流は電圧の逆数だから、<b>電圧の 2 乗で損失が消えていく</b>のです。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>損失を減らすには電線を太くするのが一番。</div>
+    <div class="row"><span class="o">✓</span>太さ（抵抗 R）は 1 乗でしか効きません。電圧は <b>2 乗</b>で効くので、154→275 kV の昇圧だけで損失は 31% に落ちます。同じ効果を太さで出すには断面積を 3.2 倍にする必要があります。</div>
+    <div class="row"><span class="x">✗</span>ループ系統は線路が 2 倍要るのだから、信頼度もせいぜい 2 倍。</div>
+    <div class="row"><span class="o">✓</span>停電は「両方同時に壊れたとき」だけ起きるので、確率は <b>積</b>になります。故障率 1% なら停電確率は 1%×1% = 0.01%、放射状（3 本直列）の約 3% と比べて <b>300 倍</b>近い差が出ます。</div>
+  </div>
+  <details><summary>もっと詳しく：導出・HVDC の損益分岐・沖縄系統</summary><div class="det">
+    三相送電電力 <i>P</i> = √3 <i>V I</i> cos φ から <i>I</i> = <i>P</i>/(√3 <i>V</i> cos φ)。ジュール損失 3<i>I</i>²<i>R</i> に代入すると <i>P</i><sub>loss</sub> = <i>R P</i>²/(<i>V</i>² cos²φ) となり、√3 は消えます。
+    直流送電は変換所が高価な代わりに線路が安く、架空線でおよそ 600 km、ケーブルで 50 km を超えると交流より有利とされます（損益分岐距離）。
+    沖縄本島系統は他系統と連系がない完全独立系統で、最大需要は約 1,500 MW。本土の 1/10 以下の規模のため、第8回で見る周波数維持が本土より格段に厳しくなります。
+    <b>限界：</b>このページの損失式は線路の抵抗だけを見ています。長距離では線路の静電容量（充電電流）が効き、第3回の π 型等価回路が必要です。モンテカルロも「線路は独立に壊れる」という仮定で、台風のように同時に壊れる相関は入っていません。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314;
+const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+
+/* ---- モデル（実計算） ---- */
+const P_MW = 1000, LEN_KM = 200, R_PER_KM = 0.03;
+let V_KV = 275, PF = 0.95;
+const current = (P, V, pf) => P * 1e6 / (Math.sqrt(3) * V * 1e3 * pf);       // A
+const loss = (P, V, pf) => 3 * current(P, V, pf) ** 2 * R_PER_KM * LEN_KM;  // W
+const lossRate = (P, V, pf) => loss(P, V, pf) / (P * 1e6) * 100;             // %
+const LEVELS = [66, 110, 154, 275, 500];
+/* モンテカルロ（放射状 3 本直列 vs ループ 2 経路） */
+const P_FAIL = 0.01, N_TRIAL = 40000;
+let mc = null;
+function runMC() { seed = 314 + mcRound * 7919; let okR = 0, okL = 0;
+  for (let i = 0; i < N_TRIAL; i++) { const a = rng() > P_FAIL, b = rng() > P_FAIL, c = rng() > P_FAIL, d = rng() > P_FAIL, e = rng() > P_FAIL;
+    if (a && b && c) okR++; if (d || e) okL++; }
+  mc = { radial: okR / N_TRIAL, loop: okL / N_TRIAL }; }
+let mcRound = 0;
+const minPerYear = p => (1 - p) * 8760 * 60;
+const f1 = x => x.toFixed(1), f2 = x => x.toFixed(2);
+
+const CHAPTERS = [
+  { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 電圧の力', c: 'var(--upd)', start: 3 },
+  { t: 'Ⅲ 系統の形', c: 'var(--loss)', start: 8 }, { t: 'Ⅳ まとめ', c: 'var(--accent)', start: 12 } ];
+const SLIDES = [
+  { legend: '左から右へ：発電 → 昇圧 → 送電 → 降圧 → 配電 → 需要家。数字は電圧階級',
+    mini: () => '<div>発電端 <b>10〜25 kV</b></div><div>基幹 <b>275〜500 kV</b></div><div>家庭 <b>100/200 V</b></div>',
+    html() { return '<h3>電気は、電圧を変えながら旅をする</h3><div class="eq curr">発電機 20 kV → 主変圧器 → 500 kV → … → 6.6 kV → 100 V<span class="read">読み：発電機の端子電圧は絶縁の都合で 20 kV 程度が限界。出口の変圧器で一気に 20 倍以上に昇圧してから運びます。</span></div><div class="desc">図の左端、発電機の電圧は意外に低く <b>10〜25 kV</b> です。回転子の絶縁厚に物理的な限界があるからです。ところが送電線は 275〜500 kV。<b>なぜわざわざ 20 倍も昇圧するのか</b> — その理由を 1 本の式で見ていきます。</div>'; },
+    draw() { drawHierarchy(); caption('発電機は低圧、送電線は超高圧。この落差がテーマ'); } },
+  { legend: '1000 MW を 200 km 送る。電圧を 66 kV にしたら何が起きるか',
+    mini: () => '<div>電流 <b>' + current(P_MW, 66, PF).toFixed(0) + ' A</b></div><div>損失 <b>' + f1(loss(P_MW, 66, PF) / 1e6) + ' MW</b></div>',
+    html() { return '<h3>問題：66 kV で 1000 MW を送ろうとすると？</h3><div class="eq curr"><i>I</i> = <i>P</i>/(√3 <i>V</i> cos φ) = <b class="res">' + current(P_MW, 66, PF).toFixed(0) + '</b> A　→　損失 3<i>I</i>²<i>R</i> = <b class="res">' + f1(loss(P_MW, 66, PF) / 1e6) + '</b> MW<span class="read">読み：同じ電力を低い電圧で送ると電流が巨大になり、抵抗で熱になる電力が送りたい電力を超えてしまいます。</span></div><div class="desc">損失が <b>' + f1(lossRate(P_MW, 66, PF)) + '%</b>、つまり<b>送ろうとした電力より多くが熱で消える</b>という結果です。これは物理的に不可能を意味します。電圧を上げるとどう変わるか、次のスライドで式から確かめます。</div>'; },
+    draw() { drawLossBars(66); caption('66 kV では損失が 100% を超える＝送れない'); } },
+  { legend: '横軸=送電電圧、縦軸=損失率（対数）。●=右下の選択',
+    mini: () => LEVELS.map(v => '<div>' + v + 'kV <b>' + f1(lossRate(P_MW, v, PF)) + '%</b></div>').join(''),
+    html() { return '<h3>電圧を上げるほど損失は急激に減る</h3><div class="eq curr">66 kV: ' + f1(lossRate(P_MW, 66, PF)) + '%　154 kV: ' + f1(lossRate(P_MW, 154, PF)) + '%　275 kV: ' + f1(lossRate(P_MW, 275, PF)) + '%　500 kV: <b class="res">' + f1(lossRate(P_MW, 500, PF)) + '%</b><span class="read">読み：同じ 1000 MW・200 km・力率でも、電圧だけで損失率が 2 桁変わります。</span></div><div class="desc">縦軸が対数であることに注目してください。66 kV から 500 kV で損失は <b>' + (lossRate(P_MW, 66, PF) / lossRate(P_MW, 500, PF)).toFixed(0) + ' 分の 1</b> です。「電圧が 7.6 倍だから損失も 1/7.6」ではありません。次の章で、この落ち方が「2 乗」であることを式で示します。</div>'; },
+    draw() { drawLossCurve(); caption('対数軸で直線 → べき乗の関係'); } },
+
+  { legend: '式の 3 段変形。赤=電圧が入る場所',
+    html() { return '<h3>導出：損失は電圧の 2 乗に反比例する</h3><div class="eq curr"><i>P</i><sub>loss</sub> = 3<i>I</i>²<i>R</i>,　<i>I</i> = <span class="frac"><span><i>P</i></span><span>√3 <i>V</i> cos φ</span></span>　⇒　<i>P</i><sub>loss</sub> = <span class="frac"><span><i>R P</i>²</span><span><i>V</i>² cos²φ</span></span><span class="read">読み：損失は電流の 2 乗。電流は電圧に反比例。だから損失は電圧の 2 乗に反比例します。√3 は約分で消えます。</span></div><div class="desc">たった 2 行の代入で答えが出ます。分母に <b><i>V</i>²</b> と <b>cos²φ</b> が並んでいることが、この回のすべてです。電圧を 2 倍にすれば損失は 1/4、力率を 0.8 から 1.0 にすれば損失は 0.64 倍。<b>抵抗 <i>R</i>（電線の太さ）は 1 乗でしか効きません</b>。</div>'; },
+    draw() { drawDerivation(); caption('分母の V² と cos²φ が主役'); } },
+  { legend: 'A/B：同じ 1000 MW を 66 kV（左）と 500 kV（右）で送る。棒=損失 MW',
+    mini: () => '<div>66 kV <b>' + f1(loss(P_MW, 66, PF) / 1e6) + ' MW</b></div><div>500 kV <b>' + f1(loss(P_MW, 500, PF) / 1e6) + ' MW</b></div><div>比 <b>' + (loss(P_MW, 66, PF) / loss(P_MW, 500, PF)).toFixed(1) + '×</b></div>',
+    html() { const r = (500 / 66) ** 2; return '<h3>A/B：66 kV vs 500 kV — 電圧比 7.6 倍で損失は 57 分の 1</h3><div class="eq curr">(500/66)<sup>2</sup> = <b class="res">' + r.toFixed(1) + '</b>　⇒　損失 ' + f1(loss(P_MW, 66, PF) / 1e6) + ' MW → <b class="res">' + f1(loss(P_MW, 500, PF) / 1e6) + '</b> MW<span class="read">読み：電圧比の 2 乗がそのまま損失の比になります。実計算の比 ' + (loss(P_MW, 66, PF) / loss(P_MW, 500, PF)).toFixed(1) + ' と一致。</span></div><div class="desc">右下のセレクタで電圧を切り替えると図が追従します。500 kV では損失 <b>' + f1(lossRate(P_MW, 500, PF)) + '%</b>、これが「大電力の長距離送電には超高電圧が必然」の意味です。日本の送配電損失が全体で約 4.5% に収まっているのは、この 2 乗則のおかげです。</div>'; },
+    draw() { drawLossBars(V_KV); caption(V_KV + ' kV → 損失率 ' + f1(lossRate(P_MW, V_KV, PF)) + '%'); } },
+  { legend: '曲線=力率 cos φ と損失率（' + '275 kV）。●=右下のスライダ',
+    mini: () => '<div>cos φ <b>' + PF.toFixed(2) + '</b></div><div>損失率 <b>' + f2(lossRate(P_MW, V_KV, PF)) + '%</b></div>',
+    html() { const base = lossRate(P_MW, V_KV, 1.0); return '<h3>もう 1 つの 2 乗：力率も分母にいる</h3><div class="eq curr">損失 ∝ 1/cos²φ：cos φ = 0.80 で <b class="res">' + (1 / .64).toFixed(2) + ' 倍</b>、0.95 で ' + (1 / .9025).toFixed(2) + ' 倍、1.00 で 1.00 倍<span class="read">読み：力率が悪いほど同じ仕事に余計な電流が要り、その 2 乗で損失が増えます。</span></div><div class="desc">右下の力率スライダを動かしてください。いまの損失率は <b>' + f2(lossRate(P_MW, V_KV, PF)) + '%</b>（力率 1 なら ' + f2(base) + '%）です。設備を 1 本も増やさず、<b>無効電力の管理だけで損失を 2〜3 割減らせる</b>のが力率改善の価値です。無効電力の正体は第3回で扱います。</div>'; },
+    draw() { drawPFCurve(); caption('力率 0.8 → 1.0 で損失は 64% に'); } },
+  { legend: '交流の決め手=変圧器。直流が勝つ場面=長距離・海底・異周波数',
+    html() { return '<h3>なぜ交流なのか、どこで直流を使うのか</h3><div class="eq curr">交流：変圧器で <i>V</i> を自在に変えられる　／　直流：架空 600 km・ケーブル 50 km 超で有利<span class="read">読み：電圧を上げ下げできることが交流の決定的な利点。長距離・海底・50/60 Hz の橋渡しでは直流が逆転します。</span></div><div class="desc">前のスライドで「電圧を上げれば損失が消える」と分かりました。それを<b>安く確実に実現する装置が変圧器</b>で、変圧器は交流でしか動きません。これが交流が世界標準になった理由です。一方、変換器の技術が進んだ現在は、北海道–本州や本州–四国の海底連系、東西の周波数変換所に<b>HVDC</b> が使われています（第9回のインバータと同じ技術）。</div>'; },
+    draw() { drawACDC(); caption('交流=変圧器が主役、直流=変換器が主役'); } },
+  { legend: '変圧器の巻数比 a と、二次側インピーダンスの一次換算 a²Z',
+    html() { return '<h3>変圧器を挟むたびに a² の換算が要る — 単位法への伏線</h3><div class="eq curr"><i>V</i><sub>1</sub>/<i>V</i><sub>2</sub> = <i>a</i>,　<i>Z</i><sub>1</sub> = <i>a</i>²<i>Z</i><sub>2</sub>　例：275/66 kV → <i>a</i> = 4.17,　<i>a</i>² = <b class="res">17.4</b><span class="read">読み：二次側の 1 Ω は一次側から見ると 17.4 Ω に見える。変圧器を 3 段通れば換算も 3 回。</span></div><div class="desc">系統は何段もの変圧器で繋がっています。解析のたびに <i>a</i>² を掛け続けるのは煩雑で、間違いのもとです。第3回で導入する<b>単位法</b>は、基準電圧を巻数比に合わせて取ることで、<b>この換算を一切不要にします</b>。ここで一度「面倒さ」を体感しておいてください。</div>'; },
+    draw() { drawTransformer(); caption('a² を掛け続けるのは面倒 → 第3回で消す'); } },
+
+  { legend: '左=放射状、中=ループ、右=網目。○=変電所、線=送電線',
+    html() { return '<h3>系統には「形」がある：放射状・ループ・網目</h3><div class="eq curr">放射状：1 本切れると末端が停電　／　ループ：2 経路あるので切替で復旧　／　網目：多重化<span class="read">読み：形が違うと、同じ 1 回線事故でも停電するかどうかが変わります。</span></div><div class="desc">配電系統は安価な放射状、送電系統はループ、大都市の基幹はさらに網目です。放射状では電流の向きが一意に決まるので手計算できますが、<b>ループ以上では電流の分かれ方がインピーダンスの比で決まる</b>ため、連立方程式＝潮流計算（第4回）が必要になります。まずは信頼度の違いを数で見ます。</div>'; },
+    draw() { drawTopologies(-1); caption('形が変わると、計算法も信頼度も変わる'); } },
+  { legend: '放射状：3 本直列。どれか 1 本でも切れると末端は停電（赤）',
+    mini: () => '<div>理論 (1−0.01)³ = <b>' + ((1 - P_FAIL) ** 3 * 100).toFixed(2) + '%</b></div>',
+    html() { return '<h3>放射状：故障確率は「足し算」に近い</h3><div class="eq curr"><i>p</i><sub>供給</sub> = (1 − 0.01)<sup>3</sup> = <b class="res">' + ((1 - P_FAIL) ** 3).toFixed(4) + '</b>　⇒ 停電確率 ≈ 3%<span class="read">読み：3 本とも無事である確率。1 本あたり 1% の故障が 3 本分ほぼ足し合わさります。</span></div><div class="desc">年間の停電時間に直すと約 <b>' + minPerYear((1 - P_FAIL) ** 3).toFixed(0) + ' 分/年</b>。線路を増やすほど「どれかが壊れる」確率が上がるのが直列の性質です。次のスライドで、同じ故障率 1% の線路をループに組んだときと<b>実際に抽選して</b>比べます。</div>'; },
+    draw() { drawTopologies(0); caption('直列：どれか 1 本の故障で終わり'); } },
+  { legend: 'A/B：放射状 vs ループ。' + N_TRIAL.toLocaleString() + ' 回の抽選（シード固定）。棒=供給成功率',
+    mini: () => mc ? '<div>放射状 <b>' + (mc.radial * 100).toFixed(3) + '%</b></div><div>ループ <b>' + (mc.loop * 100).toFixed(3) + '%</b></div>' : '',
+    enter() { runMC(); },
+    html() { if (!mc) runMC(); return '<h3>A/B：ループにすると停電時間は数百分の 1 になる</h3><div class="eq curr">ループ <i>p</i><sub>供給</sub> = 1 − 0.01² = 0.9999　実測 <b class="res">' + (mc.loop * 100).toFixed(3) + '%</b>　／　放射状 実測 <b class="res">' + (mc.radial * 100).toFixed(3) + '%</b><span class="read">読み：ループは「2 本同時に壊れる」ときだけ停電するので、確率は積（0.01×0.01）になります。</span></div><div class="desc">' + N_TRIAL.toLocaleString() + ' 回の抽選（シード付き乱数、🎲 で振り直し）で、年間停電時間は放射状 <b>' + minPerYear(mc.radial).toFixed(0) + ' 分</b> に対しループ <b>' + minPerYear(mc.loop).toFixed(1) + ' 分</b>。<b>約 ' + (minPerYear(mc.radial) / Math.max(minPerYear(mc.loop), 1e-9)).toFixed(0) + ' 分の 1</b> です。線路は 2 倍要るが、停電は 2 桁減る。ただし代償として潮流計算が必要になります。</div>'; },
+    draw() { drawMC(); caption('積になるか、和になるか。それが直列と並列の差'); } },
+  { legend: '単線結線図：~=発電機、╫=変圧器、×=遮断器 CB、／=断路器 DS、太線=母線',
+    html() { return '<h3>単線結線図を読む：母線・遮断器・断路器</h3><div class="eq curr">操作順序：CB を開く → DS を開く（逆は禁止）<span class="read">読み：遮断器（CB）は事故電流を切れるが、断路器（DS）は無電流でしか開けない。順序を誤ると重大事故になります。</span></div><div class="desc">三相の線を 1 本で代表したのが単線結線図です。ここに出てくる<b>母線（太い横線）が、第4回以降の潮流計算の「節点」</b>になります。図を読めることが、これから先の全部の前提です。CB と DS の役割の違いは試験にも実務にも出ます。</div>'; },
+    draw() { drawSLD(); caption('母線 = これからの計算の節点'); } },
+
+  { legend: '日本の系統：東 50 Hz / 西 60 Hz。沖縄（右下）は完全独立',
+    mini: () => '<div>沖縄 <b>約 1,500 MW</b></div><div>九州 <b>約 16,000 MW</b></div><div>連系線 <b>なし</b></div>',
+    html() { return '<h3>まとめ：沖縄は「応援の来ない」独立系統</h3><div class="eq curr">d<i>F</i>/d<i>t</i> ∝ Δ<i>P</i> / (<i>H</i><sub>sys</sub><i>S</i><sub>sys</sub>)　— 系統容量 <i>S</i><sub>sys</sub> が小さいほど周波数が速く動く<span class="read">読み：同じ 250 MW の脱落でも、系統が小さい沖縄では周波数変化率が本土の 10 倍以上になります（第8回で導出）。</span></div><div class="desc">今回は「どう運ぶか」を見ました。電圧の 2 乗則、力率、変圧器、系統の形。最後に沖縄の特殊性：<b>他系統と繋がっていない</b>ので、需給が乱れても隣から助けが来ません。この 1 点が、この講義を貫く題材になります。次回は運ぶための道具、<b>複素電力と単位法</b>（第3回）です。</div>'; },
+    draw() { drawJapan(); caption('沖縄：小さく、独立。だから難しく、面白い'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+
+function drawHierarchy() {
+  const stages = [['発電', '20 kV', '--warm'], ['昇圧', '', '--muted'], ['基幹送電', '500 kV', '--upd'], ['一次変電', '154 kV', '--upd'], ['配電', '6.6 kV', '--accent'], ['需要家', '100 V', '--accent']];
+  stages.forEach(([n, v, c], i) => { const x = 30 + i * 52, y = 120 + (i % 2) * 0; rect(x, 150, 44, 60, getCSS(c), .75); txt(n, x + 22, 130, { align: 'center', size: 10 }); txt(v, x + 22, 232, { align: 'center', size: 9.5, mono: true, color: getCSS('--muted') }); if (i < 5) txt('▶', x + 46, 185, { size: 10, color: getCSS('--faint') }); });
+  const pts = [[52, 300], [104, 300], [156, 262], [208, 275], [260, 296], [312, 305]]; line(pts, getCSS('--neg'), 2); pts.forEach(p => dot(p[0], p[1], 3, getCSS('--neg')));
+  txt('電圧（イメージ）', 30, 330, { size: 10, color: getCSS('--muted') }); txt('発電機は低圧 → 出口で一気に昇圧 → 需要家へ向けて段階的に降圧', CW / 2, 360, { align: 'center', size: 10.5 });
+}
+function drawLossBars(vk) {
+  const L = 60, T = 50, R = 335, B = 320; axes(L, T, R, B, '', '損失 MW（対数）');
+  const yOf = mw => B - (Math.log10(Math.max(mw, .1)) + 1) / 5 * (B - T);
+  LEVELS.forEach((v, i) => { const x = L + 12 + i * 54, mw = loss(P_MW, v, PF) / 1e6, sel = v === vk; rect(x, yOf(mw), 40, B - yOf(mw), getCSS(sel ? '--neg' : '--accent'), sel ? .95 : .45); txt(v, x + 20, B + 14, { align: 'center', size: 9.5, mono: true }); txt(f1(mw), x + 20, yOf(mw) - 5, { align: 'center', size: 9.5, mono: true, bold: sel }); });
+  line([[L, yOf(P_MW)], [R, yOf(P_MW)]], getCSS('--neg'), 1, [4, 3]); txt('送電電力 1000 MW', R, yOf(P_MW) - 4, { align: 'right', size: 9, color: getCSS('--neg') });
+  [1, 10, 100, 1000].forEach(m => txt(m, L - 4, yOf(m) + 4, { align: 'right', size: 9, mono: true }));
+  txt('kV', R, B + 28, { align: 'right', size: 9, color: getCSS('--muted') });
+}
+function drawLossCurve() {
+  const L = 60, T = 50, R = 335, B = 320; axes(L, T, R, B, 'kV', '損失率 %');
+  const xOf = v => L + (v - 50) / 470 * (R - L), yOf = pct => B - (Math.log10(Math.max(pct, 1)) ) / 2.5 * (B - T);
+  const pts = []; for (let v = 60; v <= 520; v += 5) pts.push([xOf(v), yOf(lossRate(P_MW, v, PF))]); line(pts, getCSS('--upd'), 2.5);
+  LEVELS.forEach(v => { dot(xOf(v), yOf(lossRate(P_MW, v, PF)), 4, getCSS(v === V_KV ? '--neg' : '--upd')); txt(v, xOf(v), B + 14, { align: 'center', size: 9, mono: true }); txt(f1(lossRate(P_MW, v, PF)) + '%', xOf(v) + 6, yOf(lossRate(P_MW, v, PF)) - 6, { size: 9, mono: true }); });
+  [1, 10, 100].forEach(p => { txt(p + '%', L - 4, yOf(p) + 4, { align: 'right', size: 9, mono: true }); line([[L, yOf(p)], [R, yOf(p)]], getCSS('--grid'), 1, [3, 3]); });
+  line([[L, yOf(100)], [R, yOf(100)]], getCSS('--neg'), 1.5, [4, 3]); txt('100% = 送電不能', R, yOf(100) - 5, { align: 'right', size: 9, color: getCSS('--neg') });
+}
+function drawDerivation() {
+  const rows = ['P_loss = 3 I² R', 'I = P / (√3 V cosφ)', 'P_loss = 3R · P² / (3 V² cos²φ)', 'P_loss = R P² / (V² cos²φ)'];
+  rows.forEach((r, i) => { const y = 90 + i * 62; rect(30, y - 26, 300, 40, getCSS(i === 3 ? '--accent' : '--panel'), i === 3 ? .18 : 1); txt(r, 180, y, { align: 'center', size: 13, mono: true, bold: i === 3 }); if (i < 3) txt('↓ ' + ['電流を電力で書き直す', '代入', '√3 が約分で消える'][i], 180, y + 30, { align: 'center', size: 10, color: getCSS('--muted') }); });
+  rect(140, 292, 45, 3, getCSS('--neg')); rect(196, 292, 60, 3, getCSS('--neg')); txt('V²', 162, 318, { align: 'center', size: 11, color: getCSS('--neg'), bold: true }); txt('cos²φ', 226, 318, { align: 'center', size: 11, color: getCSS('--neg'), bold: true });
+  txt('2 乗で効くのはこの 2 つだけ', 180, 345, { align: 'center', size: 11 });
+}
+function drawPFCurve() {
+  const L = 55, T = 50, R = 335, B = 320; axes(L, T, R, B, 'cos φ', '損失率 %');
+  const base = lossRate(P_MW, V_KV, 1.0), ymax = base * 2.1; const xOf = pf => L + (pf - .7) / .3 * (R - L), yOf = pct => B - pct / ymax * (B - T);
+  const pts = []; for (let pf = .7; pf <= 1.0001; pf += .005) pts.push([xOf(pf), yOf(lossRate(P_MW, V_KV, pf))]); line(pts, getCSS('--upd'), 2.5);
+  [.7, .8, .9, 1.0].forEach(pf => txt(pf.toFixed(1), xOf(pf), B + 14, { align: 'center', size: 9, mono: true }));
+  [0, .5, 1, 1.5, 2].forEach(k => { const v = base * k; txt(v.toFixed(1), L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true }); });
+  dot(xOf(PF), yOf(lossRate(P_MW, V_KV, PF)), 7, getCSS('--neg')); txt('cosφ=' + PF.toFixed(2) + ' → ' + f2(lossRate(P_MW, V_KV, PF)) + '%', xOf(PF) - 8, yOf(lossRate(P_MW, V_KV, PF)) - 12, { align: 'right', size: 11, bold: true, color: getCSS('--neg') });
+  txt(V_KV + ' kV・1000 MW・200 km', L, 345, { size: 10, color: getCSS('--muted') });
+}
+function drawACDC() {
+  rect(20, 60, 150, 260, getCSS('--upd'), .1); rect(190, 60, 150, 260, getCSS('--warm'), .1);
+  txt('交流 AC', 95, 85, { align: 'center', size: 13, bold: true, color: getCSS('--upd') }); txt('直流 DC', 265, 85, { align: 'center', size: 13, bold: true, color: getCSS('--warm') });
+  ['変圧器で昇降圧が容易', '電流零点があり遮断が容易', '長距離で充電電流が問題', '位相角の安定度制約'].forEach((s, i) => txt('・' + s, 28, 120 + i * 28, { size: 9.5 }));
+  ['変換器が必要（高価）', '零点がなく遮断が難しい', '充電電流なし・導体を有効利用', '安定度の制約なし'].forEach((s, i) => txt('・' + s, 198, 120 + i * 28, { size: 9.5 }));
+  txt('主流', 95, 260, { align: 'center', size: 12, bold: true }); txt('長距離・海底・異周波数', 265, 260, { align: 'center', size: 10.5, bold: true });
+  txt('北本連系 / 紀伊水道 / 周波数変換所', 265, 285, { align: 'center', size: 9, color: getCSS('--muted') });
+  txt('「電圧を自在に変えられる」が決め手', CW / 2, 350, { align: 'center', size: 11 });
+}
+function drawTransformer() {
+  const a = 275 / 66; line([[30, 200], [130, 200]], getCSS('--text'), 2); line([[230, 200], [330, 200]], getCSS('--text'), 2);
+  for (let k = 0; k < 4; k++) { ctx.save(); ctx.strokeStyle = getCSS('--upd'); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(150, 176 + k * 16, 8, Math.PI / 2, -Math.PI / 2, false); ctx.stroke(); ctx.beginPath(); ctx.arc(210, 176 + k * 16, 8, -Math.PI / 2, Math.PI / 2, false); ctx.stroke(); ctx.restore(); }
+  line([[176, 165], [176, 240]], getCSS('--faint'), 1); line([[184, 165], [184, 240]], getCSS('--faint'), 1);
+  txt('275 kV', 80, 185, { align: 'center', size: 11, mono: true }); txt('66 kV', 280, 185, { align: 'center', size: 11, mono: true });
+  rect(255, 205, 50, 22, getCSS('--warm'), .5); txt('Z₂ = 1 Ω', 280, 220, { align: 'center', size: 10, mono: true });
+  rect(55, 205, 60, 22, getCSS('--neg'), .5); txt('Z₁ = a²Z₂', 85, 220, { align: 'center', size: 10, mono: true });
+  txt('a = 275/66 = ' + a.toFixed(2), CW / 2, 280, { align: 'center', size: 12, mono: true }); txt('a² = ' + (a * a).toFixed(1) + '  → 1 Ω が 17.4 Ω に見える', CW / 2, 305, { align: 'center', size: 12, mono: true, bold: true });
+  txt('変圧器 3 段なら換算 3 回', CW / 2, 345, { align: 'center', size: 10.5, color: getCSS('--muted') });
+}
+function drawTopologies(hl) {
+  const cols = [30, 140, 250], names = ['放射状', 'ループ', '網目'];
+  cols.forEach((x0, k) => { const dim = hl >= 0 && hl !== k; ctx.save(); ctx.globalAlpha = dim ? .3 : 1;
+    txt(names[k], x0 + 45, 70, { align: 'center', size: 11.5, bold: true });
+    const c = getCSS('--text'); dot(x0 + 45, 95, 7, getCSS('--warm'), c); txt('電源', x0 + 45, 84, { align: 'center', size: 8.5, color: getCSS('--muted') });
+    if (k === 0) { const ys = [140, 190, 240]; line([[x0 + 45, 95], [x0 + 45, 240]], hl === 0 ? getCSS('--neg') : c, 2); ys.forEach(y => dot(x0 + 45, y, 6, getCSS('--panel'), c)); }
+    if (k === 1) { line([[x0 + 45, 95], [x0 + 15, 140], [x0 + 15, 200], [x0 + 45, 240], [x0 + 75, 200], [x0 + 75, 140], [x0 + 45, 95]], c, 2); [[x0 + 15, 140], [x0 + 15, 200], [x0 + 45, 240], [x0 + 75, 200], [x0 + 75, 140]].forEach(p => dot(p[0], p[1], 6, getCSS('--panel'), c)); }
+    if (k === 2) { const g = [[x0 + 15, 140], [x0 + 45, 140], [x0 + 75, 140], [x0 + 15, 200], [x0 + 45, 200], [x0 + 75, 200]]; line([[x0 + 45, 95], [x0 + 15, 140]], c, 2); line([[x0 + 45, 95], [x0 + 75, 140]], c, 2); line([g[0], g[1], g[2]], c, 2); line([g[3], g[4], g[5]], c, 2); line([g[0], g[3]], c, 2); line([g[1], g[4]], c, 2); line([g[2], g[5]], c, 2); g.forEach(p => dot(p[0], p[1], 6, getCSS('--panel'), c)); }
+    txt(['安価・手計算可', '1 回線事故に耐える', '高信頼・高コスト'][k], x0 + 45, 275, { align: 'center', size: 9.5, color: getCSS('--muted') });
+    txt(['1 点故障で停電', '潮流計算が必要', '潮流計算が必須'][k], x0 + 45, 292, { align: 'center', size: 9.5, color: getCSS(k === 0 ? '--neg' : '--upd') });
+    ctx.restore(); });
+  if (hl === 0) { rect(60, 225, 30, 22, getCSS('--neg'), .25); txt('停電', 75, 240, { align: 'center', size: 9, color: getCSS('--neg'), bold: true }); }
+}
+function drawMC() {
+  if (!mc) runMC(); const L = 70, T = 50, R = 335, B = 300; axes(L, T, R, B, '', '供給成功率');
+  const yOf = p => B - (p - .96) / .04 * (B - T);
+  [['放射状', mc.radial, '--neg'], ['ループ', mc.loop, '--accent']].forEach(([n, p, c], i) => { const x = L + 40 + i * 130; rect(x, yOf(p), 70, B - yOf(p), getCSS(c), .85); txt(n, x + 35, B + 16, { align: 'center', size: 11 }); txt((p * 100).toFixed(3) + '%', x + 35, yOf(p) - 6, { align: 'center', size: 11, mono: true, bold: true }); txt(minPerYear(p).toFixed(minPerYear(p) < 100 ? 1 : 0) + ' 分/年', x + 35, B + 32, { align: 'center', size: 10, mono: true, color: getCSS(c) }); });
+  [.96, .97, .98, .99, 1].forEach(p => { txt((p * 100).toFixed(0) + '%', L - 4, yOf(p) + 4, { align: 'right', size: 9, mono: true }); line([[L, yOf(p)], [R, yOf(p)]], getCSS('--grid'), 1, [3, 3]); });
+  txt('試行 ' + N_TRIAL.toLocaleString() + ' 回・故障率 1%/本・seed ' + (314 + mcRound * 7919), L, 355, { size: 9.5, color: getCSS('--muted'), mono: true });
+}
+function drawSLD() {
+  const y = 200; const c = getCSS('--text');
+  dot(40, y, 12, getCSS('--panel'), c); txt('~', 40, y + 5, { align: 'center', size: 14 }); txt('G', 40, 170, { align: 'center', size: 10 });
+  line([[52, y], [80, y]], c, 2); for (let k = 0; k < 3; k++) { ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(84, y - 8 + k * 8, 4, Math.PI / 2, -Math.PI / 2); ctx.stroke(); ctx.beginPath(); ctx.arc(94, y - 8 + k * 8, 4, -Math.PI / 2, Math.PI / 2); ctx.stroke(); ctx.restore(); } txt('Tr', 89, 170, { align: 'center', size: 10 });
+  line([[98, y], [125, y]], c, 2); rect(125, y - 7, 14, 14, getCSS('--neg'), .9); txt('CB', 132, 170, { align: 'center', size: 10, color: getCSS('--neg'), bold: true });
+  line([[139, y], [160, y]], c, 2); line([[160, y], [172, y - 10]], c, 2); line([[172, y], [190, y]], c, 2); txt('DS', 172, 170, { align: 'center', size: 10, color: getCSS('--upd'), bold: true });
+  rect(190, y - 3, 6, 70, c); txt('母線', 193, y + 90, { align: 'center', size: 10.5, bold: true, color: getCSS('--accent') });
+  line([[196, y + 20], [240, y + 20]], c, 2); ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); for (let k = 0; k < 6; k++) { ctx.lineTo(240 + k * 8, y + 20 + (k % 2 ? 6 : -6)); } ctx.stroke(); ctx.restore(); line([[288, y + 20], [310, y + 20]], c, 2); txt('送電線', 265, y + 40, { align: 'center', size: 9.5 });
+  line([[310, y + 20], [310, y + 55]], c, 2); ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(300, y + 55); ctx.lineTo(320, y + 55); ctx.lineTo(310, y + 70); ctx.closePath(); ctx.stroke(); ctx.restore(); txt('負荷', 310, y + 88, { align: 'center', size: 9.5 });
+  txt('CB：事故電流を切れる（先に開く）', 30, 320, { size: 10.5, color: getCSS('--neg') }); txt('DS：無電流でのみ開閉（後で開く）', 30, 340, { size: 10.5, color: getCSS('--upd') });
+}
+function drawJapan() {
+  rect(40, 60, 130, 200, getCSS('--upd'), .15); rect(180, 60, 130, 200, getCSS('--accent'), .15);
+  txt('東日本 50 Hz', 105, 85, { align: 'center', size: 12, bold: true, color: getCSS('--upd') }); txt('西日本 60 Hz', 245, 85, { align: 'center', size: 12, bold: true, color: getCSS('--accent') });
+  line([[170, 120], [180, 120]], getCSS('--neg'), 4); txt('FC 2,100 MW', 175, 110, { align: 'center', size: 9, color: getCSS('--neg') });
+  ['北海道', '東北', '東京'].forEach((n, i) => { dot(105, 130 + i * 40, 10, getCSS('--upd'), '#fff'); txt(n, 125, 134 + i * 40, { size: 10 }); if (i) line([[105, 130 + (i - 1) * 40 + 10], [105, 130 + i * 40 - 10]], getCSS('--upd'), 2); });
+  ['中部', '関西', '九州'].forEach((n, i) => { dot(245, 130 + i * 40, 10, getCSS('--accent'), '#fff'); txt(n, 265, 134 + i * 40, { size: 10 }); if (i) line([[245, 130 + (i - 1) * 40 + 10], [245, 130 + i * 40 - 10]], getCSS('--accent'), 2); });
+  dot(300, 320, 14, getCSS('--neg'), '#fff'); txt('沖縄', 300, 324, { align: 'center', size: 10, color: '#fff', bold: true }); txt('連系線なし・約 1,500 MW', 300, 350, { align: 'center', size: 10, color: getCSS('--neg'), bold: true });
+  line([[245, 210 + 10], [280, 300]], getCSS('--neg'), 1.5, [4, 4]); txt('✕', 265, 262, { align: 'center', size: 16, color: getCSS('--neg'), bold: true });
+}
+
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur ? 'active' : (i < cur ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; mcRound = 0; mc = null; V_KV = 275; PF = 0.95; document.getElementById('vSel').value = '275'; document.getElementById('pfRange').value = 0.95; document.getElementById('pfVal').textContent = '0.95'; goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('vSel').onchange = e => { V_KV = +e.target.value; renderAll(); draw_(); };
+document.getElementById('pfRange').oninput = e => { PF = +e.target.value; document.getElementById('pfVal').textContent = PF.toFixed(2); renderAll(); draw_(); };
+document.getElementById('diceBtn').onclick = () => { mcRound++; runMC(); renderAll(); draw_(); };
+goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

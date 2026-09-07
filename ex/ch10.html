@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第10回 演習 — 気象から再エネ出力へ</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第10回: PV 出力（温度補正）、べき法則と風力出力、誤差指標（nRMSE）、設備利用率、平滑化効果。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+
+EX.page({
+  ch: 10,
+  intro: '「天気予報を MW に翻訳する」式を手で回します。太陽光は日射と温度、風力はハブ高さと 3 乗則、評価は定格比の nRMSE、そして多地点で誤差が減る平滑化効果まで。',
+  problems: [
+    {
+      id: 'pv', title: '太陽光出力 — 日射と温度補正', tags: ['10.2.3', 'PV モデル'],
+      gen(rng) {
+        const Pr = pick(rng, [1, 2, 5, 10]);
+        const G = pick(rng, [400, 600, 800, 900, 1000]);
+        const Ta = pick(rng, [20, 25, 30, 32, 35]);
+        const NOCT = 45, gamma = -0.004, eta = 0.9;
+        const Tc = Ta + (NOCT - 20) / 800 * G;
+        const tf = 1 + gamma * (Tc - 25);
+        const P = Pr * G / 1000 * tf * eta;
+        return {
+          given: [['定格 P<sub>rated</sub>', Pr + ' MW（STC: 1000 W/m², 25 °C）'], ['面日射量 G', G + ' W/m²'], ['気温 T<sub>a</sub>', Ta + ' °C'], ['NOCT / γ / η<sub>sys</sub>', '45 °C / −0.4 %/°C / 0.9']],
+          q: '(a) セル温度 <b>T<sub>cell</sub> = T<sub>a</sub> + (NOCT − 20)/800 · G</b><br>(b) 温度補正係数 <b>1 + γ(T<sub>cell</sub> − 25)</b><br>(c) 出力 <b>P</b>',
+          answers: [
+            { key: 'Tc', label: '(a) T_cell', unit: '°C', value: Tc },
+            { key: 'tf', label: '(b) 温度補正係数', unit: '', value: tf },
+            { key: 'P', label: '(c) P', unit: 'MW', value: P },
+          ],
+          steps: [
+            eq('T<sub>cell</sub> = ' + Ta + ' + 25/800 × ' + G + ' = ' + fmt(Tc) + ' °C') + '。日射が強いほどセルは気温よりずっと熱い。',
+            eq('1 + (−0.004)(' + fmt(Tc) + ' − 25) = ' + fmt(tf)) + '（' + fmt((1 - tf) * 100) + ' % の目減り）。',
+            eq('P = ' + Pr + ' × ' + G + '/1000 × ' + fmt(tf) + ' × 0.9 = ' + fmt(P) + ' MW') + '（定格の ' + fmt(P / Pr * 100) + ' %）。',
+          ],
+          insight: '沖縄の真夏の快晴でも定格は出ない。気温 1 °C の予報誤差が出力 0.4% の誤差になる。',
+        };
+      },
+    },
+    {
+      id: 'wind', title: '風力出力 — べき法則と 3 乗則', tags: ['10.2.4', '風力モデル'],
+      gen(rng) {
+        const v10 = pick(rng, [4, 5, 6, 7]);
+        const h = pick(rng, [60, 80, 100, 120]);
+        const alpha = pick(rng, [0.1, 0.14, 0.2, 0.3]);
+        const D = pick(rng, [80, 100, 120]);
+        const Cp = pick(rng, [0.4, 0.45]);
+        const rated = pick(rng, [2, 3, 4]);
+        const vh = v10 * Math.pow(h / 10, alpha);
+        const A = Math.PI * D * D / 4;
+        const Praw = 0.5 * 1.225 * A * Math.pow(vh, 3) * Cp / 1e6;
+        const P = Math.min(Praw, rated);
+        return {
+          given: [['地上 10 m の予報風速 v₁₀', v10 + ' m/s'], ['ハブ高さ h', h + ' m'], ['べき指数 α', String(alpha)], ['ロータ直径 D / C<sub>p</sub> / 定格', D + ' m / ' + Cp + ' / ' + rated + ' MW（ρ = 1.225 kg/m³）']],
+          q: '(a) ハブ高さの風速 <b>v<sub>h</sub> = v₁₀ (h/10)<sup>α</sup></b><br>(b) 受風面積 <b>A = πD²/4</b><br>(c) 出力 <b>P = ½ρA v<sub>h</sub>³ C<sub>p</sub></b>（定格を超えるなら定格）',
+          answers: [
+            { key: 'vh', label: '(a) v_h', unit: 'm/s', value: vh },
+            { key: 'A', label: '(b) A', unit: 'm²', value: A },
+            { key: 'P', label: '(c) P', unit: 'MW', value: P },
+          ],
+          steps: [
+            eq('v<sub>h</sub> = ' + v10 + ' × (' + h + '/10)^' + alpha + ' = ' + fmt(vh) + ' m/s') + '。10 m の値をそのまま使うと出力を大きく見誤る。',
+            eq('A = π × ' + D + '² / 4 = ' + fmt(A) + ' m²') + '。',
+            eq('P = 0.5 × 1.225 × ' + fmt(A) + ' × ' + fmt(vh) + '³ × ' + Cp + ' = ' + fmt(Praw) + ' MW') + (Praw > rated ? ' → 定格 ' + rated + ' MW を超えるのでパワーカーブで ' + rated + ' MW。' : '。定格未満なので 3 乗則の領域。'),
+          ],
+          insight: '風速の 10% の誤りは出力の 33% の誤り。風力予測が太陽光より難しい理由はこの 3 乗。',
+        };
+      },
+    },
+    {
+      id: 'nrmse', title: '予測誤差の評価 — MAE・RMSE・nRMSE', tags: ['10.2.5', '評価指標'],
+      gen(rng) {
+        const Pr = pick(rng, [10, 20, 50]);
+        const n = 5;
+        const errs = Array.from({ length: n }, () => (rint(rng, -25, 25, 5) / 100) * Pr);
+        const mae = errs.reduce((s, e) => s + Math.abs(e), 0) / n;
+        const rmse = Math.sqrt(errs.reduce((s, e) => s + e * e, 0) / n);
+        const nrmse = rmse / Pr * 100;
+        return {
+          given: [['定格 P<sub>rated</sub>', Pr + ' MW'], ['5 時点の誤差 e = 実績 − 予測', '[' + errs.map(e => fmt(e, 1)).join(', ') + '] MW']],
+          q: '(a) <b>MAE</b><br>(b) <b>RMSE</b><br>(c) 定格で正規化した <b>nRMSE = RMSE / P<sub>rated</sub></b> [%]',
+          answers: [
+            { key: 'mae', label: '(a) MAE', unit: 'MW', value: mae },
+            { key: 'rmse', label: '(b) RMSE', unit: 'MW', value: rmse },
+            { key: 'nrmse', label: '(c) nRMSE', unit: '%', value: nrmse },
+          ],
+          steps: [
+            eq('MAE = (' + errs.map(e => fmt(Math.abs(e), 1)).join(' + ') + ') / 5 = ' + fmt(mae) + ' MW') + '。',
+            eq('RMSE = √((' + errs.map(e => fmt(e * e, 1)).join(' + ') + ') / 5) = ' + fmt(rmse) + ' MW') + '。RMSE ≥ MAE で、差が大きいほど大外れがある。',
+            eq('nRMSE = ' + fmt(rmse) + ' / ' + Pr + ' = ' + fmt(nrmse) + ' %') + '。MAPE は夜間の実績 0 で発散するので使わない。',
+          ],
+          insight: '翌日の太陽光予測で nRMSE 数 % 台なら良い方。運用はこの値から予備力を決める。',
+        };
+      },
+    },
+    {
+      id: 'cf', title: '設備利用率', tags: ['10.2.3', '年間発電量'],
+      gen(rng) {
+        const Pr = pick(rng, [2, 5, 10, 50]);
+        const kind = pick(rng, ['太陽光', '風力']);
+        const cf = kind === '太陽光' ? pick(rng, [0.12, 0.13, 0.14, 0.15]) : pick(rng, [0.2, 0.25, 0.3]);
+        const E = Pr * 8760 * cf;
+        const hours = 8760 * cf;
+        return {
+          given: [['設備', kind + ' ' + Pr + ' MW'], ['年間発電量 E', fmt(E) + ' MWh']],
+          q: '(a) 設備利用率 <b>CF = E / (P<sub>rated</sub> × 8760)</b> [%]<br>(b) 定格換算の年間運転時間 <b>8760 × CF</b> [h]',
+          answers: [
+            { key: 'cf', label: '(a) CF', unit: '%', value: cf * 100 },
+            { key: 'h', label: '(b) 等価運転時間', unit: 'h', value: hours },
+          ],
+          steps: [
+            eq('CF = ' + fmt(E) + ' / (' + Pr + ' × 8760) = ' + fmt(cf * 100) + ' %') + '。',
+            eq('8760 × ' + fmt(cf) + ' = ' + fmt(hours) + ' h') + '。1 年のうちこの時間だけ定格で回ったのと同じ。',
+            '太陽光は 12〜15%、陸上風力は 20〜30% が目安。同じ「定格 10 MW」でも年間の電力量は 2 倍違う。',
+          ],
+          insight: '定格（kW）と電力量（kWh）を混同しない。系統計画は kW（容量）と kWh（燃料）の両方で見る。',
+        };
+      },
+    },
+    {
+      id: 'smoothing', title: '平滑化効果 — 多地点集約で誤差が減る', tags: ['10.2.6', '空間相関'],
+      gen(rng) {
+        const s1 = pick(rng, [10, 12, 15, 20]);
+        const N = pick(rng, [4, 9, 16, 25, 36]);
+        const rho = pick(rng, [0.2, 0.3, 0.5, 0.7]);
+        const sInd = s1 / Math.sqrt(N);
+        const sCor = s1 * Math.sqrt((1 + (N - 1) * rho) / N);
+        return {
+          given: [['1 地点の nRMSE σ₁', s1 + ' %'], ['地点数 N', String(N)], ['地点間の誤差の相関 ρ', String(rho)]],
+          q: '(a) 誤差が独立なら合計出力の nRMSE は <b>σ₁/√N</b><br>(b) 相関 ρ があるときは <b>σ₁ √((1 + (N−1)ρ)/N)</b>',
+          answers: [
+            { key: 'ind', label: '(a) 独立のとき', unit: '%', value: sInd },
+            { key: 'cor', label: '(b) 相関ありのとき', unit: '%', value: sCor },
+          ],
+          steps: [
+            eq('σ₁/√N = ' + s1 + '/√' + N + ' = ' + fmt(sInd) + ' %') + '。地点が増えるほど外れが打ち消し合う。',
+            eq(s1 + ' × √((1 + ' + (N - 1) + ' × ' + rho + ')/' + N + ') = ' + fmt(sCor) + ' %') + '。',
+            'N → ∞ でも σ₁√ρ = ' + fmt(s1 * Math.sqrt(rho)) + ' % より下がらない。相関（同じ雲・同じ前線）が平滑化の床を作る。',
+          ],
+          insight: '沖縄本島は面積が小さく地点間の相関が強い。九州ほどには平滑化に期待できない。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

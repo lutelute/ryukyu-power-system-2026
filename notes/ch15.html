@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第15回: 総合演習・まとめ — 講義ノート</title>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="notes.css">
+</head>
+<body>
+<header class="top">
+  <a class="home" href="../index.html">▲ 地図（トップ）</a>
+  <nav class="days"><span class="">Day 1 基礎と潮流計算入門</span><span class="">Day 2 潮流とダイナミクス</span><span class="">Day 3 インバータと予測</span><span class="on">Day 4 AI と統合演習</span></nav>
+  <nav class="rounds"><a href="ch01.html" class="" title="第1回 エネルギー変換">1</a><a href="ch02.html" class="" title="第2回 電力システムの構成">2</a><a href="ch03.html" class="" title="第3回 P と Q の分離">3</a><a href="ch04.html" class="" title="第4回 Y行列と直流法潮流">4</a><a href="ch05.html" class="" title="第5回 ニュートン・ラフソン法">5</a><a href="ch06.html" class="" title="第6回 電圧と無効電力">6</a><a href="ch07.html" class="" title="第7回 等面積法と安定度">7</a><a href="ch08.html" class="" title="第8回 周波数と需給バランス">8</a><a href="ch09.html" class="" title="第9回 インバータと系統連系">9</a><a href="ch10.html" class="" title="第10回 気象と再エネ出力">10</a><a href="ch11.html" class="" title="第11回 電力需要予測">11</a><a href="ch12.html" class="" title="第12回 機械学習で予測する">12</a><a href="ch13.html" class="" title="第13回 AI × 系統解析">13</a><a href="ch14.html" class="" title="第14回 経済負荷配分と OPF">14</a><a href="ch15.html" class="on" title="第15回 沖縄系統・統合演習">15</a></nav>
+</header>
+<div class="wrap">
+  <main class="doc">
+    <div class="chips"><span class="chip day">Day 4 AI と統合演習</span><a class="chip viz" href="../viz/island.html">🖥 動く図で見る</a><a class="chip ex" href="../ex/ch15.html">✍ 演習で確かめる</a><a class="chip" href="symbols.html">記号表</a></div>
+    <h1>第15回: 総合演習・まとめ</h1>
+<p><strong>Day 4 / コマ15</strong> ｜ 電力エネルギーシステム解析の基礎と応用</p>
+<blockquote>
+<p><strong>本講義の到達点。</strong> 第1〜14回で学んだすべてを、
+沖縄本島系統を題材に<strong>1 つの流れ</strong>として統合する。
+次のコマは最終試験なので、本回は総復習も兼ねる。</p>
+</blockquote>
+<blockquote class="callout viz">
+<p><strong>🖥 動くインフォグラフ</strong>：<a href="../viz/island.html"><code>viz/island.html</code></a> — 6 制約の連系可能量と、対策で律速が移る様子。
+ブラウザで「次へ ▶」を押しながら、この回の核心を実計算で追えます（<code>index.html</code> から全回に飛べます）。</p>
+</blockquote>
+<!-- intuition:start（tools/sync-intuition.mjs が スライド/ch15.md から生成。直接編集せずスライドを直す）-->
+<blockquote class="callout ex">
+<p><strong>✍ 演習</strong>：<a href="../ex/ch15.html"><code>ex/ch15.html</code></a> — 学籍番号ごとに数値が変わる問題。採点・途中式つき。
+<strong>📊 スライド</strong>：<code>スライド/ch15.pptx</code>（講義用）</p>
+</blockquote>
+<hr>
+<h2 id="s1">まず直感で（3 分でつかむ）</h2>
+<blockquote class="callout key">
+<p><strong>📌 一言でいうと</strong>：沖縄本島に太陽光を何 MW まで入れられるか。答えは 6 つの上限の最小値で決まり、対策は「今の律速」に打つ。</p>
+</blockquote>
+<blockquote class="callout analogy">
+<p><strong>🪄 たとえ話：樽の一番低い板</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">樽</th>
+<th align="left">連系可能量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">樽に入る水は <strong>一番低い板</strong> で決まる</td>
+<td align="left">連系可能量 = <strong>min(6 つの上限)</strong></td>
+</tr>
+<tr>
+<td align="left">高い板を伸ばしても水は増えない</td>
+<td align="left">律速でない制約への対策は無駄</td>
+</tr>
+<tr>
+<td align="left">低い板を伸ばすと <strong>次に低い板</strong> が効く</td>
+<td align="left">対策すると <strong>律速が移る</strong></td>
+</tr>
+<tr>
+<td align="left">板は 6 枚</td>
+<td align="left">電圧・容量・N-1・周波数・安定度・最低出力</td>
+</tr>
+<tr>
+<td align="left">1 枚を伸ばす道具が別の板も伸ばすことがある</td>
+<td align="left">蓄電池は周波数と最低出力の <strong>2 枚</strong> を伸ばす</td>
+</tr>
+</tbody></table></div>
+<p>崩れる点：板は独立だが制約は連動する。太陽光を増やすと同期機が減り、周波数と安定度の板が同時に下がる。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：2018年 北海道ブラックアウトの教訓</strong>
+大型電源への依存、系統の小ささ、そして <strong>応援が来ない</strong> こと。北海道は本州との直流連系が細く、沖縄は連系そのものが無い。周波数と慣性の議論（第8回）は、沖縄では設計の前提になる。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：離島の実証と、本島の制約</strong>
+宮古島などの離島では再エネと蓄電池を組み合わせた実証が行われてきた。本島は 60 Hz の独立系統で、太陽光の拡大とともに火力の最低出力と慣性が制約として前に出てきている。今日の 6 制約はこの現実を式にしたもの。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 この回の式で読むと</strong>：沖縄は「日本で最も再エネ統合が難しい系統の 1 つ」。だからこそ教材として面白い。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ最小値なのか</strong>
+制約は「すべて満たす」もの。1 つでも破れば運用できないので、上限の集合の最小値が答えになる。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ対策で律速が移るのか</strong>
+対策は特定の板だけを伸ばす。伸ばした板が最小でなくなった瞬間、次に低い板が答えを決める。投資の順番は「今の律速」で決まる。</p>
+</blockquote>
+<blockquote class="callout warn">
+<p><strong>⚠ 1 つの制約だけ見ない</strong>
+電圧が余裕でも周波数で入らない。系統計画は 6 枚の板を同時に見る仕事である。</p>
+</blockquote>
+<p><strong>この回の地図</strong>：Ⅰ 系統モデルと 6 つの制約 → Ⅱ 制約ごとに「どこで破れるか」を実計算する → Ⅲ 最小値を取り、律速を言う → Ⅳ 対策を打つと律速が移る — 投資の順番</p>
+<!-- intuition:end -->
+<hr>
+<h2 id="s2">15.1 導入</h2>
+<h3 id="s3">学習目標</h3>
+<ol>
+<li>実系統を模したモデルを構築し、<strong>潮流計算 → 安定度評価 → 予測 → 最適化</strong>を
+一連の流れとして実行できる。</li>
+<li><strong>N-1 事故解析</strong>を実施し、系統の健全性を評価できる。</li>
+<li>再生可能エネルギーの<strong>導入可能量</strong>を、複数の制約から総合的に決定できる。</li>
+<li>本講義で学んだ各回の内容が、実務でどう繋がるかを説明できる。</li>
+<li>電力システム工学の今後の課題と研究トレンドを述べられる。</li>
+</ol>
+<h3 id="s4">本回の課題 — 沖縄本島系統の再エネ導入可能量を評価する</h3>
+<p><strong>「沖縄本島系統に、太陽光発電を何 MW まで導入できるか」</strong></p>
+<p>この一見単純な問いに答えるには、本講義のほぼ全内容が必要になる。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">制約</th>
+<th align="left">何で決まるか</th>
+<th align="left">学んだ回</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>電圧上限</strong></td>
+<td align="left">逆潮流による電圧上昇</td>
+<td align="left">第3回、第6回、第9回</td>
+</tr>
+<tr>
+<td align="left"><strong>線路容量</strong></td>
+<td align="left">潮流の過負荷</td>
+<td align="left">第4〜6回</td>
+</tr>
+<tr>
+<td align="left"><strong>N-1 基準</strong></td>
+<td align="left">1 回線停止時にも耐えるか</td>
+<td align="left">第2回、第15回</td>
+</tr>
+<tr>
+<td align="left"><strong>同期安定度</strong></td>
+<td align="left">慣性低下による <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mtext>cr</mtext></msub></mrow><annotation encoding="application/x-tex">t_\text{cr}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cr</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 短縮</td>
+<td align="left">第7回</td>
+</tr>
+<tr>
+<td align="left"><strong>周波数維持</strong></td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>H</mi><mtext>sys</mtext></msub></mrow><annotation encoding="application/x-tex">H_\text{sys}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> と <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> の低下</td>
+<td align="left">第8回</td>
+</tr>
+<tr>
+<td align="left"><strong>最低出力制約</strong></td>
+<td align="left">火力を止められない → 出力抑制</td>
+<td align="left">第14回</td>
+</tr>
+<tr>
+<td align="left"><strong>予測誤差</strong></td>
+<td align="left">必要な予備力</td>
+<td align="left">第10〜12回</td>
+</tr>
+</tbody></table></div>
+<p><strong>どれか 1 つでも破れば導入できない。</strong> 最も厳しい制約が導入可能量を決める。</p>
+<hr>
+<h2 id="s5">15.2 総合演習の進め方</h2>
+<h3 id="s6">Step 0: 系統モデルの構築</h3>
+<p>第6回 問6-5 で構築した沖縄本島系統の簡略モデルを用いる。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="center">ノード</th>
+<th align="left">名称</th>
+<th align="left">設備</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td align="left">具志川</td>
+<td align="left">ext_grid（スラック）、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi><mo>=</mo><mn>1.02</mn></mrow><annotation encoding="application/x-tex">V=1.02</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.02</span></span></span></span> p.u.</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td align="left">牧港</td>
+<td align="left">gen 250 MW、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi><mo>=</mo><mn>1.01</mn></mrow><annotation encoding="application/x-tex">V=1.01</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.01</span></span></span></span> p.u.</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td align="left">那覇</td>
+<td align="left">load 400 MW / 160 Mvar</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td align="left">中部</td>
+<td align="left">load 350 MW / 140 Mvar</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td align="left">北部</td>
+<td align="left">load 150 MW / 60 Mvar、<strong>太陽光の連系点</strong></td>
+</tr>
+</tbody></table></div>
+<p>線路（132 kV、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span></span></span></span>=0.06 Ω/km、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">x</span></span></span></span>=0.35 Ω/km、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi></mrow><annotation encoding="application/x-tex">c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">c</span></span></span></span>=9.0 nF/km、<code>max_i_ka</code>=1.2）:
+1-2（15 km）、2-3（25 km）、3-4（20 km）、4-5（35 km）、1-5（45 km）</p>
+<p><strong>系統緒元</strong>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>S</mi><mtext>sys</mtext></msub><mo>=</mo><mn>1500</mn></mrow><annotation encoding="application/x-tex">S_\text{sys}=1500</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1500</span></span></span></span> MVA、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>F</mi><mi>N</mi></msub><mo>=</mo><mn>60</mn></mrow><annotation encoding="application/x-tex">F_N=60</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">60</span></span></span></span> Hz、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>H</mi><mtext>sys</mtext></msub><mo>=</mo><mn>4.5</mn></mrow><annotation encoding="application/x-tex">H_\text{sys}=4.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4.5</span></span></span></span> s、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">%</mi><mi>K</mi><mo>=</mo><mn>1.0</mn></mrow><annotation encoding="application/x-tex">\%K=1.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">%</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.0</span></span></span></span> %MW/0.1Hz</p>
+<!-- fig:ch15_system.png -->
+<p><img src="../%E5%9B%B3/ch15_system.png" alt="図 15.1">
+<em>図 15.1　沖縄本島系統の簡略モデル（132 kV・5 母線）。系統容量 1,500 MW、負荷 900 MW、H = 4.5 s、K = 150 MW/Hz、火力の最低出力 320 MW。60 Hz の独立系統で連系線を持たない。</em></p>
+<!-- /fig -->
+
+<h3 id="s7">Step 1: ベースケースの潮流計算（第4〜6回）</h3>
+<ul>
+<li>各ノードの電圧・位相角</li>
+<li>各線路の潮流・負荷率</li>
+<li>系統損失</li>
+</ul>
+<p><strong>確認事項</strong>: 電圧が 0.95〜1.05 p.u. に入っているか。線路負荷率が 100% 未満か。</p>
+<h3 id="s8">Step 2: N-1 事故解析（第2回・第15回）</h3>
+<p><strong>N-1 基準</strong>: 系統内のどの設備 1 つが停止しても、
+<strong>供給支障や設備の過負荷を起こさない</strong>こと。日本の系統計画の基本原則である。</p>
+<p>各線路を 1 本ずつ開放して潮流計算を行い、次を確認する。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">判定項目</th>
+<th align="left">基準</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">潮流計算が収束するか</td>
+<td align="left">収束しない＝系統崩壊のおそれ</td>
+</tr>
+<tr>
+<td align="left">電圧</td>
+<td align="left">0.90〜1.10 p.u.（事故時は平常時より緩い基準）</td>
+</tr>
+<tr>
+<td align="left">線路負荷率</td>
+<td align="left">短時間許容（120%）以内</td>
+</tr>
+<tr>
+<td align="left">供給支障</td>
+<td align="left">発生しないこと</td>
+</tr>
+</tbody></table></div>
+<p>第5回で学んだ<strong>高速デカップル法</strong>が威力を発揮する場面である
+（係数行列の LU 分解を 1 回で済ませられる）。</p>
+<h3 id="s9">Step 3: 動特性の評価（第7回・第8回）</h3>
+<p><strong>同期安定度</strong>:</p>
+<ul>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>H</mi><mtext>sys</mtext></msub></mrow><annotation encoding="application/x-tex">H_\text{sys}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> を計算</li>
+<li>三相短絡を想定し、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>δ</mi><mtext>cr</mtext></msub></mrow><annotation encoding="application/x-tex">\delta_\text{cr}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0379em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cr</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> と <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mtext>cr</mtext></msub></mrow><annotation encoding="application/x-tex">t_\text{cr}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cr</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> を等面積法で求める</li>
+<li>保護時間（リレー20 ms + 遮断器50 ms = 70 ms）と比較</li>
+</ul>
+<p><strong>周波数維持</strong>:</p>
+<ul>
+<li>系統定数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> を計算</li>
+<li>最大電源脱落（250 MW）時の RoCoF と定常周波数偏差</li>
+<li>UFR 整定値（57.0 Hz）に対する余裕</li>
+</ul>
+<!-- fig:ch15_hk.png -->
+<p><img src="../%E5%9B%B3/ch15_hk.png" alt="図 15.2">
+<em>図 15.2　太陽光の導入に伴う系統慣性定数 H と系統定数 K の低下。太陽光 400 MW で H は 4.50 → 2.50 s、K は 150 → 100 MW/Hz に下がる。蓄電池を入れると両方を補える。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch15_freq_response.png -->
+<p><img src="../%E5%9B%B3/ch15_freq_response.png" alt="図 15.3">
+<em>図 15.3　120 MW 脱落時の周波数応答。太陽光が増えるほど最低点が深くなり、300 MW では UFR 整定 58.5 Hz を割る。蓄電池による合成慣性と高速応答を加えると回復する。</em></p>
+<!-- /fig -->
+
+<h3 id="s10">Step 4: 予測（第10〜12回）</h3>
+<ul>
+<li>気象データから太陽光出力を推定（第10回）</li>
+<li>需要を予測（第11回・第12回）</li>
+<li><strong>正味需要（ネットロード）</strong>を計算し、ダックカーブを確認</li>
+<li>予測誤差から必要な予備力を算出</li>
+</ul>
+<!-- fig:ch15_duck.png -->
+<p><img src="../%E5%9B%B3/ch15_duck.png" alt="図 15.4">
+<em>図 15.4　正味需要（需要 − 太陽光）と火力の最低出力。休日の最小需要 520 MW に対し火力は 320 MW を下回れないため、太陽光 600 MW では正味需要が 6 MW まで下がり、太陽光を絞らざるを得なくなる。</em></p>
+<!-- /fig -->
+
+<h3 id="s11">Step 5: 最適化（第14回）</h3>
+<ul>
+<li>経済負荷配分（ELD）で発電機出力を決定</li>
+<li>OPF で系統制約を考慮</li>
+<li>出力抑制が必要になる時間帯を特定</li>
+<li>蓄電池導入の効果を評価</li>
+</ul>
+<h3 id="s12">Step 6: 総合評価</h3>
+<p>各制約から導入可能量を求め、<strong>最も厳しいもの</strong>を採用する。
+そして、その制約を緩和する対策を検討する。</p>
+<!-- fig:ch15_measure_map.png -->
+<p><img src="../%E5%9B%B3/ch15_measure_map.png" alt="図 15.8">
+<em>図 15.8　対策と制約の対応。力率 0.95 は電圧だけ、蓄電池の合成慣性は周波数と安定度、昼の充電は最低出力、送電線増強は容量と N-1 に効く。律速でない制約に投資しても連系可能量は増えない。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch15_measures.png -->
+<p><img src="../%E5%9B%B3/ch15_measures.png" alt="図 15.9">
+<em>図 15.9　対策による律速の移動。対策なしで 90 MW（律速 周波数）、力率 0.95 を加えても 90 MW のまま、蓄電池（周波数）で 300 MW（律速 最低出力）、昼充電を加えて 430 MW（律速 N-1）と、律速が順に移っていく。</em></p>
+<!-- /fig -->
+
+<hr>
+<h2 id="s13">15.3 実装</h2>
+<h3 id="s14">15.3.1 系統モデルの構築とベースケース</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第15回 総合演習: 沖縄本島系統モデル&quot;&quot;&quot;
+import numpy as np
+import pandas as pd
+import pandapower as pp
+import matplotlib.pyplot as plt
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+
+S_BASE, V_BASE, F_N = 1500.0, 132.0, 60.0
+H_SYS, PCT_K = 4.5, 1.0                       # [s], [%MW/0.1Hz]
+
+def build_okinawa(pv_mw=0.0, pv_pf=1.0, pv_bus=4):
+    &quot;&quot;&quot;沖縄本島系統の簡略モデル。pv_mw で太陽光容量を指定&quot;&quot;&quot;
+    net = pp.create_empty_network(f_hz=F_N, sn_mva=100.0)
+    names = [&quot;具志川&quot;, &quot;牧港&quot;, &quot;那覇&quot;, &quot;中部&quot;, &quot;北部&quot;]
+    buses = [pp.create_bus(net, vn_kv=V_BASE, name=n) for n in names]
+
+    pp.create_ext_grid(net, bus=buses[0], vm_pu=1.02, name=&quot;具志川&quot;)
+    pp.create_gen(net, bus=buses[1], p_mw=250.0, vm_pu=1.01, name=&quot;牧港&quot;,
+                  min_p_mw=60.0, max_p_mw=400.0,
+                  min_q_mvar=-120.0, max_q_mvar=150.0)
+
+    for b, p, q in [(2, 400.0, 160.0), (3, 350.0, 140.0), (4, 150.0, 60.0)]:
+        pp.create_load(net, bus=buses[b], p_mw=p, q_mvar=q, name=names[b])
+
+    for f, t, L in [(0,1,15.0), (1,2,25.0), (2,3,20.0), (3,4,35.0), (0,4,45.0)]:
+        pp.create_line_from_parameters(
+            net, from_bus=buses[f], to_bus=buses[t], length_km=L,
+            r_ohm_per_km=0.06, x_ohm_per_km=0.35, c_nf_per_km=9.0,
+            max_i_ka=1.2, name=f&quot;L{f+1}-{t+1}&quot;)
+
+    if pv_mw &gt; 0:
+        q = 0.0 if pv_pf &gt;= 1.0 else -pv_mw*np.tan(np.arccos(pv_pf))
+        pp.create_sgen(net, bus=buses[pv_bus], p_mw=pv_mw, q_mvar=q, name=&quot;太陽光&quot;)
+    return net
+
+net = build_okinawa()
+pp.runpp(net)
+
+print(&quot;=&quot;*66)
+print(&quot;Step 1: ベースケースの潮流計算&quot;)
+print(&quot;=&quot;*66)
+res = net.res_bus.copy()
+res[&quot;名称&quot;] = net.bus.name.values
+res[&quot;判定&quot;] = res.vm_pu.apply(lambda v: &quot;★逸脱&quot; if not (0.95 &lt;= v &lt;= 1.05) else &quot;OK&quot;)
+print(res[[&quot;名称&quot;,&quot;vm_pu&quot;,&quot;va_degree&quot;,&quot;p_mw&quot;,&quot;q_mvar&quot;,&quot;判定&quot;]].round(4).to_string())
+
+print(&quot;\n--- 線路 ---&quot;)
+lr = net.res_line.copy()
+lr[&quot;線路&quot;] = net.line.name.values
+print(lr[[&quot;線路&quot;,&quot;p_from_mw&quot;,&quot;q_from_mvar&quot;,&quot;pl_mw&quot;,&quot;loading_percent&quot;]].round(3).to_string())
+
+p_gen  = net.res_ext_grid.p_mw.sum() + net.res_gen.p_mw.sum()
+p_load = net.res_load.p_mw.sum()
+p_loss = net.res_line.pl_mw.sum()
+print(f&quot;\n総発電 {p_gen:.2f} MW / 総負荷 {p_load:.2f} MW / &quot;
+      f&quot;損失 {p_loss:.3f} MW ({p_loss/p_load*100:.2f}%)&quot;)
+print(f&quot;最大線路負荷率: {net.res_line.loading_percent.max():.2f} %&quot;)
+</code></pre>
+<h3 id="s15">15.3.2 Step 2: N-1 事故解析</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第15回: N-1 事故解析&quot;&quot;&quot;
+def n1_analysis(pv_mw=0.0, pv_pf=1.0, verbose=True):
+    &quot;&quot;&quot;全線路を1本ずつ開放して健全性を確認&quot;&quot;&quot;
+    rows = []
+    for idx in build_okinawa().line.index:
+        net = build_okinawa(pv_mw, pv_pf)
+        name = net.line.name[idx]
+        net.line.at[idx, &quot;in_service&quot;] = False
+        try:
+            pp.runpp(net)
+            rows.append({
+                &quot;開放線路&quot;: name,
+                &quot;収束&quot;: &quot;○&quot;,
+                &quot;V最小&quot;: net.res_bus.vm_pu.min(),
+                &quot;V最大&quot;: net.res_bus.vm_pu.max(),
+                &quot;最大負荷率&quot;: net.res_line.loading_percent.max(),
+                &quot;損失[MW]&quot;: net.res_line.pl_mw.sum(),
+            })
+        except pp.LoadflowNotConverged:
+            rows.append({&quot;開放線路&quot;: name, &quot;収束&quot;: &quot;×&quot;,
+                         &quot;V最小&quot;: np.nan, &quot;V最大&quot;: np.nan,
+                         &quot;最大負荷率&quot;: np.nan, &quot;損失[MW]&quot;: np.nan})
+    df = pd.DataFrame(rows)
+    # 判定（事故時基準: 電圧 0.90〜1.10、負荷率 120% 以内）
+    def judge(r):
+        if r[&quot;収束&quot;] == &quot;×&quot;: return &quot;★不収束&quot;
+        ng = []
+        if r[&quot;V最小&quot;] &lt; 0.90: ng.append(&quot;低電圧&quot;)
+        if r[&quot;V最大&quot;] &gt; 1.10: ng.append(&quot;過電圧&quot;)
+        if r[&quot;最大負荷率&quot;] &gt; 120: ng.append(&quot;過負荷&quot;)
+        return &quot;OK&quot; if not ng else &quot;★&quot; + &quot;/&quot;.join(ng)
+    df[&quot;判定&quot;] = df.apply(judge, axis=1)
+    if verbose:
+        print(&quot;=&quot;*66)
+        print(f&quot;Step 2: N-1 事故解析（太陽光 {pv_mw:.0f} MW）&quot;)
+        print(&quot;=&quot;*66)
+        print(df.round(4).to_string(index=False))
+        ng = (df.判定 != &quot;OK&quot;).sum()
+        print(f&quot;\n→ N-1 基準を満たさないケース: {ng} / {len(df)} 件&quot;)
+    return df
+
+df_n1 = n1_analysis(0.0)
+</code></pre>
+<h3 id="s16">15.3.3 Step 3: 動特性の評価</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第15回: 同期安定度と周波数維持の評価&quot;&quot;&quot;
+print(&quot;=&quot;*66)
+print(&quot;Step 3: 動特性の評価&quot;)
+print(&quot;=&quot;*66)
+
+def dynamics_check(H_sys, pct_k, dP_trip=250.0, S_sys=S_BASE, F_n=F_N):
+    K = pct_k/100*S_sys*10                            # [MW/Hz]
+    rocof = F_n*(-dP_trip)/(2*H_sys*S_sys)
+    dF_ss = -dP_trip/K
+    return K, rocof, dF_ss
+
+def transient_stability(H_sys, P_max=2.0, P_m=0.8, F_n=F_N):
+    w0 = 2*np.pi*F_n
+    d0 = np.arcsin(P_m/P_max)
+    cos_cr = P_m/P_max*(np.pi - 2*d0) - np.cos(d0)
+    d_cr = np.arccos(np.clip(cos_cr, -1, 1))
+    t_cr = np.sqrt(4*H_sys*(d_cr-d0)/(w0*P_m))
+    return np.rad2deg(d0), np.rad2deg(d_cr), t_cr
+
+print(&quot;\n--- 同期安定度（第7回）---&quot;)
+d0, dcr, tcr = transient_stability(H_SYS)
+print(f&quot;  初期相差角 δ0    = {d0:.2f}°&quot;)
+print(f&quot;  臨界除去角 δ_cr  = {dcr:.2f}°&quot;)
+print(f&quot;  臨界除去時間 t_cr = {tcr*1000:.1f} ms&quot;)
+t_protect = 70.0
+print(f&quot;  実際の保護時間   = {t_protect:.0f} ms （リレー20 + 遮断器50）&quot;)
+print(f&quot;  判定: {&#39;✅ 安定&#39; if tcr*1000 &gt; t_protect else &#39;❌ 脱調&#39;}  &quot;
+      f&quot;（余裕 {(tcr*1000-t_protect)/(tcr*1000)*100:.1f}%）&quot;)
+
+print(&quot;\n--- 周波数維持（第8回）---&quot;)
+K, rocof, dF = dynamics_check(H_SYS, PCT_K)
+print(f&quot;  系統定数 K       = {K:.0f} MW/Hz&quot;)
+print(f&quot;  RoCoF            = {rocof:+.3f} Hz/s&quot;)
+print(f&quot;  定常周波数偏差   = {dF:+.3f} Hz  → 到達 {F_N+dF:.3f} Hz&quot;)
+print(f&quot;  UFR 整定 57.0 Hz に対する余裕: {F_N+dF-57.0:+.3f} Hz&quot;)
+print(f&quot;  判定: {&#39;✅ UFR 不動作&#39; if F_N+dF &gt; 57.0 else &#39;❌ 負荷遮断&#39;}&quot;)
+
+print(&quot;\n--- 再エネ導入による慣性・系統定数の低下 ---&quot;)
+print(f&quot;{&#39;太陽光[MW]&#39;:&gt;11} {&#39;H_sys[s]&#39;:&gt;10} {&#39;K[MW/Hz]&#39;:&gt;10} &quot;
+      f&quot;{&#39;RoCoF[Hz/s]&#39;:&gt;13} {&#39;到達F[Hz]&#39;:&gt;11} {&#39;t_cr[ms]&#39;:&gt;10} {&#39;判定&#39;:&gt;8}&quot;)
+for pv in [0, 100, 200, 300, 400, 500, 600]:
+    # 太陽光が増えるとその分の同期機を停止 → H と K_G が下がる
+    frac = min(pv/900.0, 0.75)                    # 同期機の停止割合
+    H_new = H_SYS*(1-frac)
+    K_new = K*(1 - 0.75*frac)                     # K_L 分は残る
+    _, rc, dfs = dynamics_check(H_new, 1.0)
+    K_new = max(K_new, 1e-6)
+    dfs = -250.0/K_new
+    rc  = F_N*(-250.0)/(2*max(H_new,1e-6)*S_BASE)
+    _, _, tc = transient_stability(max(H_new, 0.1))
+    ok = (F_N+dfs &gt; 57.0) and (tc*1000 &gt; t_protect)
+    print(f&quot;{pv:11d} {H_new:10.2f} {K_new:10.0f} {rc:13.3f} &quot;
+          f&quot;{F_N+dfs:11.3f} {tc*1000:10.1f} {&#39;✅&#39; if ok else &#39;❌&#39;:&gt;8}&quot;)
+</code></pre>
+<h3 id="s17">15.3.4 Step 4: 予測と正味需要（ダックカーブ）</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第15回: 需要・太陽光予測と正味需要&quot;&quot;&quot;
+print(&quot;=&quot;*66)
+print(&quot;Step 4: 予測と正味需要（ダックカーブ）&quot;)
+print(&quot;=&quot;*66)
+
+hours = np.arange(0, 24, 0.5)
+
+# 需要の日変化（沖縄の夏、第11回のモデルを簡略化）
+demand = 900 + 180*np.sin(2*np.pi*(hours-9)/24) + 90*np.sin(4*np.pi*(hours-7)/24)
+demand = np.maximum(demand, 700)
+
+def pv_output(hours, capacity, doy=196, lat=26.21):
+    &quot;&quot;&quot;第10回のモデル（簡略版）&quot;&quot;&quot;
+    decl = np.deg2rad(23.45)*np.sin(2*np.pi*(284+doy)/365)
+    lat_r = np.deg2rad(lat)
+    omega = np.deg2rad(15*(hours-12))
+    cosz = np.sin(lat_r)*np.sin(decl) + np.cos(lat_r)*np.cos(decl)*np.cos(omega)
+    cosz = np.clip(cosz, 0, 1)
+    G = 1098*cosz*np.exp(-0.059/np.maximum(cosz, 1e-6))*(cosz &gt; 0)
+    T_air = 29.5 - 2.5*np.cos(2*np.pi*(hours-14)/24)
+    T_cell = T_air + (45-20)/800*G
+    return np.maximum(capacity*(G/1000)*(1-0.004*(T_cell-25))*0.82, 0)
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+print(f&quot;{&#39;太陽光[MW]&#39;:&gt;11} {&#39;最小正味需要&#39;:&gt;14} {&#39;最大ランプ[MW/h]&#39;:&gt;18} {&#39;火力最低出力割れ&#39;:&gt;18}&quot;)
+P_THERMAL_MIN = 320.0        # 火力の最低出力合計
+
+for pv_cap, color in [(0, &quot;#264653&quot;), (200, &quot;#2a9d8f&quot;),
+                      (400, &quot;#e9c46a&quot;), (600, &quot;#e63946&quot;)]:
+    pv = pv_output(hours, pv_cap)
+    net_load = demand - pv
+    ramp = np.max(np.abs(np.diff(net_load)))*2       # 0.5h刻み → MW/h
+    below = net_load.min() &lt; P_THERMAL_MIN
+    axes[0].plot(hours, net_load, lw=2, color=color, label=f&quot;太陽光 {pv_cap} MW&quot;)
+    axes[1].plot(hours, pv, lw=2, color=color, label=f&quot;{pv_cap} MW&quot;)
+    print(f&quot;{pv_cap:11d} {net_load.min():14.1f} {ramp:18.1f} &quot;
+          f&quot;{&#39;★あり（要出力抑制）&#39; if below else &#39;なし&#39;:&gt;18}&quot;)
+
+axes[0].axhline(P_THERMAL_MIN, color=&quot;k&quot;, ls=&quot;--&quot;, alpha=0.7,
+                label=f&quot;火力最低出力 {P_THERMAL_MIN:.0f} MW&quot;)
+axes[0].plot(hours, demand, &quot;k:&quot;, lw=1.5, label=&quot;需要（太陽光なし）&quot;)
+axes[0].set_xlabel(&quot;時刻 [h]&quot;); axes[0].set_ylabel(&quot;正味需要 [MW]&quot;)
+axes[0].set_title(&quot;正味需要（ダックカーブ）&quot;)
+axes[0].legend(fontsize=8); axes[0].grid(alpha=0.3)
+
+axes[1].set_xlabel(&quot;時刻 [h]&quot;); axes[1].set_ylabel(&quot;太陽光出力 [MW]&quot;)
+axes[1].set_title(&quot;太陽光出力&quot;); axes[1].legend(fontsize=8); axes[1].grid(alpha=0.3)
+plt.tight_layout(); plt.savefig(&quot;../図/ch15_duck_curve.png&quot;, dpi=150)
+
+print(&quot;\n→ 太陽光が増えると昼の正味需要が下がり、夕方のランプが急になる（ダックカーブ）&quot;)
+print(&quot;→ 火力の最低出力を割ると、出力抑制または蓄電池が必要になる&quot;)
+</code></pre>
+<h3 id="s18">15.3.5 Step 5-6: 連系可能量の総合評価</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第15回: 全制約を横断して連系可能量を決定する&quot;&quot;&quot;
+print(&quot;=&quot;*66)
+print(&quot;Step 5-6: 再エネ連系可能量の総合評価&quot;)
+print(&quot;=&quot;*66)
+
+def find_limit(check_fn, lo=0.0, hi=1200.0, tol=1.0):
+    &quot;&quot;&quot;二分探索で制約を満たす最大容量を求める&quot;&quot;&quot;
+    if not check_fn(lo): return 0.0
+    while hi - lo &gt; tol:
+        mid = (lo+hi)/2
+        if check_fn(mid): lo = mid
+        else: hi = mid
+    return lo
+
+&lt;!-- fig:ch15_curves.png --&gt;
+![図 15.5](../図/ch15_curves.png)
+*図 15.5　制約ごとの実計算。電圧は軽負荷・末端連系で 1.05 p.u. に達し、線路利用率は逆潮流で上がり、周波数は H と K の低下で最低点が UFR を割り、臨界除去時間は √H で短くなる。*
+&lt;!-- /fig --&gt;
+
+&lt;!-- fig:ch15_limits.png --&gt;
+![図 15.6](../図/ch15_limits.png)
+*図 15.6　6 つの制約の上限。電圧 800、線路容量 600、N-1 430、周波数 90、安定度 800、最低出力 300 MW。連系可能量はその最小値である 90 MW で、律速は周波数になる。*
+&lt;!-- /fig --&gt;
+
+&lt;!-- fig:ch15_battery.png --&gt;
+![図 15.7](../図/ch15_battery.png)
+*図 15.7　周波数対策に必要な蓄電池。K_bat = ΔP/|ΔF|max − K で求まり、太陽光 400 MW（K = 100 MW/Hz）で周波数低下を 1.0 Hz に抑えるには 20 MW/Hz（出力 20 MW）が要る。容量ではなく出力で設計する。*
+&lt;!-- /fig --&gt;
+
+# --- 制約1: 平常時の電圧 ---
+def ok_voltage(pv, pf=1.0):
+    try:
+        net = build_okinawa(pv, pf); pp.runpp(net)
+        return net.res_bus.vm_pu.max() &lt;= 1.05
+    except pp.LoadflowNotConverged:
+        return False
+
+# --- 制約2: 平常時の線路容量 ---
+def ok_thermal(pv, pf=1.0):
+    try:
+        net = build_okinawa(pv, pf); pp.runpp(net)
+        return net.res_line.loading_percent.max() &lt;= 100.0
+    except pp.LoadflowNotConverged:
+        return False
+
+# --- 制約3: N-1 基準 ---
+def ok_n1(pv, pf=1.0):
+    df = n1_analysis(pv, pf, verbose=False)
+    return (df.判定 == &quot;OK&quot;).all()
+
+# --- 制約4: 周波数維持 ---
+def ok_frequency(pv):
+    frac = min(pv/900.0, 0.95)
+    K_new = max(PCT_K/100*S_BASE*10*(1-0.75*frac), 1.0)
+    return F_N - 250.0/K_new &gt; 57.0
+
+# --- 制約5: 同期安定度 ---
+def ok_stability(pv):
+    frac = min(pv/900.0, 0.95)
+    H_new = max(H_SYS*(1-frac), 0.05)
+    _, _, tc = transient_stability(H_new)
+    return tc*1000 &gt; 70.0
+
+# --- 制約6: 火力最低出力（出力抑制なしで運用できるか）---
+def ok_min_output(pv):
+    return (demand - pv_output(hours, pv)).min() &gt;= P_THERMAL_MIN
+
+results = {}
+print(&quot;\n【力率 1.0 運転（現状の標準）】&quot;)
+for name, fn in [(&quot;① 電圧上限（1.05 p.u.）&quot;, lambda p: ok_voltage(p, 1.0)),
+                 (&quot;② 線路容量（平常時）&quot;,     lambda p: ok_thermal(p, 1.0)),
+                 (&quot;③ N-1 基準&quot;,              lambda p: ok_n1(p, 1.0)),
+                 (&quot;④ 周波数維持（UFR）&quot;,      ok_frequency),
+                 (&quot;⑤ 同期安定度（t_cr）&quot;,     ok_stability),
+                 (&quot;⑥ 火力最低出力&quot;,           ok_min_output)]:
+    lim = find_limit(fn)
+    results[name] = lim
+    print(f&quot;  {name:&lt;26}: {lim:7.1f} MW&quot;)
+
+binding = min(results, key=results.get)
+limit_pf1 = results[binding]
+print(f&quot;\n  ▶ 連系可能量 = {limit_pf1:.1f} MW&quot;)
+print(f&quot;  ▶ 律速する制約 = 【{binding}】&quot;)
+
+# --- 対策後 ---
+print(&quot;\n【対策を講じた場合】&quot;)
+lim_pf95 = find_limit(lambda p: ok_voltage(p, 0.95) and ok_thermal(p, 0.95))
+print(f&quot;  対策A: 力率0.95進み運転（第9回）      → 電圧・熱制約 {lim_pf95:7.1f} MW&quot;)
+
+def ok_freq_bess(pv, k_bess=200.0):
+    frac = min(pv/900.0, 0.95)
+    K_new = max(PCT_K/100*S_BASE*10*(1-0.75*frac), 1.0) + k_bess
+    return F_N - 250.0/K_new &gt; 57.0
+lim_bess = find_limit(ok_freq_bess)
+print(f&quot;  対策B: 蓄電池 疑似ガバナ 200 MW/Hz    → 周波数制約 {lim_bess:7.1f} MW&quot;)
+
+def ok_stab_si(pv, h_virtual=2.5):
+    frac = min(pv/900.0, 0.95)
+    H_new = max(H_SYS*(1-frac), 0.05) + h_virtual
+    _, _, tc = transient_stability(H_new)
+    return tc*1000 &gt; 70.0
+lim_si = find_limit(ok_stab_si)
+print(f&quot;  対策C: 合成慣性 H_v=2.5 s（第9回）     → 安定度制約 {lim_si:7.1f} MW&quot;)
+
+def ok_min_bess(pv, bess_mw=150.0):
+    return (demand - pv_output(hours, pv)).min() &gt;= P_THERMAL_MIN - bess_mw
+lim_min_bess = find_limit(ok_min_bess)
+print(f&quot;  対策D: 蓄電池充電 150 MW（第14回）    → 最低出力制約 {lim_min_bess:7.1f} MW&quot;)
+
+print(f&quot;\n  ▶ 全対策後の連系可能量 ≒ &quot;
+      f&quot;{min(lim_pf95, lim_bess, lim_si, lim_min_bess):.1f} MW&quot;)
+print(f&quot;  ▶ 対策なしの {limit_pf1:.1f} MW から &quot;
+      f&quot;{min(lim_pf95,lim_bess,lim_si,lim_min_bess)/max(limit_pf1,1):.2f} 倍に拡大&quot;)
+
+# --- 可視化 ---
+fig, ax = plt.subplots(figsize=(10, 5.5))
+names = list(results.keys())
+vals  = [results[n] for n in names]
+colors = [&quot;#e63946&quot; if n == binding else &quot;#457b9d&quot; for n in names]
+bars = ax.barh(range(len(names)), vals, color=colors)
+ax.set_yticks(range(len(names))); ax.set_yticklabels(names, fontsize=9)
+ax.axvline(limit_pf1, color=&quot;r&quot;, ls=&quot;--&quot;, lw=2,
+           label=f&quot;連系可能量 {limit_pf1:.0f} MW（最小値が律速）&quot;)
+for i, v in enumerate(vals):
+    ax.text(v+8, i, f&quot;{v:.0f}&quot;, va=&quot;center&quot;, fontsize=9)
+ax.set_xlabel(&quot;太陽光の導入可能量 [MW]&quot;)
+ax.set_title(&quot;制約別の連系可能量 — 最も厳しい制約が全体を決める&quot;)
+ax.legend(); ax.grid(axis=&quot;x&quot;, alpha=0.3)
+ax.invert_yaxis()
+plt.tight_layout(); plt.savefig(&quot;../図/ch15_hosting_capacity.png&quot;, dpi=150)
+</code></pre>
+<h3 id="s19">15.3.6 レポート課題</h3>
+<p><strong>課題</strong>: 上記 Step 0〜6 を実行し、次を含むレポートを作成せよ（A4 で 6〜10 ページ程度）。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">章</th>
+<th align="left">内容</th>
+<th align="center">対応する回</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">1. 系統モデル</td>
+<td align="left">諸元と単線結線図</td>
+<td align="center">第2回</td>
+</tr>
+<tr>
+<td align="left">2. ベースケース解析</td>
+<td align="left">潮流計算結果、電圧・潮流・損失の考察</td>
+<td align="center">第4〜6回</td>
+</tr>
+<tr>
+<td align="left">3. N-1 事故解析</td>
+<td align="left">全ケースの結果と、最も厳しいケースの特定</td>
+<td align="center">第15回</td>
+</tr>
+<tr>
+<td align="left">4. 動特性評価</td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mtext>cr</mtext></msub></mrow><annotation encoding="application/x-tex">t_\text{cr}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cr</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、RoCoF、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>F</mi></mrow><annotation encoding="application/x-tex">\Delta F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">F</span></span></span></span> の評価</td>
+<td align="center">第7〜8回</td>
+</tr>
+<tr>
+<td align="left">5. 予測と正味需要</td>
+<td align="left">ダックカーブ、ランプ率、必要予備力</td>
+<td align="center">第10〜12回</td>
+</tr>
+<tr>
+<td align="left">6. 最適化</td>
+<td align="left">ELD / OPF、出力抑制量、蓄電池の効果</td>
+<td align="center">第14回</td>
+</tr>
+<tr>
+<td align="left">7. 連系可能量の総合評価</td>
+<td align="left">制約別の限界と律速要因の特定</td>
+<td align="center">全回</td>
+</tr>
+<tr>
+<td align="left">8. 対策の提案</td>
+<td align="left">技術的対策と、その費用対効果の考察</td>
+<td align="center">第9, 13, 14回</td>
+</tr>
+</tbody></table></div>
+<p><strong>評価の観点</strong>:</p>
+<ul>
+<li>計算が正しいか（コードが動き、結果に物理的な妥当性があるか）</li>
+<li><strong>結果の解釈が適切か</strong>（数値を出すだけでなく、なぜそうなるか説明できているか）</li>
+<li>各回で学んだ内容を関連づけられているか</li>
+<li>対策の提案に根拠があるか</li>
+</ul>
+<hr>
+<h2 id="s20">15.4 本講義のまとめ</h2>
+<h3 id="s21">15.4.1 全体の構造</h3>
+<p>本講義は 4 つのブロックからなる。</p>
+<pre><code>【Day 1: 基礎】第1〜4回
+  エネルギー変換 → 系統構成 → 基本量と等価回路 → 電力方程式
+        ↓ 「系統をどう記述するか」
+【Day 2: 解析】第5〜8回
+  反復解法 → 実習 → 安定度 → 周波数制御
+        ↓ 「系統がどう振る舞うか」
+【Day 3: 変動性】第9〜12回
+  インバータ → 気象予測 → 需要予測 → 機械学習
+        ↓ 「不確実性をどう扱うか」
+【Day 4: 統合】第13〜15回
+  AI 解析 → AI 最適化 → 総合演習
+          「どう運用すべきか」
+</code></pre>
+<h3 id="s22">15.4.2 講義を貫く 3 本の柱</h3>
+<p><strong>柱 1: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi></mrow><annotation encoding="application/x-tex">P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span> と <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi></mrow><annotation encoding="application/x-tex">Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span></span></span></span> は別物である</strong></p>
+<p>第3回で導いた</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo>=</mo><mfrac><mrow><msub><mi>V</mi><mi>s</mi></msub><msub><mi>V</mi><mi>r</mi></msub></mrow><mi>X</mi></mfrac><mi>sin</mi><mo>⁡</mo><mi>δ</mi><mo separator="true">,</mo><mspace width="2em"/><mi>Q</mi><mo>=</mo><mfrac><mrow><msub><mi>V</mi><mi>s</mi></msub><msub><mi>V</mi><mi>r</mi></msub><mi>cos</mi><mo>⁡</mo><mi>δ</mi><mo>−</mo><msubsup><mi>V</mi><mi>r</mi><mn>2</mn></msubsup></mrow><mi>X</mi></mfrac></mrow><annotation encoding="application/x-tex">P = \frac{V_sV_r}{X}\sin\delta, \qquad Q = \frac{V_sV_r\cos\delta - V_r^2}{X}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0463em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">X</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">sin</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">Q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.1771em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.4911em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">X</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-2.453em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>がすべての出発点だった。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left"></th>
+<th align="left">有効電力 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi></mrow><annotation encoding="application/x-tex">P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span></th>
+<th align="left">無効電力 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi></mrow><annotation encoding="application/x-tex">Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span></span></span></span></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">支配する量</td>
+<td align="left"><strong>相差角 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>δ</mi></mrow><annotation encoding="application/x-tex">\delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span></span></span></span></strong></td>
+<td align="left"><strong>電圧の大きさ</strong></td>
+</tr>
+<tr>
+<td align="left">現れる問題</td>
+<td align="left">周波数（第8回）、安定度（第7回）</td>
+<td align="left">電圧（第6回）</td>
+</tr>
+<tr>
+<td align="left">性質</td>
+<td align="left"><strong>系統全体で共通</strong>（周波数）</td>
+<td align="left"><strong>局所的</strong>（遠くへ運べない）</td>
+</tr>
+<tr>
+<td align="left">制御</td>
+<td align="left">ガバナ、LFC、ELD</td>
+<td align="left">AVR、調相設備、VQC</td>
+</tr>
+<tr>
+<td align="left">計算上の帰結</td>
+<td align="left">ヤコビアンの <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">H</mi></mrow><annotation encoding="application/x-tex">\mathbf{H}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em;"></span><span class="mord mathbf">H</span></span></span></span> ブロック</td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">L</mi></mrow><annotation encoding="application/x-tex">\mathbf{L}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em;"></span><span class="mord mathbf">L</span></span></span></span> ブロック</td>
+</tr>
+<tr>
+<td align="left">高速化</td>
+<td align="left">高速デカップル法（第5回）</td>
+<td align="left">同左</td>
+</tr>
+</tbody></table></div>
+<p><strong>柱 2: 慣性という見えない資産</strong></p>
+<p>第7回で導入した <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi></mrow><annotation encoding="application/x-tex">H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span></span> が、その後ずっと効いてきた。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="center">回</th>
+<th align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi></mrow><annotation encoding="application/x-tex">H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span></span> が効く場面</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">第7回</td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mtext>cr</mtext></msub><mo>∝</mo><msqrt><mi>H</mi></msqrt></mrow><annotation encoding="application/x-tex">t_\text{cr}\propto\sqrt{H}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cr</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∝</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.04em;vertical-align:-0.1133em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9267em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span><span style="top:-2.8867em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1133em;"><span></span></span></span></span></span></span></span></span> — 保護に許される時間</td>
+</tr>
+<tr>
+<td align="center">第8回</td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>F</mi><mi mathvariant="normal">/</mi><mi>d</mi><mi>t</mi><mo>∝</mo><mn>1</mn><mi mathvariant="normal">/</mi><mi>H</mi></mrow><annotation encoding="application/x-tex">dF/dt \propto 1/H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">d</span><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="mord">/</span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∝</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1/</span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span></span> — 周波数の落ちる速さ</td>
+</tr>
+<tr>
+<td align="center">第9回</td>
+<td align="left">合成慣性・グリッドフォーミングで模擬する</td>
+</tr>
+<tr>
+<td align="center">第13回</td>
+<td align="left">AI 制御に求められる応答速度が上がる</td>
+</tr>
+<tr>
+<td align="center">第15回</td>
+<td align="left">再エネ導入可能量の律速要因になりうる</td>
+</tr>
+</tbody></table></div>
+<p><strong>インバータ電源は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">H = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></strong>。この 1 点が、再エネ大量導入の技術的課題の
+かなりの部分を説明する。</p>
+<p><strong>柱 3: 沖縄という題材</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">特性</th>
+<th align="left">帰結</th>
+<th align="center">扱った回</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>完全独立系統</strong></td>
+<td align="left">連系線の応援がない。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>F</mi><mo>=</mo><mi mathvariant="normal">Δ</mi><mi>P</mi><mi mathvariant="normal">/</mi><mi>K</mi></mrow><annotation encoding="application/x-tex">\Delta F = \Delta P/K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> の分母が小さい</td>
+<td align="center">第2, 8回</td>
+</tr>
+<tr>
+<td align="left"><strong>小規模</strong></td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> が小さく <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>H</mi><mtext>sys</mtext></msub><msub><mi>S</mi><mtext>sys</mtext></msub></mrow><annotation encoding="application/x-tex">H_\text{sys}S_\text{sys}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> も小さい</td>
+<td align="center">第2, 7, 8回</td>
+</tr>
+<tr>
+<td align="left"><strong>亜熱帯・高温</strong></td>
+<td align="left">太陽光の温度損失が大きい</td>
+<td align="center">第10回</td>
+</tr>
+<tr>
+<td align="left"><strong>高湿度</strong></td>
+<td align="left">需要予測に不快指数が必要</td>
+<td align="center">第11回</td>
+</tr>
+<tr>
+<td align="left"><strong>島嶼で地理的に狭い</strong></td>
+<td align="left">予測の平滑化効果が働かない</td>
+<td align="center">第10回</td>
+</tr>
+<tr>
+<td align="left"><strong>台風</strong></td>
+<td align="left">カットアウトによる出力の不連続</td>
+<td align="center">第10回</td>
+</tr>
+</tbody></table></div>
+<p>沖縄は<strong>再エネ統合の難しさが凝縮された系統</strong>であり、
+だからこそ<strong>世界的にも先端の研究対象</strong>である。
+ここで有効な技術は、他の島嶼系統や、
+将来の低慣性化した本土系統にも適用できる。</p>
+<h3 id="s23">15.4.3 今後の課題と研究トレンド</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">領域</th>
+<th align="left">課題</th>
+<th align="left">研究の方向</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>低慣性系統</strong></td>
+<td align="left">インバータ主体系統の安定運用</td>
+<td align="left">グリッドフォーミング、100% インバータ系統の理論</td>
+</tr>
+<tr>
+<td align="left"><strong>不確実性</strong></td>
+<td align="left">再エネ・需要の変動</td>
+<td align="left">確率的最適化、ロバスト最適化、確率予測</td>
+</tr>
+<tr>
+<td align="left"><strong>計算</strong></td>
+<td align="left">SCOPF・確率的 UC の規模爆発</td>
+<td align="left">AI 高速化、分散最適化、量子計算</td>
+</tr>
+<tr>
+<td align="left"><strong>セクター統合</strong></td>
+<td align="left">電気・熱・水素・モビリティ</td>
+<td align="left">セクターカップリング、P2X</td>
+</tr>
+<tr>
+<td align="left"><strong>需要側資源</strong></td>
+<td align="left">DR・EV・蓄電池の活用</td>
+<td align="left">VPP、アグリゲーション、V2G</td>
+</tr>
+<tr>
+<td align="left"><strong>市場設計</strong></td>
+<td align="left">変動電源に適した制度</td>
+<td align="left">容量市場、需給調整市場、慣性市場</td>
+</tr>
+<tr>
+<td align="left"><strong>サイバーセキュリティ</strong></td>
+<td align="left">制御系への攻撃</td>
+<td align="left">異常検知、レジリエンス設計</td>
+</tr>
+<tr>
+<td align="left"><strong>レジリエンス</strong></td>
+<td align="left">自然災害の激甚化</td>
+<td align="left">マイクログリッド、自律分散運用</td>
+</tr>
+</tbody></table></div>
+<p><strong>特に重要な問い</strong>:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mtext>同期発電機がほぼ存在しない系統を、どうやって安定に運用するのか</mtext></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\text{同期発電機がほぼ存在しない系統を、どうやって安定に運用するのか}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord text"><span class="mord cjk_fallback">同期発電機がほぼ存在しない系統を、どうやって安定に運用するのか</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>これは現在進行形の未解決問題であり、
+本講義で学んだ「慣性」「同期化力」「周波数制御」の概念そのものを
+再定義する必要が出てきている。</p>
+<h3 id="s24">15.4.4 学んだことをどう使うか</h3>
+<p><strong>電力会社・送配電事業者に進む場合</strong>:
+第4〜8回の内容が日常業務の基礎になる。EMS を扱うなら第13〜14回も直結する。</p>
+<p><strong>メーカー（重電・パワエレ）に進む場合</strong>:
+第9回のインバータ制御、第7回の安定度が製品開発の前提になる。</p>
+<p><strong>研究に進む場合</strong>:
+第10〜14回が研究のフロンティアに近い。
+特に低慣性系統・AI 応用・不確実性の扱いは論文が量産されている領域である。</p>
+<p><strong>それ以外の道に進む場合</strong>:
+「複雑なシステムを、物理法則と数理最適化とデータで扱う」という
+本講義の方法論は、電力以外の分野にも通用する。</p>
+<!-- fig:ch15_map.png -->
+<p><img src="../%E5%9B%B3/ch15_map.png" alt="図 15.10">
+<em>図 15.10　本講義の全体像。Day 1・2 の物理が電圧・容量・周波数の計算を、Day 3 の予測が厳しい時間帯の特定を、Day 4 の最適化が配分の決定を担い、それらの総合として 6 制約の評価が成り立つ。</em></p>
+<!-- /fig -->
+
+<hr>
+<h2 id="s25">15.5 演習問題（総合）</h2>
+<p><strong>問 15-1</strong> 本講義で学んだ内容を用いて、次の問いに答えよ。</p>
+<p>沖縄本島系統に太陽光を導入していったとき、
+最初に問題になるのはどの制約か。以下の 3 つの状況それぞれについて答え、
+理由を本講義で学んだ理論とともに説明せよ。</p>
+<p>(a) 太陽光が<strong>配電系統末端</strong>に分散して連系される場合
+(b) 太陽光が<strong>大規模 1 か所</strong>に集中して連系される場合
+(c) 太陽光の<strong>総量が需要の 50% を超えた</strong>場合</p>
+<p><strong>問 15-2</strong> 次の各対策について、
+「どの制約を緩和するか」「効く量（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi></mrow><annotation encoding="application/x-tex">H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span></span> / <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> / 電圧 / 容量）」
+「概算コスト」「実現可能性」を表にまとめて比較せよ。</p>
+<p>(a) 送電線の増強
+(b) 蓄電池（100 MW / 400 MWh）
+(c) 同期調相機（100 MVA × 3 台）
+(d) インバータの Volt-Var 制御（既設への機能追加）
+(e) グリッドフォーミングインバータへの更新
+(f) 出力抑制の受け入れ</p>
+<p><strong>問 15-3</strong> 15.3 節の総合演習を実行し、レポートを作成せよ（15.3.6 節参照）。</p>
+<p><strong>問 15-4</strong> 本講義の内容を踏まえ、次のテーマから 1 つ選んで
+1200 字程度の小論文を書け。</p>
+<p>(a) 「同期発電機がない電力系統は成立するか」
+(b) 「再エネの出力抑制は悪か」
+(c) 「AI は電力系統の運用をどこまで担えるか」
+(d) 「島嶼系統の研究が持つ普遍的な意義」</p>
+<hr>
+<h2 id="s26">15.6 おわりに</h2>
+<h3 id="s27">本講義で伝えたかったこと</h3>
+<p><strong>1. 電力系統は物理法則に支配されている</strong></p>
+<p>キルヒホッフの法則、エネルギー保存則、熱力学第二法則、回転体の運動方程式。
+どんなに高度な AI を使っても、これらを無視することはできない。
+第13回・第14回で繰り返し述べたとおり、
+<strong>AI は物理の代替ではなく、物理計算の高速化と補完</strong>である。</p>
+<p><strong>2. すべては繋がっている</strong></p>
+<p>第3回の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo>=</mo><mo stretchy="false">(</mo><msub><mi>V</mi><mi>s</mi></msub><msub><mi>V</mi><mi>r</mi></msub><mi mathvariant="normal">/</mi><mi>X</mi><mo stretchy="false">)</mo><mi>sin</mi><mo>⁡</mo><mi>δ</mi></mrow><annotation encoding="application/x-tex">P = (V_sV_r/X)\sin\delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">sin</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span></span></span></span> という 1 つの式が、
+潮流計算のヤコビアン（第5回）、等面積法（第7回）、
+高速デカップル法（第5回）、直流法潮流（第4回）、
+そして電力市場の価格形成（第14回）にまで繋がっていた。</p>
+<p><strong>基礎を疎かにしないこと。</strong> それが応用の質を決める。</p>
+<p><strong>3. 制約は 1 つではない</strong></p>
+<p>第15回の総合演習で見たとおり、
+再エネの導入可能量は電圧・容量・N-1・慣性・周波数・最低出力という
+<strong>複数の制約の中で最も厳しいもの</strong>が決める。
+1 つの制約だけを見て「まだ入る」と判断してはならない。</p>
+<p><strong>4. 現場には答えのない問題がある</strong></p>
+<p>低慣性系統の運用、再エネの出力抑制の是非、AI の責任の所在。
+これらに教科書的な正解はない。
+<strong>自分で考え、根拠を持って判断する</strong>ことが求められる。
+本講義の演習問題に「論じよ」という設問を多く入れたのはそのためである。</p>
+<h3 id="s28">集中講義を終えて</h3>
+<p>4 日間・16 コマ、お疲れさまでした。</p>
+<p>電力システム工学は、150 年近い歴史を持つ成熟した学問でありながら、
+再生可能エネルギーの大量導入によって<strong>根本から問い直されている</strong>分野です。
+皆さんが学生である今、まさにその転換点にあります。</p>
+<p>沖縄という、日本で最も再エネ統合が難しく、
+同時に最も再エネのポテンシャルがある場所で学ぶ皆さんには、
+この分野で大きな役割を果たす機会があると思います。</p>
+<p>質問や相談があれば、いつでも連絡してください。</p>
+<p><strong></strong>（ 学術研究院工学系部門）</p>
+
+    <div class="pn"><a class="pn-prev" href="ch14.html">← 第14回 経済負荷配分と OPF</a><a class="pn-next" href="../index.html">🎉 全 15 回を読了 — 地図に戻る →</a></div>
+  </main>
+  <aside class="side"><nav class="toc" aria-label="目次"><div class="toc-h">この回の目次</div><a class="lv2" href="#s1">まず直感で（3 分でつかむ）</a><a class="lv2" href="#s2">15.1 導入</a><a class="lv3" href="#s3">学習目標</a><a class="lv3" href="#s4">本回の課題 — 沖縄本島系統の再エネ導入可能量を評価する</a><a class="lv2" href="#s5">15.2 総合演習の進め方</a><a class="lv3" href="#s6">Step 0: 系統モデルの構築</a><a class="lv3" href="#s7">Step 1: ベースケースの潮流計算（第4〜6回）</a><a class="lv3" href="#s8">Step 2: N-1 事故解析（第2回・第15回）</a><a class="lv3" href="#s9">Step 3: 動特性の評価（第7回・第8回）</a><a class="lv3" href="#s10">Step 4: 予測（第10〜12回）</a><a class="lv3" href="#s11">Step 5: 最適化（第14回）</a><a class="lv3" href="#s12">Step 6: 総合評価</a><a class="lv2" href="#s13">15.3 実装</a><a class="lv3" href="#s14">15.3.1 系統モデルの構築とベースケース</a><a class="lv3" href="#s15">15.3.2 Step 2: N-1 事故解析</a><a class="lv3" href="#s16">15.3.3 Step 3: 動特性の評価</a><a class="lv3" href="#s17">15.3.4 Step 4: 予測と正味需要（ダックカーブ）</a><a class="lv3" href="#s18">15.3.5 Step 5-6: 連系可能量の総合評価</a><a class="lv3" href="#s19">15.3.6 レポート課題</a><a class="lv2" href="#s20">15.4 本講義のまとめ</a><a class="lv3" href="#s21">15.4.1 全体の構造</a><a class="lv3" href="#s22">15.4.2 講義を貫く 3 本の柱</a><a class="lv3" href="#s23">15.4.3 今後の課題と研究トレンド</a><a class="lv3" href="#s24">15.4.4 学んだことをどう使うか</a><a class="lv2" href="#s25">15.5 演習問題（総合）</a><a class="lv2" href="#s26">15.6 おわりに</a><a class="lv3" href="#s27">本講義で伝えたかったこと</a><a class="lv3" href="#s28">集中講義を終えて</a></nav></aside>
+</div>
+<footer class="bottom">教科書：加藤・田岡『電力システム工学の基礎』 ／ 電力エネルギーシステム解析の基礎と応用 ／ 数式描画：KaTeX（同梱・MIT）</footer>
+<script>
+// 目次の現在位置ハイライト（外部依存なし・file:// で動く）
+(function(){
+  var links=[].slice.call(document.querySelectorAll('.toc a')); if(!links.length) return;
+  var heads=links.map(function(a){return document.getElementById(a.getAttribute('href').slice(1));});
+  function upd(){ var y=window.scrollY+120, i=0; for(var k=0;k<heads.length;k++){ if(heads[k]&&heads[k].offsetTop<=y) i=k; }
+    links.forEach(function(a,k){ a.classList.toggle('on',k===i); }); }
+  window.addEventListener('scroll',upd,{passive:true}); upd();
+})();
+</script>
+</body>
+</html>

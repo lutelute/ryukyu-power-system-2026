@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第8回 周波数と需給バランス — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第8回 周波数と需給バランス — ΔF = ΔP / K、そして沖縄には応援が来ない</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch08.html">📖 講義ノート（第8回）</a><a class="e" href="../ex/ch08.html">✍ 演習で確かめる</a></div>
+  <div class="lead">周波数は系統全体で 1 つの値で、<b>発電と消費のバランスが崩れた分だけ</b>ずれます。この回は教科書（加藤・田岡 第7章）の系統定数 <i>K</i> を軸に、<b>沖縄と九州で同じ 250 MW が脱落したら何が違うか</b>を実計算し、慣性 → ガバナ → LFC の 3 段応答をブラウザ内でシミュレーションします。前提は<a href="swing.html">第7回</a>、次は<a href="inverter.html">第9回 インバータ</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「電源が 1 台落ちても周波数はちょっと下がるだけ」が本土の感覚。独立・小規模の沖縄では同じ事故が負荷遮断につながります。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>需給の食い違い ΔP を系統の硬さ K で割ったのが周波数のずれ。K が小さく連系がない沖縄は二重に不利。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>中央給電指令所の LFC、発電機のガバナ整定、UFR（周波数低下リレー）の整定、再エネ導入可能量の評価。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>系統 <select id="sysSel"><option value="oki" selected>沖縄本島 1,500 MW</option><option value="kyu">九州 16,000 MW</option></select></label>
+      <label>脱落 ΔP <input type="range" id="dpRange" min="50" max="400" step="10" value="250"> <span id="dpVal">250</span> MW</label>
+      <label>慣性 H <input type="range" id="hRange" min="0.5" max="8" step="0.1" value="4.5"> <span id="hVal">4.5</span> s</label>
+      <button id="lfcBtn">LFC: あり</button>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>連系線とは「隣の系統の K を借りる」仕組みです — 沖縄は借りる相手がいないので、<b>ΔF = ΔP/K の分母が自分の K だけ</b>になります。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>%K = 1.0 %MW/0.1Hz は「1 Hz あたり 1%」という意味。</div>
+    <div class="row"><span class="o">✓</span><b>0.1 Hz あたり</b> 1% です。%MW/Hz に直すと 10 %MW/Hz。教科書の例題も試験もこの単位で出るので、1/10 の換算を落とすと答えが 10 倍ずれます。</div>
+    <div class="row"><span class="x">✗</span>ガバナが働けば周波数は元の 60 Hz に戻る。</div>
+    <div class="row"><span class="o">✓</span>ガバナは比例制御なので <b>ΔF = ΔP/K の定常偏差が残ります</b>。60 Hz に戻すのは中央給電指令所の LFC（積分制御）の仕事で、数十秒〜数分かかります。図の「LFC あり／なし」で差を見てください。</div>
+  </div>
+  <details><summary>もっと詳しく：ガバナカット試験・TBC の導出・日本の方式</summary><div class="det">
+    系統定数は新設発電機のガバナカット試験（運転中に系統から切り離す）で推定します。教科書 例題7.1：1000 MW 機を 1/2 出力で切って 0.045 Hz 低下 → <i>K</i> = 500/0.045 = 11,111 MW/Hz、系統容量 100 GW で %<i>K</i> = 11.1 %MW/Hz = 1.11 %MW/0.1Hz。
+    連系系統では Δ<i>P<sub>A</sub></i> = <i>K<sub>A</sub></i>Δ<i>F</i> + Δ<i>P<sub>T</sub></i>、Δ<i>P<sub>B</sub></i> = <i>K<sub>B</sub></i>Δ<i>F</i> − Δ<i>P<sub>T</sub></i> を連立して Δ<i>F</i> = (Δ<i>P<sub>A</sub></i>+Δ<i>P<sub>B</sub></i>)/(<i>K<sub>A</sub></i>+<i>K<sub>B</sub></i>)。TBC は測った Δ<i>F</i> と Δ<i>P<sub>T</sub></i> から自系統の Δ<i>P</i>（地域要求量 AR）を逆算して、その分だけ調整します。
+    日本の 60 Hz 系統は 6 社すべて TBC、東京と北海道は FFC。50/60 Hz 間は常時の LFC を行いません。
+    <b>限界：</b>このページの時間シミュレーションはガバナを 1 次遅れ、LFC を PI で単純化した集中定数モデルです。実際は発電機ごとの応答・ボイラの制約・UFR の段階動作などが入ります。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+/* ---- モデル ---- */
+const SYS = { oki: { name: '沖縄本島', S: 1500, H: 4.5 }, kyu: { name: '九州', S: 16000, H: 5.0 } };
+let SEL = 'oki', DP = 250, HS = 4.5, LFC = true; const FN = 60, PCT_K = 1.0;
+const Kof = (S, pct = PCT_K) => pct / 100 * S * 10;                 // %MW/0.1Hz → MW/Hz
+const rocof = (dP, H, S) => FN * (-dP) / (2 * H * S);
+const pctKG = eps => 100 * 100 / (eps * FN);
+function sim(H, S, K, dP, lfcOn) { const KG = 0.8 * K, KL = 0.2 * K, Tg = 8, al = 0.27 * K, be = 0.053 * K, Tl = 20, dt = 0.01, T = 120;
+  let y = [0, 0, 0]; const t = [], F = []; let nadir = 0;
+  const f = (tt, s) => { const [dF, Pg, ig] = s; const Pl = (lfcOn && tt >= Tl) ? -(al * dF + be * ig) : 0; const Pnet = -dP + Pg + Pl - KL * dF; return [FN * Pnet / (2 * H * S), (-KG * dF - Pg) / Tg, tt >= Tl && lfcOn ? dF : 0]; };
+  for (let tt = 0, k = 0; tt <= T; tt += dt, k++) { if (k % 5 === 0) { t.push(tt); F.push(FN + y[0]); } nadir = Math.min(nadir, y[0]);
+    const k1 = f(tt, y), k2 = f(tt + dt / 2, y.map((v, i) => v + dt / 2 * k1[i])), k3 = f(tt + dt / 2, y.map((v, i) => v + dt / 2 * k2[i])), k4 = f(tt + dt, y.map((v, i) => v + dt * k3[i])); y = y.map((v, i) => v + dt / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])); }
+  return { t, F, nadir: FN + nadir, ss: FN + y[0], gov: FN - dP / K }; }
+/* 連系系統（教科書 例題7.2/7.4） */
+function twoArea(KA, KB, dPA, dPB) { const dF = (dPA + dPB) / (KA + KB), dPT = (KB * dPA - KA * dPB) / (KA + KB); return { dF, dPT, ARA: KA * dF + dPT, ARB: KB * dF - dPT }; }
+const f1 = x => x.toFixed(1), f2 = x => x.toFixed(2), f3 = x => x.toFixed(3);
+const cur = () => SYS[SEL]; const curK = () => Kof(cur().S);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 系統定数', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ 時間応答', c: 'var(--loss)', start: 7 }, { t: 'Ⅳ 連系・まとめ', c: 'var(--accent)', start: 10 } ];
+const SLIDES = [
+  { legend: '天秤：左=発電、右=消費。傾き=周波数のずれ。250 MW が抜けると右に傾く',
+    html() { return '<h3>問題：250 MW の発電機が突然止まると、周波数はどうなる？</h3><div class="eq curr">発電 − 消費 = Δ<i>P</i> ≠ 0　⇒　回転子が減速　⇒　周波数が下がる<span class="read">読み：不足分は回転体の運動エネルギーから取り崩される。それが周波数の低下として現れる。</span></div><div class="desc">沖縄本島（約 1,500 MW）で 250 MW が抜けると需要の 17% が一瞬で消えます。九州（約 16,000 MW）なら 1.6% です。<b>「どこまで下がり、どれだけ速く下がるか」</b>を式で言えるようにするのがこの回の目標です。右下で系統・脱落量・慣性を変えられます。</div>'; },
+    draw() { drawBalance(); caption('天秤が傾く = 周波数がずれる'); } },
+  { legend: '周波数を守る理由：タービン翼の共振（系統側）と、UFR → 解列の連鎖',
+    html() { return '<h3>なぜ周波数を守るのか：崩壊の連鎖を止めるため</h3><div class="eq curr">周波数低下 → 発電機の保護解列 → さらに不足 → さらに低下 …（正のフィードバック）<span class="read">読み：大容量タービンの薄い翼は特定周波数で共振して壊れるため、周波数が外れると発電機が自分を守って止まる。止まると不足が増える。</span></div><div class="desc">教科書 7.1 節は「近年はむしろ電力供給の安定という観点から周波数を維持している」と述べます。インバータ制御のモータが普及して需要家側の必要性は薄れましたが、<b>系統側の連鎖を止める</b>必要は増しています。この連鎖が広域停電（ブラックアウト）の典型的な進み方です。</div>'; },
+    draw() { drawCascade(); caption('落ちる → 止まる → もっと落ちる'); } },
+
+  { legend: 'ガバナ：周波数が下がると蒸気を増やす。直線の傾きが速度調定率 ε',
+    html() { const eps = 4; return '<h3>調速制御（ガバナ）と速度調定率 ε</h3><div class="eq curr">ε = <span class="frac"><span><i>F</i><sub>0</sub> − <i>F<sub>N</sub></i></span><span><i>F<sub>N</sub></i></span></span> × 100 [%]　⇒　%<i>K<sub>G</sub></i> = <span class="frac"><span>100 × 100</span><span>ε <i>F<sub>N</sub></i></span></span> = <span class="frac"><span>10000</span><span>' + eps + ' × 60</span></span> = <b class="res">' + f1(pctKG(eps)) + '</b> %MW/Hz<span class="read">読み：無負荷回転速度と定格の差の割合。ε=4% なら 1 Hz 下がると出力が定格の 41.7% 増える。</span></div><div class="desc">教科書 7.2.1 節。ガバナは周波数の下がりを検出して蒸気加減弁（水力ならガイドベーン）を開きます。ε は 4〜5% に「わざと鈍く」設定します。敏感すぎると発電機どうしが出力を取り合って不安定になり、鈍すぎると周波数が安定しないからです。50 Hz 系統なら同じ ε=4% で 50 %MW/Hz です。</div>'; },
+    draw() { drawGovernor(); caption('傾きを鈍くしてあるのは「取り合い」を防ぐため'); } },
+  { legend: '負荷の自己制御性：周波数が上がるとモータが速く回り、負荷が増える',
+    html() { return '<h3>負荷にも周波数特性がある：自己制御性 K<sub>L</sub></h3><div class="eq curr">Δ<i>L</i> = <i>K<sub>L</sub></i> Δ<i>F</i>　（周波数が上がると消費が増える）<span class="read">読み：回転機負荷はモータの回転数が上がると消費電力が増える。制御装置なしに自動で働く「最初の防波堤」。</span></div><div class="desc">教科書 7.2.2 節。周波数が下がるとファンやポンプの回転が落ちて<b>勝手に消費が減る</b>ので、不足の一部は負荷側が吸収してくれます。誰も何もしなくても働くのが特徴です。このページの時間シミュレーションでは <i>K<sub>L</sub></i> を <i>K</i> の 2 割としています。</div>'; },
+    draw() { drawLoadChar(); caption('負荷は勝手に協力してくれる'); } },
+  { legend: '系統定数 K = K_G + K_L。●=いまの系統の K',
+    mini: () => '<div>' + cur().name + ' K <b>' + f1(curK()) + ' MW/Hz</b></div><div>%K <b>' + PCT_K + ' %MW/0.1Hz</b></div>',
+    html() { return '<h3>系統定数 K：需給のずれと周波数のずれを結ぶ 1 本の式</h3><div class="eq curr">Δ<i>P</i> = (<i>K<sub>G</sub></i> + <i>K<sub>L</sub></i>) Δ<i>F</i> = <i>K</i> Δ<i>F</i>　　%<i>K</i> = <span class="frac"><span>100 <i>K</i></span><span>系統容量</span></span>　　' + cur().name + '：<i>K</i> = <b class="res">' + f1(curK()) + '</b> MW/Hz<span class="read">読み：発電の応答と負荷の応答を足したものが系統の「硬さ」。大きいほど同じアンバランスで周波数がずれにくい。</span></div><div class="desc">教科書 (7.4) 式。実系統の %<i>K</i> は <b>10〜20 %MW/Hz</b>、実務の単位は <b>%MW/0.1Hz</b>（値は 1/10）です。1.0 %MW/0.1Hz の沖縄本島（1,500 MW）なら <i>K</i> = 0.01 × 1500 × 10 = ' + f1(curK()) + ' MW/Hz。この <b>K は系統容量にほぼ比例する</b>ので、小さい系統ほど周波数が動きやすい。</div>'; },
+    draw() { drawKbars(); caption('K は系統の「硬さ」。容量に比例する'); } },
+  { legend: 'ガバナカット試験（教科書 例題7.1）：500 MW を切って 0.045 Hz 低下 → K を逆算',
+    html() { const K = 500 / 0.045; return '<h3>K はどう測るか：ガバナカット試験</h3><div class="eq curr"><i>K</i> = <span class="frac"><span>Δ<i>P</i></span><span>Δ<i>F</i></span></span> = <span class="frac"><span>500 MW</span><span>0.045 Hz</span></span> = <b class="res">' + K.toFixed(0) + '</b> MW/Hz　⇒　%<i>K</i> = ' + (100 * K / 1e5).toFixed(1) + ' %MW/Hz = <b class="res">' + (10 * K / 1e5).toFixed(2) + '</b> %MW/0.1Hz<span class="read">読み：1000 MW 機を 1/2 出力（500 MW）で系統から切り離し、周波数の落ち幅から K を逆算する。系統容量 100 GW。</span></div><div class="desc">教科書 例題7.1 そのままです。「1000 MW 機」を切ったのに <b>ΔP は 500 MW</b>（1/2 出力だから）— これを落とすと答えが 2 倍ずれます。K を正確に知ることは、Ⅳ 章の TBC（連系線潮流制御）で決定的に重要になります。</div>'; },
+    draw() { drawGovCut(); caption('切った出力 ÷ 落ちた周波数 = K'); } },
+  { legend: 'A/B：同じ ΔP を沖縄（赤）と九州（緑）に与える。棒=定常周波数偏差 ΔF=ΔP/K',
+    mini: () => '<div>沖縄 ΔF <b>' + f3(-DP / Kof(SYS.oki.S)) + ' Hz</b></div><div>九州 ΔF <b>' + f3(-DP / Kof(SYS.kyu.S)) + ' Hz</b></div>',
+    html() { const dO = -DP / Kof(SYS.oki.S), dK = -DP / Kof(SYS.kyu.S); return '<h3>A/B：同じ ' + DP + ' MW の脱落で、沖縄は九州の ' + (dO / dK).toFixed(0) + ' 倍下がる</h3><div class="eq curr">沖縄：Δ<i>F</i> = −' + DP + ' / ' + f1(Kof(SYS.oki.S)) + ' = <b class="res">' + f3(dO) + '</b> Hz　／　九州：−' + DP + ' / ' + f1(Kof(SYS.kyu.S)) + ' = <b class="res">' + f3(dK) + '</b> Hz<span class="read">読み：同じ %K でも系統容量が 10 倍違えば K も 10 倍違い、周波数偏差は 1/10 になる。</span></div><div class="desc">脱落量スライダを動かしてください。九州では ' + DP + ' MW 脱落でも ' + (FN + dK).toFixed(2) + ' Hz で済みますが、沖縄では <b>' + (FN + dO).toFixed(2) + ' Hz</b> まで落ちます。UFR（負荷遮断）の整定が 57.0 Hz 付近だとすると、沖縄の余裕は ' + (FN + dO - 57).toFixed(2) + ' Hz しかありません。<b>ただしこれは「ガバナが効いた後」の定常値</b>で、その前にもっと落ち込む瞬間があります（次章）。</div>'; },
+    draw() { drawAB(); caption('系統が小さい = K が小さい = 深く落ちる'); } },
+
+  { legend: '慣性応答：脱落直後の傾き RoCoF = F_N·ΔP / (2·H·S)。H スライダで変わる',
+    mini: () => '<div>RoCoF <b>' + f3(rocof(DP, HS, cur().S)) + ' Hz/s</b></div>',
+    html() { return '<h3>最初の数秒：慣性だけが周波数を支えている</h3><div class="eq curr"><span class="frac"><span>d<i>F</i></span><span>d<i>t</i></span></span> = <span class="frac"><span><i>F<sub>N</sub></i> Δ<i>P</i></span><span>2 <i>H</i><sub>sys</sub> <i>S</i><sub>sys</sub></span></span> = <span class="frac"><span>60 × (−' + DP + ')</span><span>2 × ' + f1(HS) + ' × ' + cur().S + '</span></span> = <b class="res">' + f3(rocof(DP, HS, cur().S)) + '</b> Hz/s<span class="read">読み：第7回の動揺方程式を系統全体に適用したもの。慣性 H と系統容量 S が小さいほど速く落ちる。RoCoF と呼ぶ。</span></div><div class="desc">ガバナが動き出すまでの最初の 1〜2 秒、周波数を支えているのは回転体の運動エネルギー（慣性）だけです。この初期の傾きを <b>RoCoF</b> と呼びます。慣性スライダを下げると傾きが急になります。<b>再エネ（H = 0）が増えると H<sub>sys</sub> が下がり、ここが最初に悪化します</b>。</div>'; },
+    draw() { drawRocof(); caption('傾きは 1/H。慣性が減ると急落する'); } },
+  { legend: '時間応答：①慣性で落ち始め ②ガバナ＋自己制御で下げ止まり ③LFC で戻る（RK4 実シミュレーション）',
+    mini: () => { const r = sim(HS, cur().S, curK(), DP, LFC); return '<div>最低 <b>' + f3(r.nadir) + ' Hz</b></div><div>120 s 後 <b>' + f3(r.ss) + ' Hz</b></div>'; },
+    html() { const r = sim(HS, cur().S, curK(), DP, LFC); return '<h3>4 段階の応答：慣性 → ガバナ・自己制御性 → LFC → ELD</h3><div class="eq curr">①慣性（〜数秒, <i>H</i>）→ ②調速制御＋自己制御性（〜数十秒, <i>K</i>）→ ③LFC（〜10 分, PI）→ ④ELD（10 分〜, 経済性）<span class="read">読み：時間スケールの違う 4 つの仕組みがリレーする。教科書 図7.5 の制御分担。</span></div><div class="desc">' + cur().name + '・脱落 ' + DP + ' MW・H = ' + f1(HS) + ' s で、最低周波数（nadir）は <b>' + f3(r.nadir) + ' Hz</b>、ガバナで下げ止まる定常値は ' + f3(r.gov) + ' Hz、LFC ' + (LFC ? 'あり' : 'なし') + 'で 120 秒後は <b>' + f3(r.ss) + ' Hz</b>。<b>nadir は定常値よりさらに深い</b>ことに注意 — UFR が動作するかはこの最低点で決まります。</div>'; },
+    draw() { drawTimeResp(); caption('nadir（最低点）が UFR の運命を決める'); } },
+  { legend: 'A/B：LFC あり（緑）／なし（赤）。なしでは ΔF=ΔP/K の定常偏差が残る',
+    mini: () => { const a = sim(HS, cur().S, curK(), DP, true), b = sim(HS, cur().S, curK(), DP, false); return '<div>あり <b>' + f3(a.ss) + '</b></div><div>なし <b>' + f3(b.ss) + '</b></div>'; },
+    html() { const a = sim(HS, cur().S, curK(), DP, true), b = sim(HS, cur().S, curK(), DP, false); return '<h3>A/B：LFC がなければ周波数は 60 Hz に戻らない</h3><div class="eq curr">Δ<i>G</i> = α Δ<i>F</i> + β ∫Δ<i>F</i> d<i>t</i>　（PI 制御）　→　120 s 後：LFC あり <b class="res">' + f3(a.ss) + '</b> Hz　／　なし <b class="res">' + f3(b.ss) + '</b> Hz<span class="read">読み：比例項だけでは ΔF=ΔP/K の偏差が残る。積分項が時間をかけて偏差を 0 に押し戻す。教科書 (7.9) 式。</span></div><div class="desc">右下の「LFC」ボタンで切り替えてください。ガバナは比例制御なので定常偏差 ' + f3(b.ss - FN) + ' Hz が残りますが、中央給電指令所の LFC が積分制御で消します。教科書 例題7.3 のとおり、<b>α が大きすぎると振動し、小さすぎると初期の偏差が大きい</b>というトレードオフがあります。</div>'; },
+    draw() { drawLFCab(); caption('積分がなければ偏差は消えない'); } },
+
+  { legend: '2 連系系統（教科書 例題7.2）：A で 30 MW 脱落 → 周波数と連系線潮流',
+    html() { const r = twoArea(100, 50, -30, 0); return '<h3>連系系統：隣の K を借りて偏差を小さくする</h3><div class="eq curr">Δ<i>F</i> = <span class="frac"><span>Δ<i>P<sub>A</sub></i> + Δ<i>P<sub>B</sub></i></span><span><i>K<sub>A</sub></i> + <i>K<sub>B</sub></i></span></span> = <span class="frac"><span>−30</span><span>100 + 50</span></span> = <b class="res">' + f2(r.dF) + '</b> Hz,　Δ<i>P<sub>T</sub></i> = <span class="frac"><span><i>K<sub>B</sub></i>Δ<i>P<sub>A</sub></i> − <i>K<sub>A</sub></i>Δ<i>P<sub>B</sub></i></span><span><i>K<sub>A</sub></i> + <i>K<sub>B</sub></i></span></span> = <b class="res">' + f1(r.dPT) + '</b> MW<span class="read">読み：A 系統（1000 MW, K=100）と B 系統（500 MW, K=50）。周波数偏差は両方の K で割る。ΔP_T が負なので B から A へ 10 MW 流れる。</span></div><div class="desc">教科書 例題7.2。A 単独なら −30/100 = −0.30 Hz でしたが、連系で <b>−0.20 Hz に改善</b>。B 系統が連系線を通じて 10 MW 応援したからです。<b>沖縄本島にはこの連系線がありません</b>。分母は自分の K だけ、これが「二重のハンディ」の 1 つ目です（もう 1 つは K 自体が小さいこと）。</div>'; },
+    draw() { drawTwoArea(); caption('連系 = 隣の K を借りる。沖縄は借りられない'); } },
+  { legend: 'TBC：測った ΔF と ΔP_T から自系統の要求量 AR を逆算。K の推定が 10% ずれると…',
+    html() { const a = twoArea(100, 50, -30, 0); const ARA1 = 100 * a.dF + a.dPT, ARB1 = 50 * a.dF - a.dPT; const ARA2 = 90 * a.dF + a.dPT, ARB2 = 45 * a.dF - a.dPT; return '<h3>TBC と地域要求量 AR：自分の分だけ直す</h3><div class="eq curr"><i>AR<sub>A</sub></i> = <i>K<sub>A</sub></i>Δ<i>F</i> + Δ<i>P<sub>T</sub></i> = 100×(−0.2) + (−10) = <b class="res">' + f1(ARA1) + '</b> MW,　<i>AR<sub>B</sub></i> = 50×(−0.2) − (−10) = <b class="res">' + f1(ARB1) + '</b> MW<span class="read">読み：周波数と連系線潮流を測れば、自分の系統で起きたアンバランスが分かる。A は 30 MW 増やせ、B は何もするな。</span></div><div class="desc">教科書 例題7.4。正しい K なら AR は脱落量そのものを言い当てます。ところが <b>K を 10% 小さく見積もる（0.9 %MW/0.1Hz）と</b> <i>AR<sub>A</sub></i> = ' + f1(ARA2) + '、<i>AR<sub>B</sub></i> = ' + f1(ARB2) + ' となり、本来無関係の B 系統まで動いてしまいます。<b>だからガバナカット試験で K を正確に測る</b>のです。</div>'; },
+    draw() { drawTBC(); caption('K が正しければ、自分の分だけ動ける'); } },
+  { legend: '日本の周波数制御方式：60 Hz 系統は全て TBC、東京・北海道は FFC',
+    html() { return '<h3>日本の方式：TBC が標準、FFC は主要系統だけ</h3><div class="eq curr">FFC（定周波数制御）：周波数だけを見る　／　TBC（周波数バイアス連系線潮流制御）：自系統の AR だけ直す<span class="read">読み：FFC は他系統の乱れにも応動するので調整量が大きくなる。TBC は自分の分だけ。連系のメリットを損なわないのが TBC。</span></div><div class="desc">教科書 7.6 節。60 Hz 系統の 6 社はすべて TBC、東京と北海道は FFC（北海道は北本直流の潮流制御と 2 本立て）。北米・欧州は全系統 TBC で、系統容量が大きいので日本より周波数変動が小さい。<b>沖縄は連系がないので単独系統の LFC</b>で、FFC に相当します。</div>'; },
+    draw() { drawJapanFC(); caption('連系があるなら TBC。沖縄は単独系統'); } },
+  { legend: 'まとめ：沖縄の二重ハンディ（K 小・応援なし）と、再エネで H と K_G がさらに減る',
+    html() { const dO = -DP / Kof(SYS.oki.S); return '<h3>まとめ：ΔF = ΔP/K — 沖縄は分母が小さく、借りる相手もいない</h3><div class="eq curr">Δ<i>F</i> = Δ<i>P</i>/<i>K</i>（定常）　／　d<i>F</i>/d<i>t</i> = <i>F<sub>N</sub></i>Δ<i>P</i>/(2<i>HS</i>)（初期）　／　再エネ↑ → <i>H</i>↓ かつ <i>K<sub>G</sub></i>↓<span class="read">読み：深さは K、速さは H が決める。インバータ電源はどちらにも寄与しないので、両方が同時に悪化する。</span></div><div class="desc">' + DP + ' MW 脱落で沖縄は ' + (FN + dO).toFixed(2) + ' Hz まで落ち、しかも最初の傾きは九州の 10 倍以上。対策は蓄電池の高速応答（K を補う）、同期調相機・合成慣性（H を補う）、需要側応答です。次回は<b>問題の原因だったインバータが、制御次第で解決策にもなる</b>ことを見ます（第9回）。</div>'; },
+    draw() { drawSummary(); caption('深さは K、速さは H。沖縄は両方厳しい'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function arrow(x0, y0, x1, y1, color, w = 2) { line([[x0, y0], [x1, y1]], color, w); const a = Math.atan2(y1 - y0, x1 - x0); line([[x1, y1], [x1 - 9 * Math.cos(a - .4), y1 - 9 * Math.sin(a - .4)]], color, w); line([[x1, y1], [x1 - 9 * Math.cos(a + .4), y1 - 9 * Math.sin(a + .4)]], color, w); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawBalance() { const S = cur().S, tilt = Math.min(DP / S, .35) * 60; const cx = 180, cy = 200; ctx.save(); ctx.translate(cx, cy); ctx.rotate(tilt * Math.PI / 180); line([[-130, 0], [130, 0]], getCSS('--text'), 4); rect(-150, -50, 60, 50, getCSS('--accent'), .75); rect(90, -50, 60, 50, getCSS('--warm'), .75); ctx.restore(); line([[cx, cy], [cx, cy + 60]], getCSS('--text'), 4); line([[cx - 30, cy + 60], [cx + 30, cy + 60]], getCSS('--text'), 4); txt('発電 ' + (S - DP) + ' MW', 70, 120, { align: 'center', size: 11, bold: true, color: getCSS('--accent') }); txt('消費 ' + S + ' MW', 290, 120, { align: 'center', size: 11, bold: true, color: getCSS('--warm') }); txt('−' + DP + ' MW 脱落', 70, 140, { align: 'center', size: 10, color: getCSS('--neg') }); txt(cur().name + '：需要の ' + (DP / S * 100).toFixed(1) + '% が一瞬で消える', CW / 2, 320, { align: 'center', size: 11 }); txt('傾き = 周波数低下', CW / 2, 345, { align: 'center', size: 10.5, color: getCSS('--muted') }); }
+function drawCascade() { const steps = ['電源脱落 ΔP', '周波数低下', 'UFR/保護で\n発電機が解列', 'さらに不足', '周波数崩壊']; steps.forEach((s, i) => { const y = 60 + i * 62; const col = i === 4 ? '--neg' : (i === 0 ? '--warm' : '--upd'); rect(80, y - 20, 200, 44, getCSS(col), .18); const ls = s.split('\n'); txt(ls[0], 180, y + (ls[1] ? -2 : 6), { align: 'center', size: 11, bold: true }); if (ls[1]) txt(ls[1], 180, y + 16, { align: 'center', size: 10 }); if (i < 4) txt('▼', 180, y + 40, { align: 'center', size: 10, color: getCSS('--faint') }); }); line([[290, 130], [320, 130], [320, 250], [290, 250]], getCSS('--neg'), 1.5, [4, 3]); txt('正の\nフィードバック'.split('\n')[0], 335, 185, { align: 'center', size: 9, color: getCSS('--neg') }); txt('循環', 335, 199, { align: 'center', size: 9, color: getCSS('--neg') }); }
+function drawGovernor() { const L = 55, T = 50, R = 335, B = 300; axes(L, T, R, B, '出力 [% 定格]', 'F [Hz]'); const eps = 4; const F0 = FN * (1 + eps / 100); const xOf = p => L + p / 100 * (R - L), yOf = f => B - (f - 58) / 5 * (B - T); line([[xOf(0), yOf(F0)], [xOf(100), yOf(FN * (1 - eps / 100))]], getCSS('--upd'), 3); line([[L, yOf(FN)], [R, yOf(FN)]], getCSS('--faint'), 1, [4, 3]); dot(xOf(50), yOf(FN), 6, getCSS('--text')); txt('定格 F_N=60', xOf(50) + 8, yOf(FN) + 4, { size: 10, mono: true }); dot(xOf(0), yOf(F0), 6, getCSS('--warm')); txt('無負荷 F₀=' + F0.toFixed(1), xOf(0) + 8, yOf(F0) - 6, { size: 10, mono: true, color: getCSS('--warm') }); txt('ε = ' + eps + '%', xOf(70), yOf(59), { size: 12, bold: true, color: getCSS('--upd') }); [0, 50, 100].forEach(p => txt(p, xOf(p), B + 14, { align: 'center', size: 9, mono: true })); [58, 59, 60, 61, 62].forEach(f => txt(f, L - 4, yOf(f) + 4, { align: 'right', size: 9, mono: true })); txt('1 Hz 低下 → 出力 +' + f1(pctKG(eps)) + '%', CW / 2, 340, { align: 'center', size: 10.5, mono: true }); }
+function drawLoadChar() { const L = 55, T = 50, R = 335, B = 300; axes(L, T, R, B, '負荷 [%]', 'F [Hz]'); const xOf = p => L + (p - 90) / 20 * (R - L), yOf = f => B - (f - 58) / 4 * (B - T); line([[xOf(94), yOf(58)], [xOf(106), yOf(62)]], getCSS('--warm'), 3); line([[xOf(110), yOf(58.5)], [xOf(90), yOf(61.5)]], getCSS('--upd'), 3, [5, 4]); dot(xOf(100), yOf(60), 7, getCSS('--text')); txt('負荷（右上がり）', xOf(103), yOf(61.6), { size: 10, color: getCSS('--warm'), bold: true }); txt('発電（右下がり）', xOf(91), yOf(61.6), { size: 10, color: getCSS('--upd'), bold: true }); [90, 100, 110].forEach(p => txt(p, xOf(p), B + 14, { align: 'center', size: 9, mono: true })); [58, 60, 62].forEach(f => txt(f, L - 4, yOf(f) + 4, { align: 'right', size: 9, mono: true })); txt('交点が運転点。両方の傾きの和が K', CW / 2, 340, { align: 'center', size: 10.5 }); }
+function drawKbars() { const L = 80, T = 50, R = 335, B = 300; axes(L, T, R, B, '', 'K [MW/Hz]（対数）'); const yOf = k => B - (Math.log10(k) - 1) / 3.5 * (B - T); [['沖縄本島', Kof(1500), '--neg'], ['九州', Kof(16000), '--accent'], ['東京', Kof(60000), '--upd']].forEach(([n, k, c], i) => { const x = L + 20 + i * 80; const sel = (n === '沖縄本島' && SEL === 'oki') || (n === '九州' && SEL === 'kyu'); rect(x, yOf(k), 55, B - yOf(k), getCSS(c), sel ? .95 : .45); txt(n, x + 27, B + 14, { align: 'center', size: 10 }); txt(k.toLocaleString(), x + 27, yOf(k) - 6, { align: 'center', size: 10, mono: true, bold: sel }); }); [10, 100, 1000, 10000].forEach(k => { txt(k.toLocaleString(), L - 4, yOf(k) + 4, { align: 'right', size: 9, mono: true }); line([[L, yOf(k)], [R, yOf(k)]], getCSS('--grid'), 1, [3, 3]); }); txt('%K = 1.0 %MW/0.1Hz で共通', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawGovCut() { const L = 50, T = 50, R = 335, B = 280; axes(L, T, R, B, 't [s]', 'F [Hz]'); const xOf = t => L + t / 30 * (R - L), yOf = f => B - (f - 59.9) / .15 * (B - T); const pts = []; for (let t = 0; t <= 30; t += .2) pts.push([xOf(t), yOf(t < 5 ? 60 : 60 - .045 * (1 - Math.exp(-(t - 5) / 4)))]); line(pts, getCSS('--upd'), 2.5); line([[xOf(5), T], [xOf(5), B]], getCSS('--neg'), 1.5, [4, 3]); txt('500 MW 解列', xOf(5) + 4, T + 14, { size: 10, color: getCSS('--neg'), bold: true }); line([[L, yOf(60)], [R, yOf(60)]], getCSS('--faint'), 1, [3, 3]); line([[L, yOf(59.955)], [R, yOf(59.955)]], getCSS('--faint'), 1, [3, 3]); arrow(xOf(26), yOf(60), xOf(26), yOf(59.955), getCSS('--warm'), 2); txt('ΔF = 0.045 Hz', xOf(25), yOf(59.978), { align: 'right', size: 10.5, color: getCSS('--warm'), bold: true }); [0, 10, 20, 30].forEach(t => txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true })); [59.9, 59.95, 60].forEach(f => txt(f.toFixed(2), L - 4, yOf(f) + 4, { align: 'right', size: 9, mono: true })); txt('K = 500 / 0.045 = 11,111 MW/Hz', CW / 2, 320, { align: 'center', size: 11, mono: true, bold: true }); txt('系統容量 100 GW → %K = 11.1 %MW/Hz = 1.11 %MW/0.1Hz', CW / 2, 345, { align: 'center', size: 9.5, mono: true, color: getCSS('--muted') }); }
+function drawAB() { const L = 70, T = 50, R = 335, B = 300; axes(L, T, R, B, '', '到達周波数 [Hz]'); const yOf = f => B - (f - 56) / 4.2 * (B - T); [['沖縄本島', FN - DP / Kof(1500), '--neg'], ['九州', FN - DP / Kof(16000), '--accent']].forEach(([n, f, c], i) => { const x = L + 40 + i * 130; rect(x, yOf(f), 70, B - yOf(f), getCSS(c), .85); txt(n, x + 35, B + 16, { align: 'center', size: 11 }); txt(f.toFixed(2) + ' Hz', x + 35, yOf(f) - 6, { align: 'center', size: 11, mono: true, bold: true }); }); line([[L, yOf(60)], [R, yOf(60)]], getCSS('--faint'), 1, [4, 3]); line([[L, yOf(57)], [R, yOf(57)]], getCSS('--neg'), 1.5, [4, 3]); txt('UFR 57.0 Hz', R - 4, yOf(57) - 5, { align: 'right', size: 9.5, color: getCSS('--neg') }); [56, 57, 58, 59, 60].forEach(f => txt(f, L - 4, yOf(f) + 4, { align: 'right', size: 9, mono: true })); txt('脱落 ' + DP + ' MW・定常値（ガバナ後）', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawRocof() { const L = 50, T = 50, R = 335, B = 300; axes(L, T, R, B, 't [s]', 'F [Hz]'); const xOf = t => L + t / 3 * (R - L), yOf = f => B - (f - 55) / 5 * (B - T); const rc = rocof(DP, HS, cur().S); line([[xOf(0), yOf(60)], [xOf(3), yOf(Math.max(55, 60 + 3 * rc))]], getCSS('--neg'), 3); [[8, '--faint'], [2, '--faint']].forEach(([h, c]) => { const r2 = rocof(DP, h, cur().S); line([[xOf(0), yOf(60)], [xOf(3), yOf(Math.max(55, 60 + 3 * r2))]], getCSS(c), 1.5, [4, 3]); txt('H=' + h, xOf(2.9), yOf(Math.max(55.2, 60 + 2.9 * r2)) - 4, { align: 'right', size: 9, color: getCSS('--muted') }); }); txt('H=' + f1(HS) + '：' + f3(rc) + ' Hz/s', xOf(1.5), yOf(60 + 1.5 * rc) - 14, { align: 'center', size: 11, bold: true, color: getCSS('--neg') }); line([[L, yOf(57)], [R, yOf(57)]], getCSS('--neg'), 1, [4, 3]); txt('57.0 Hz', L + 3, yOf(57) - 4, { size: 9, mono: true, color: getCSS('--neg') }); [0, 1, 2, 3].forEach(t => txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true })); [55, 56, 57, 58, 59, 60].forEach(f => txt(f, L - 4, yOf(f) + 4, { align: 'right', size: 9, mono: true })); txt('57 Hz まで ' + (rc < 0 ? f1(-3 / rc) : '—') + ' 秒（慣性だけなら）', CW / 2, 340, { align: 'center', size: 10.5, mono: true }); }
+function drawTimeResp() { const r = sim(HS, cur().S, curK(), DP, LFC); const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, 't [s]', 'F [Hz]'); const fmin = Math.min(r.nadir - .3, 57); const xOf = t => L + t / 120 * (R - L), yOf = f => B - (f - fmin) / (60.2 - fmin) * (B - T); line(r.t.map((t, k) => [xOf(t), yOf(r.F[k])]), getCSS('--accent'), 2.5); line([[L, yOf(60)], [R, yOf(60)]], getCSS('--faint'), 1, [4, 3]); line([[L, yOf(r.gov)], [R, yOf(r.gov)]], getCSS('--warm'), 1, [4, 3]); txt('ΔP/K → ' + f2(r.gov), R - 4, yOf(r.gov) + 12, { align: 'right', size: 9, mono: true, color: getCSS('--warm') }); line([[L, yOf(57)], [R, yOf(57)]], getCSS('--neg'), 1.5, [4, 3]); txt('UFR 57', L + 3, yOf(57) - 4, { size: 9, mono: true, color: getCSS('--neg') }); if (LFC) { line([[xOf(20), T], [xOf(20), B]], getCSS('--upd'), 1, [3, 3]); txt('LFC 起動', xOf(20) + 3, T + 12, { size: 9, color: getCSS('--upd') }); } const kn = r.F.indexOf(Math.min(...r.F)); dot(xOf(r.t[kn]), yOf(r.nadir), 6, getCSS('--neg')); txt('nadir ' + f2(r.nadir), xOf(r.t[kn]) + 8, yOf(r.nadir) + 14, { size: 10, mono: true, color: getCSS('--neg'), bold: true }); txt('①', xOf(3), yOf(60) - 8, { size: 10, bold: true }); txt('②', xOf(12), yOf(r.gov) - 8, { size: 10, bold: true }); if (LFC) txt('③', xOf(60), yOf(60) - 8, { size: 10, bold: true }); [0, 30, 60, 90, 120].forEach(t => txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true })); }
+function drawLFCab() { const a = sim(HS, cur().S, curK(), DP, true), b = sim(HS, cur().S, curK(), DP, false); const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, 't [s]', 'F [Hz]'); const fmin = Math.min(a.nadir - .3, 57); const xOf = t => L + t / 120 * (R - L), yOf = f => B - (f - fmin) / (60.2 - fmin) * (B - T); line(b.t.map((t, k) => [xOf(t), yOf(b.F[k])]), getCSS('--neg'), 2.2); line(a.t.map((t, k) => [xOf(t), yOf(a.F[k])]), getCSS('--accent'), 2.5); line([[L, yOf(60)], [R, yOf(60)]], getCSS('--faint'), 1, [4, 3]); txt('LFC あり → ' + f2(a.ss), R - 4, yOf(a.ss) - 6, { align: 'right', size: 10, mono: true, color: getCSS('--accent'), bold: true }); txt('なし → ' + f2(b.ss), R - 4, yOf(b.ss) + 14, { align: 'right', size: 10, mono: true, color: getCSS('--neg'), bold: true }); [0, 30, 60, 90, 120].forEach(t => txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true })); txt('残る偏差 = ΔP/K = ' + f3(b.ss - 60) + ' Hz', CW / 2, 340, { align: 'center', size: 10.5, mono: true }); }
+function drawTwoArea() { const r = twoArea(100, 50, -30, 0); const c = getCSS('--text'); ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(90, 180, 55, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = getCSS('--neg'); ctx.globalAlpha = .15; ctx.fill(); ctx.beginPath(); ctx.arc(270, 180, 42, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = getCSS('--accent'); ctx.fill(); ctx.restore(); txt('A 系統', 90, 170, { align: 'center', size: 12, bold: true }); txt('1000 MW, K=100', 90, 188, { align: 'center', size: 9.5, mono: true }); txt('ΔP_A = −30', 90, 204, { align: 'center', size: 10, mono: true, color: getCSS('--neg'), bold: true }); txt('B 系統', 270, 170, { align: 'center', size: 12, bold: true }); txt('500 MW, K=50', 270, 188, { align: 'center', size: 9.5, mono: true }); line([[145, 180], [228, 180]], c, 3); arrow(215, 165, 160, 165, getCSS('--accent'), 2.5); txt('10 MW 応援', 188, 155, { align: 'center', size: 10, color: getCSS('--accent'), bold: true }); txt('ΔF = ' + f2(r.dF) + ' Hz（両系統共通）', CW / 2, 280, { align: 'center', size: 12, mono: true, bold: true }); txt('A 単独なら −0.30 Hz → 連系で −0.20 Hz', CW / 2, 305, { align: 'center', size: 10.5 }); txt('沖縄：この矢印が存在しない', CW / 2, 340, { align: 'center', size: 11, color: getCSS('--neg'), bold: true }); }
+function drawTBC() { const a = twoArea(100, 50, -30, 0); const L = 70, T = 50, R = 335, B = 280; axes(L, T, R, B, '', 'AR [MW]'); const yOf = v => B - (v + 35) / 40 * (B - T); const cases = [['A 正しいK', 100 * a.dF + a.dPT, '--accent'], ['B 正しいK', 50 * a.dF - a.dPT, '--accent'], ['A K−10%', 90 * a.dF + a.dPT, '--neg'], ['B K−10%', 45 * a.dF - a.dPT, '--neg']]; cases.forEach(([n, v, c], i) => { const x = L + 15 + i * 65; const y0 = yOf(0), y1 = yOf(v); rect(x, Math.min(y0, y1), 45, Math.abs(y1 - y0), getCSS(c), .85); txt(n, x + 22, B + 14, { align: 'center', size: 8.5 }); txt(f1(v), x + 22, (v < 0 ? y1 + 12 : y1 - 6), { align: 'center', size: 10, mono: true, bold: true }); }); line([[L, yOf(0)], [R, yOf(0)]], getCSS('--text'), 1); [-30, -20, -10, 0].forEach(v => txt(v, L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); txt('K の誤差 10% → 無関係な B が 1 MW 動く', CW / 2, 320, { align: 'center', size: 10.5 }); txt('教科書 例題7.4', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawJapanFC() { rect(40, 60, 130, 200, getCSS('--upd'), .12); rect(180, 60, 130, 200, getCSS('--accent'), .12); txt('50 Hz', 105, 85, { align: 'center', size: 12, bold: true, color: getCSS('--upd') }); txt('60 Hz', 245, 85, { align: 'center', size: 12, bold: true, color: getCSS('--accent') }); [['北海道', 'FFC+直流'], ['東北', 'TBC'], ['東京', 'FFC']].forEach(([n, m], i) => { dot(80, 130 + i * 40, 9, getCSS('--upd'), '#fff'); txt(n, 96, 134 + i * 40, { size: 10 }); txt(m, 150, 134 + i * 40, { size: 9.5, mono: true, bold: m === 'FFC' }); }); [['中部〜九州', 'TBC ×6'], ['', '']].forEach(([n, m], i) => { if (!n) return; dot(215, 150, 9, getCSS('--accent'), '#fff'); txt(n, 231, 154, { size: 10 }); txt(m, 231, 172, { size: 9.5, mono: true, bold: true }); }); dot(290, 320, 14, getCSS('--neg'), '#fff'); txt('沖縄', 290, 324, { align: 'center', size: 10, color: '#fff', bold: true }); txt('単独系統の LFC', 290, 350, { align: 'center', size: 10, color: getCSS('--neg'), bold: true }); txt('50/60 間は常時 LFC なし', 175, 280, { align: 'center', size: 9.5, color: getCSS('--muted') }); }
+function drawSummary() { const L = 70, T = 50, R = 335, B = 280; axes(L, T, R, B, '', ''); const rows = [['K [MW/Hz]', Kof(1500), Kof(16000)], ['連系線', 0, 1], ['H_sys [s]', 4.5, 5.0]]; txt('沖縄', L + 70, T - 8, { align: 'center', size: 10.5, bold: true, color: getCSS('--neg') }); txt('九州', L + 190, T - 8, { align: 'center', size: 10.5, bold: true, color: getCSS('--accent') }); rows.forEach(([n, a, b], i) => { const y = T + 40 + i * 70; txt(n, L - 4, y + 4, { align: 'right', size: 10, mono: true }); const va = i === 1 ? 'なし' : (i === 0 ? a.toLocaleString() : a), vb = i === 1 ? 'あり' : (i === 0 ? b.toLocaleString() : b); rect(L + 30, y - 18, 80, 36, getCSS('--neg'), .18); rect(L + 150, y - 18, 80, 36, getCSS('--accent'), .18); txt(va, L + 70, y + 5, { align: 'center', size: 11, mono: true, bold: true }); txt(vb, L + 190, y + 5, { align: 'center', size: 11, mono: true, bold: true }); }); txt('二重のハンディ：K が 1/10、しかも借りられない', CW / 2, 320, { align: 'center', size: 11, bold: true }); txt('再エネ → H↓ K_G↓ でさらに悪化 → 第9回の対策へ', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur2 = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur2 ? 'active' : (i < cur2 ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur2 ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+function sync() { document.getElementById('dpVal').textContent = DP; document.getElementById('hVal').textContent = HS.toFixed(1); document.getElementById('lfcBtn').textContent = 'LFC: ' + (LFC ? 'あり' : 'なし'); }
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; SEL = 'oki'; DP = 250; HS = 4.5; LFC = true; document.getElementById('sysSel').value = 'oki'; document.getElementById('dpRange').value = 250; document.getElementById('hRange').value = 4.5; sync(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('sysSel').onchange = e => { SEL = e.target.value; HS = SYS[SEL].H; document.getElementById('hRange').value = HS; sync(); renderAll(); draw_(); };
+document.getElementById('dpRange').oninput = e => { DP = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('hRange').oninput = e => { HS = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('lfcBtn').onclick = () => { LFC = !LFC; sync(); renderAll(); draw_(); };
+sync(); goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

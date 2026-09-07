@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第7回 等面積法と安定度 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第7回 等面積法と安定度 — 臨界時間より早く切れば、発電機は戻ってくる</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch07.html">📖 講義ノート（第7回）</a><a class="e" href="../ex/ch07.html">✍ 演習で確かめる</a></div>
+  <div class="lead">送電線で短絡事故が起きると、発電機は機械入力を受け続けるのに電気を出せず<b>加速</b>します。事故を切るのが遅いと同期を失って脱調します。この回は<b>動揺方程式をブラウザ内で本当に積分</b>し、等面積法が予言する臨界除去時間を境に安定と脱調が分かれることを確かめます。教科書（加藤・田岡 第5章）準拠。前提は<a href="acpower.html">第3回</a>、次は<a href="freq.html">第8回 周波数</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>保護リレーと遮断器に「何ミリ秒以内に切れ」と要求する根拠がここにあります。再エネで慣性が減るとその時間が短くなります。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>事故中に貯まった勢い（加速エネルギー）を、事故後に吐き出しきれるか（減速エネルギー）を面積で比べる。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>送電線の保護整定（3 サイクル遮断）、系統計画の過渡安定度解析、PSS・FACTS の設計。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>除去時間 t<sub>c</sub> <input type="range" id="tcRange" min="50" max="400" step="10" value="240"> <span id="tcVal">240</span> ms</label>
+      <label>慣性 H <input type="range" id="hRange" min="0.5" max="8" step="0.1" value="4.0"> <span id="hVal">4.0</span> s</label>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>電力系統の安定は、結局は<b>回転体の力学</b>です — 動揺方程式はニュートンの運動方程式そのもので、慣性 H とは「勢いの貯金」の大きさです。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>慣性 H が下がると、臨界除去角 δ<sub>cr</sub> も小さくなる。</div>
+    <div class="row"><span class="o">✓</span>δ<sub>cr</sub> は電力相差角曲線（P<sub>max</sub>, P<sub>m</sub>）だけで決まり、<b>H に依存しません</b>。H が効くのは臨界除去「時間」で、t<sub>cr</sub> ∝ √H。H が 1/4 になると t<sub>cr</sub> は半分になります。</div>
+    <div class="row"><span class="x">✗</span>δ が 90° を超えたら即座に脱調する。</div>
+    <div class="row"><span class="o">✓</span>90° は「定態」安定限界です。過渡的には減速エネルギーが残っている限り 90° を超えても戻れます（δ<sub>max</sub> = 180° − δ<sub>0</sub> まで振れて戻る）。時間応答の図で 96°・132° まで振れて戻る例を見てください。</div>
+  </div>
+  <details><summary>もっと詳しく：導出・発電機モデル・安定度向上対策</summary><div class="det">
+    動揺方程式 (2<i>H</i>/ω<sub>0</sub>) d²δ/d<i>t</i>² = <i>P<sub>m</sub></i> − <i>P<sub>e</sub></i> の両辺に 2dδ/d<i>t</i> を掛けて積分すると (2<i>H</i>/ω<sub>0</sub>)(dδ/d<i>t</i>)² = 2∫(<i>P<sub>m</sub></i> − <i>P<sub>e</sub></i>)dδ。ロータが止まる（dδ/d<i>t</i> = 0）条件が ∫ = 0、すなわち加速エネルギー <i>S<sub>A</sub></i> = 減速エネルギー <i>S<sub>B</sub></i> です。
+    教科書は慣性定数を <i>M</i> = ω<i>J</i> で書き、単位法・ω≈1 で <i>M</i> d²δ/d<i>t</i>² = <i>P<sub>a</sub></i>。本ページの <i>H</i>（秒）とは <i>M</i> ≒ 2<i>H</i>/ω<sub>0</sub> の関係です。
+    数秒の過渡解析では過渡リアクタンス <i>X<sub>d</sub></i>′ と過渡背後電圧 <i>E</i>′ を使います（定常は <i>X<sub>d</sub></i>、事故直後 1 秒以内は <i>X<sub>d</sub></i>″）。
+    教科書 5.4 節の安定度向上対策 4 本柱：①送電の高電圧化（<i>P<sub>max</sub></i>↑）②高速度遮断器（<i>S<sub>A</sub></i>↓）③高速再閉路（<i>S<sub>B</sub></i>↑）④超速応励磁（<i>E</i>′↑）。
+    <b>限界：</b>このページは一機無限大母線・故障中 <i>P<sub>e</sub></i>=0・故障後は元の曲線に戻る、という最も単純なケースです。実系統では多機・故障後に 1 回線開放（<i>P<sub>max</sub></i> が下がる）・AVR/ガバナの動作を含む時間領域シミュレーションが必要です。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+/* ---- モデル ---- */
+const PMAX = 2.0, PM = 0.8, D = 0.5, F0 = 60, W0 = 2 * Math.PI * F0; let TC = 0.24, H = 4.0;
+const rad2deg = r => r * 180 / Math.PI;
+function equalArea(h) { const d0 = Math.asin(PM / PMAX); const cc = PM / PMAX * (Math.PI - 2 * d0) - Math.cos(d0); const dcr = Math.acos(Math.max(-1, Math.min(1, cc))); const tcr = Math.sqrt(4 * h * (dcr - d0) / (W0 * PM)); return { d0, dcr, dmax: Math.PI - d0, tcr }; }
+function simulate(tc, h, tEnd = 5.0, dt = 0.0005) {          // RK4
+  const { d0 } = equalArea(h); let y = [d0, 0]; const T = [], DEL = [], OM = []; let maxD = d0;
+  const f = (t, s) => { const pe = t < tc ? 0 : PMAX * Math.sin(s[0]); return [s[1], (W0 / (2 * h)) * (PM - pe - D * s[1] / W0)]; };
+  for (let t = 0, k = 0; t <= tEnd; t += dt, k++) { if (k % 10 === 0) { T.push(t); DEL.push(y[0]); OM.push(y[1]); } maxD = Math.max(maxD, y[0]); if (y[0] > 8 * Math.PI) break;
+    const k1 = f(t, y), k2 = f(t + dt / 2, [y[0] + dt / 2 * k1[0], y[1] + dt / 2 * k1[1]]), k3 = f(t + dt / 2, [y[0] + dt / 2 * k2[0], y[1] + dt / 2 * k2[1]]), k4 = f(t + dt, [y[0] + dt * k3[0], y[1] + dt * k3[1]]);
+    y = [y[0] + dt / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]), y[1] + dt / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])]; }
+  return { T, DEL, OM, stable: maxD < Math.PI, maxDeg: rad2deg(maxD) }; }
+let SIM = null, SIM_B = null; function runSim() { SIM = simulate(TC, H); SIM_B = simulate(0.30, H); }
+const f1 = x => x.toFixed(1), f2 = x => x.toFixed(2), f3 = x => x.toFixed(3);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 動揺方程式', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ 等面積法', c: 'var(--loss)', start: 5 }, { t: 'Ⅳ 慣性・まとめ', c: 'var(--accent)', start: 11 } ];
+const SLIDES = [
+  { legend: '事故中：タービンは押し続ける（P_m）が、電気は出せない（P_e=0）→ ロータが加速',
+    html() { return '<h3>問題：短絡事故の瞬間、発電機に何が起きるか</h3><div class="eq curr">事故中：<i>P<sub>e</sub></i> = 0,　<i>P<sub>m</sub></i> = ' + PM + ' のまま　⇒　余った <i>P<sub>m</sub></i> − <i>P<sub>e</sub></i> がロータを加速させる<span class="read">読み：蒸気タービンは事故を知らずに押し続ける。電気出力が消えると、そのエネルギーは全部ロータの回転の勢いになる。</span></div><div class="desc">事故が切れれば電気出力は戻りますが、<b>その間に貯まった勢い</b>はどこかで吐き出さないといけません。吐き出しきれなければロータは回り続けて同期を失います（脱調）。「何 ms 以内に切れば間に合うか」がこの回の問いです。右下のスライダで除去時間 t<sub>c</sub> と慣性 H を変えられます。</div>'; },
+    draw() { drawFaultCartoon(); caption('押されるのに出せない → 勢いが貯まる'); } },
+  { legend: '安定度の 3 分類。今回は同期安定度（0.1〜10 秒）',
+    html() { return '<h3>安定度には 3 種類ある — 今回は「同期」</h3><div class="eq curr">同期安定度（0.1〜10 s）　／　電圧安定度（1 s〜分）　／　周波数安定度（1 s〜分）<span class="read">読み：何が失われるか（同期・電圧・需給）で分ける。時間スケールも原因も違う。</span></div><div class="desc">教科書（加藤・田岡 5.1 節）は安定度を、小さな擾乱に対する<b>定態安定度</b>と大きな擾乱に対する<b>過渡安定度</b>に分けます。三相短絡は大きな擾乱なので過渡安定度の問題で、線形化できず時間領域で解く必要があります。電圧は第6回、周波数は第8回で扱いました。</div>'; },
+    draw() { drawTaxonomy(); caption('同期＝発電機どうしの歩調。今回のテーマ'); } },
+
+  { legend: '回転体：入る力（機械トルク）と出る力（電気トルク）の差が角加速度を生む',
+    html() { return '<h3>動揺方程式はニュートンの運動方程式そのもの</h3><div class="eq curr"><i>J</i> <span class="frac"><span>d²θ<sub>m</sub></span><span>d<i>t</i>²</span></span> = <i>T<sub>m</sub></i> − <i>T<sub>e</sub></i>　⇒　<span class="frac"><span>2<i>H</i></span><span>ω<sub>0</sub></span></span> <span class="frac"><span>d²δ</span><span>d<i>t</i>²</span></span> = <i>P<sub>m</sub></i> − <i>P<sub>e</sub></i> − <i>D</i> <span class="frac"><span>dδ</span><span>d<i>t</i></span></span><span class="read">読み：慣性モーメント×角加速度 = トルクの差。電気角に直し、定格容量で割って単位法にすると右の形。δ は相差角、D は制動。</span></div><div class="desc">教科書 (5.5) 式は <i>M</i> d²δ/d<i>t</i>² = <i>P<sub>m</sub></i> − <i>P<sub>e</sub></i> = <i>P<sub>a</sub></i>（加速電力）。本ページは国際標準の <i>H</i> 表記を使い、<i>M</i> ≒ 2<i>H</i>/ω<sub>0</sub> です。<b>右辺が正なら加速、負なら減速</b>。この方程式をこれから本当に積分します。</div>'; },
+    draw() { drawRotor(); caption('J·α = T_m − T_e：力の差が回転を変える'); } },
+  { legend: '慣性定数 H [s]：定格出力で運転中に原動機を止めても、勢いだけで何秒発電できるか',
+    mini: () => '<div>いまの H <b>' + f1(H) + ' s</b></div>',
+    html() { return '<h3>慣性定数 H の単位が「秒」である意味</h3><div class="eq curr"><i>H</i> = <span class="frac"><span>½ <i>J</i> ω<sub>m0</sub>²</span><span><i>S</i><sub>rated</sub></span></span> [s]　　火力 3〜6 s、水力 2〜4 s、<b>太陽光・風力 0 s</b><span class="read">読み：定格速度で回転子が蓄えている運動エネルギーを、定格容量で割る。エネルギー÷電力＝時間。</span></div><div class="desc">H = ' + f1(H) + ' s なら、定格出力で運転中に機械入力をゼロにしても、<b>' + f1(H) + ' 秒間は勢いだけで発電を続けられる</b>という意味です。インバータ接続の太陽光・風力は回転体が系統と結合していないので <b>H = 0</b>。再エネが増えると系統全体の H が下がり、この回の終盤で見るように臨界時間が縮みます。</div>'; },
+    draw() { drawHbars(); caption('H は「勢いの貯金」を秒で数えたもの'); } },
+  { legend: '電力相差角曲線 P_e = P_max sin δ。運転点は P_m と交わる δ₀（δ<90° 側）',
+    mini: () => { const e = equalArea(H); return '<div>δ₀ <b>' + f2(rad2deg(e.d0)) + '°</b></div><div>P<sub>max</sub> <b>' + PMAX + '</b></div>'; },
+    html() { const e = equalArea(H); return '<h3>電力相差角曲線と運転点 δ₀</h3><div class="eq curr"><i>P<sub>e</sub></i> = <i>P</i><sub>max</sub> sin δ,　<i>P<sub>m</sub></i> = <i>P</i><sub>max</sub> sin δ<sub>0</sub>　⇒　δ<sub>0</sub> = arcsin(' + PM + '/' + PMAX + ') = <b class="res">' + f2(rad2deg(e.d0)) + '°</b><span class="read">読み：第3回の送電電力式。定常運転では機械入力と電気出力が釣り合う点にいる。</span></div><div class="desc">教科書はこれを<b>電力相差角曲線（P-δ 曲線）</b>と呼びます。同期化力 <i>K<sub>s</sub></i> = d<i>P</i>/dδ = <i>P</i><sub>max</sub>cos δ<sub>0</sub> = <b>' + f3(PMAX * Math.cos(e.d0)) + '</b> が正なので、少し押されても戻る力があります（定態安定）。ここから事故のシナリオを面積で追います。</div>'; },
+    draw() { drawPD(0); caption('曲線と横線の交点 = 平常時の居場所'); } },
+
+  { legend: '事故中（0〜t_c）：P_e=0 なので P_m との差（赤の面積）が加速エネルギー S_A',
+    mini: () => { const e = equalArea(H); const dc = e.d0 + W0 * PM / (4 * H) * TC * TC; return '<div>t<sub>c</sub> <b>' + (TC * 1000).toFixed(0) + ' ms</b></div><div>除去時の δ <b>' + f2(rad2deg(dc)) + '°</b></div>'; },
+    html() { const e = equalArea(H); const dc = e.d0 + W0 * PM / (4 * H) * TC * TC; return '<h3>事故中：加速エネルギー S<sub>A</sub> が貯まる</h3><div class="eq curr">δ(<i>t</i>) = δ<sub>0</sub> + <span class="frac"><span>ω<sub>0</sub><i>P<sub>m</sub></i></span><span>4<i>H</i></span></span> <i>t</i>²　⇒　<i>t<sub>c</sub></i> = ' + (TC * 1000).toFixed(0) + ' ms で δ<sub>c</sub> = <b class="res">' + f2(rad2deg(dc)) + '°</b>,　<i>S<sub>A</sub></i> = <i>P<sub>m</sub></i>(δ<sub>c</sub> − δ<sub>0</sub>) = <b class="res">' + f3(PM * (dc - e.d0)) + '</b><span class="read">読み：P_e=0 で加速度が一定なので δ は t² で増える。赤い長方形の面積が、貯まった勢い（教科書の加速エネルギー S_A）。</span></div><div class="desc">除去時間 t<sub>c</sub> のスライダを動かすと、赤い面積が広がります。<b>切るのが遅いほど、吐き出すべき勢いが増える</b>。事故除去の瞬間、ロータは δ<sub>c</sub> にいて、まだ加速したままの速度を持っています。</div>'; },
+    draw() { drawPD(1); caption('赤の面積 = 貯まった勢い。t_c が長いほど広い'); } },
+  { legend: '除去後：P_e が復活し P_m を上回る → 減速。青の面積が減速エネルギー S_B（最大 δ_max まで）',
+    html() { const e = equalArea(H); const dc = Math.min(e.d0 + W0 * PM / (4 * H) * TC * TC, e.dmax); const SB = PMAX * (Math.cos(dc) - Math.cos(e.dmax)) - PM * (e.dmax - dc); return '<h3>除去後：減速エネルギー S<sub>B</sub> で勢いを吐き出す</h3><div class="eq curr"><i>S<sub>B</sub></i> = ∫<sub>δc</sub><sup>δmax</sup>(<i>P</i><sub>max</sub>sin δ − <i>P<sub>m</sub></i>)dδ = <b class="res">' + f3(SB) + '</b>　（δ<sub>max</sub> = 180° − δ<sub>0</sub> = ' + f2(rad2deg(e.dmax)) + '°）<span class="read">読み：曲線が P_m を上回る区間の面積。ここが「使える減速エネルギーの最大値」。δ_max を越えると再び加速に転じる。</span></div><div class="desc">事故が切れると <i>P<sub>e</sub></i> = <i>P</i><sub>max</sub>sin δ が戻り、<i>P<sub>m</sub></i> より大きいのでロータは減速し始めます。でも<b>止まりきる前に δ<sub>max</sub> を越えると、そこから先は再び加速</b>してしまいます。だから青の面積が赤の面積以上あるかどうかが運命を分けます。</div>'; },
+    draw() { drawPD(2); caption('青 ≥ 赤 なら止まれる。青 < 赤 なら脱調'); } },
+  { legend: '臨界除去角 δ_cr：赤の面積 = 青の面積となる、ぎりぎりの除去角',
+    mini: () => { const e = equalArea(H); return '<div>δ<sub>cr</sub> <b>' + f2(rad2deg(e.dcr)) + '°</b></div>'; },
+    html() { const e = equalArea(H); return '<h3>等面積法：S<sub>A</sub> = S<sub>B</sub> となる臨界除去角 δ<sub>cr</sub></h3><div class="eq curr">cos δ<sub>cr</sub> = <span class="frac"><span><i>P<sub>m</sub></i></span><span><i>P</i><sub>max</sub></span></span>(π − 2δ<sub>0</sub>) − cos δ<sub>0</sub>　⇒　δ<sub>cr</sub> = <b class="res">' + f2(rad2deg(e.dcr)) + '°</b><span class="read">読み：加速面積と減速面積を等しいと置いて δ_cr について解いた式。P_m, P_max, δ₀ だけで決まる。</span></div><div class="desc">図は赤と青がちょうど釣り合う状態です。検算：<i>S<sub>A</sub></i> = ' + f3(PM * (e.dcr - e.d0)) + '、<i>S<sub>B</sub></i> = ' + f3(PMAX * (Math.cos(e.dcr) - Math.cos(e.dmax)) - PM * (e.dmax - e.dcr)) + '。<b>この式に H は出てきません</b>。慣性は「角」ではなく「時間」に効きます（次のスライド）。</div>'; },
+    draw() { drawPD(3); caption('赤 = 青 のとき、ロータは δ_max でちょうど止まる'); } },
+  { legend: '臨界除去時間 t_cr：δ が δ_cr に達するまでの時間。H が効くのはここ',
+    mini: () => { const e = equalArea(H); return '<div>t<sub>cr</sub> <b>' + (e.tcr * 1000).toFixed(1) + ' ms</b></div><div>= <b>' + f1(e.tcr * F0) + ' サイクル</b></div>'; },
+    html() { const e = equalArea(H); return '<h3>臨界除去時間 t<sub>cr</sub> = ' + (e.tcr * 1000).toFixed(0) + ' ms（H = ' + f1(H) + ' s）</h3><div class="eq curr"><i>t</i><sub>cr</sub> = <span class="rad">4<i>H</i>(δ<sub>cr</sub> − δ<sub>0</sub>) / (ω<sub>0</sub><i>P<sub>m</sub></i>)</span> = <b class="res">' + (e.tcr * 1000).toFixed(1) + '</b> ms<span class="read">読み：事故中の δ(t) = δ₀ + (ω₀P_m/4H)t² を δ_cr について解いた。H の平方根に比例する。</span></div><div class="desc">保護リレー 20 ms ＋ 遮断器 50 ms = 70 ms で切れるなら、余裕率は <b>' + ((e.tcr - .07) / e.tcr * 100).toFixed(0) + '%</b>。H のスライダを下げてください — δ<sub>cr</sub> は動かないのに <b>t<sub>cr</sub> だけが縮む</b>ことが分かります。次のスライドで、この t<sub>cr</sub> を境に本当に安定と脱調が分かれるかを積分で確かめます。</div>'; },
+    draw() { drawTcr(); caption('保護は t_cr より早く。再エネで H が減ると t_cr が縮む'); } },
+  { legend: 'A/B：除去時間 t_c（スライダ・緑）vs 300 ms（赤）。RK4 で動揺方程式を実積分',
+    enter() { runSim(); },
+    mini: () => { if (!SIM) runSim(); return '<div>t<sub>c</sub>=' + (TC * 1000).toFixed(0) + 'ms → <b>' + (SIM.stable ? '安定' : '脱調') + '</b>（最大 ' + f1(SIM.maxDeg) + '°）</div><div>300ms → <b>' + (SIM_B.stable ? '安定' : '脱調') + '</b></div>'; },
+    html() { if (!SIM) runSim(); const e = equalArea(H); return '<h3>A/B：t<sub>c</sub> = ' + (TC * 1000).toFixed(0) + ' ms は' + (SIM.stable ? '安定' : '脱調') + '、300 ms は' + (SIM_B.stable ? '安定' : '脱調') + '</h3><div class="eq curr">理論 <i>t</i><sub>cr</sub> = <b class="res">' + (e.tcr * 1000).toFixed(0) + '</b> ms　／　積分結果：' + (TC * 1000).toFixed(0) + ' ms → 最大 δ = <b class="res">' + f1(SIM.maxDeg) + '°</b>（' + (SIM.stable ? '戻る' : '発散') + '）<span class="read">読み：動揺方程式を 0.5 ms 刻みの RK4 で 5 秒間積分。δ が 180° を越えて戻らなければ脱調と判定。</span></div><div class="desc">除去時間スライダを t<sub>cr</sub> の前後で動かしてください。<b>' + (e.tcr * 1000).toFixed(0) + ' ms を境に、振動して戻るか、単調に増えて発散するかが切り替わります</b>。等面積法は微分方程式を解かずにこの境界を当てています。制動 D = 0.5 があるので、安定な場合は振動が減衰して δ<sub>0</sub> に落ち着きます。</div>'; },
+    draw() { drawTimeResp(); caption('t_cr を境に、戻るか・発散するかが切り替わる'); } },
+  { legend: '位相平面（横=δ、縦=速度偏差）。安定なら渦を巻いて中心へ、脱調なら右へ抜ける',
+    html() { if (!SIM) runSim(); return '<h3>位相平面で見る：渦になるか、抜けるか</h3><div class="eq curr">状態 (δ, dδ/d<i>t</i>)　　安定：中心 (δ<sub>0</sub>, 0) へ渦巻く　／　脱調：δ が増え続ける<span class="read">読み：横軸に角度、縦軸に速さ。時間を消して軌道の形だけを見ると、安定・不安定が一目で分かる。</span></div><div class="desc">緑（t<sub>c</sub> = ' + (TC * 1000).toFixed(0) + ' ms）は' + (SIM.stable ? '渦を巻いて中心に収束します' : '右へ抜けて戻りません') + '。赤（300 ms）は' + (SIM_B.stable ? '渦を巻きます' : '右へ抜けて戻りません') + '。<b>事故中の直線部分の長さ（貯まった速度）が、渦に収まる限界を超えるかどうか</b>が等面積法の言っていることです。</div>'; },
+    draw() { drawPhase(); caption('渦 = 安定、抜ける = 脱調'); } },
+
+  { legend: '曲線：t_cr ∝ √H。●=いまの H。赤線=保護時間 70 ms',
+    mini: () => { const e = equalArea(H); return '<div>H=' + f1(H) + ' → t<sub>cr</sub> <b>' + (e.tcr * 1000).toFixed(0) + ' ms</b></div><div>余裕 <b>' + ((e.tcr - .07) / e.tcr * 100).toFixed(0) + '%</b></div>'; },
+    html() { const e4 = equalArea(4), e1 = equalArea(1.2); return '<h3>慣性が下がると、保護に許される時間が縮む</h3><div class="eq curr"><i>t</i><sub>cr</sub> ∝ √<i>H</i>　　H = 4.0 → <b class="res">' + (e4.tcr * 1000).toFixed(0) + '</b> ms,　H = 1.2 → <b class="res">' + (e1.tcr * 1000).toFixed(0) + '</b> ms<span class="read">読み：H が 1/3.3 になると t_cr は 1/1.8。角 δ_cr は変わらないので、時間だけが縮む。</span></div><div class="desc">再生可能エネルギー（H = 0）が増えて系統慣性が 4 s から 1.2 s に落ちると、保護に許される時間は ' + (e4.tcr * 1000).toFixed(0) + ' ms から ' + (e1.tcr * 1000).toFixed(0) + ' ms へ。70 ms の保護でも余裕率は ' + ((e4.tcr - .07) / e4.tcr * 100).toFixed(0) + '% → ' + ((e1.tcr - .07) / e1.tcr * 100).toFixed(0) + '% に落ちます。<b>H が ' + (0.07 ** 2 * W0 * PM / (4 * (e4.dcr - e4.d0))).toFixed(2) + ' s を割ると 70 ms でも脱調</b>します。</div>'; },
+    draw() { drawTcrCurve(); caption('角は同じ、時間だけ縮む'); } },
+  { legend: '系統慣性は同期機の加重平均。再エネ（H=0）が増えるほど H_sys が下がる',
+    html() { return '<h3>再エネ大量導入 = 系統の「勢いの貯金」が減る</h3><div class="eq curr"><i>H</i><sub>sys</sub> = <span class="frac"><span>Σ <i>H<sub>k</sub>S<sub>k</sub></i></span><span>Σ <i>S<sub>k</sub></i></span></span>　　太陽光・風力は <i>H</i> = 0 → 分子だけ減る<span class="read">読み：運転中の同期機の慣性を容量で重み付けして平均したもの。インバータ電源は分子に寄与しない。</span></div><div class="desc">沖縄本島系統（約 1,500 MVA）で太陽光 500 MW を入れ、同等の火力を止めると <i>H</i><sub>sys</sub> は 4.5 s から 2 s 台に落ちます。本土なら連系線の向こうの慣性が助けてくれますが、<b>沖縄は独立系統なので自前の慣性しかありません</b>。対策は同期調相機（回転体を追加）、合成慣性・グリッドフォーミングインバータ（第9回）です。</div>'; },
+    draw() { drawHsys(); caption('再エネが増える → 回転体が減る → H_sys ↓'); } },
+  { legend: '安定度向上対策の 4 本柱（教科書 5.4 節）。それぞれ S_A を減らすか S_B を増やす',
+    html() { return '<h3>まとめ：対策は「赤を減らす」か「青を増やす」か</h3><div class="eq curr">①高電圧化（<i>P</i><sub>max</sub>↑ → 青↑）　②高速度遮断器（<i>t<sub>c</sub></i>↓ → 赤↓）　③高速再閉路（青↑）　④超速応励磁（<i>E</i>′↑ → 青↑）<span class="read">読み：教科書の 4 本柱はすべて、等面積法の図で「赤の面積を減らす」か「青の面積を増やす」のどちらかに帰着する。</span></div><div class="desc">動揺方程式 → P-δ 曲線 → 等面積法 → t<sub>cr</sub> ∝ √H。<b>δ<sub>cr</sub> は H に依存せず、t<sub>cr</sub> は √H に比例する</b>のが試験の定番です。次回は相差角 δ の代わりに<b>周波数 F</b> のダイナミクスを扱います。ここで学んだ H が、そのまま周波数の落ちる速さ（RoCoF）を決めます。</div>'; },
+    draw() { drawMeasures(); caption('赤を減らす／青を増やす — 対策は全部これ'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function poly(pts, color, a) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fill(); ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawFaultCartoon() { const c = getCSS('--text'); rect(30, 150, 80, 70, getCSS('--warm'), .6); txt('タービン', 70, 190, { align: 'center', size: 11, bold: true }); txt('P_m = ' + PM, 70, 240, { align: 'center', size: 10.5, mono: true, color: getCSS('--warm'), bold: true }); line([[110, 185], [150, 185]], c, 4); ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(190, 185, 38, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); txt('G', 190, 191, { align: 'center', size: 16, bold: true }); line([[228, 185], [300, 185]], c, 2.5); txt('P_e = 0', 265, 172, { align: 'center', size: 10.5, mono: true, color: getCSS('--neg'), bold: true }); txt('✕ 短絡', 300, 205, { align: 'center', size: 12, color: getCSS('--neg'), bold: true }); rect(285, 175, 30, 20, getCSS('--neg'), .3); ctx.save(); ctx.strokeStyle = getCSS('--neg'); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(190, 185, 52, -.6, 1.0); ctx.stroke(); ctx.restore(); txt('加速', 240, 245, { align: 'center', size: 12, color: getCSS('--neg'), bold: true }); txt('入る ' + PM + ' − 出る 0 = 余り ' + PM + ' が回転に', CW / 2, 300, { align: 'center', size: 11 }); txt('切るのが遅いほど、余りが貯まる', CW / 2, 325, { align: 'center', size: 10.5, color: getCSS('--muted') }); }
+function drawTaxonomy() { const rows = [['同期安定度', '発電機どうしの同期', '0.1〜10 s', '短絡・線路開放', '--neg', true], ['電圧安定度', '電圧の維持', '1 s〜数分', '無効電力不足', '--upd', false], ['周波数安定度', '需給バランス', '1 s〜数分', '電源脱落', '--accent', false]]; txt('分類', 30, 60, { size: 10, color: getCSS('--muted') }); txt('失うもの', 125, 60, { size: 10, color: getCSS('--muted') }); txt('時間', 215, 60, { size: 10, color: getCSS('--muted') }); txt('原因', 275, 60, { size: 10, color: getCSS('--muted') }); rows.forEach(([a, b, c, d, col, hl], i) => { const y = 95 + i * 62; rect(20, y - 22, 325, 50, getCSS(col), hl ? .25 : .08); txt(a, 30, y + 4, { size: 11, bold: true, color: getCSS(col) }); txt(b, 125, y + 4, { size: 9.5 }); txt(c, 215, y + 4, { size: 9.5, mono: true }); txt(d, 275, y + 4, { size: 9 }); if (hl) txt('◀ 今回', 320, y - 8, { align: 'right', size: 9, color: getCSS(col), bold: true }); }); txt('定態（微小擾乱・線形化）／過渡（大擾乱・時間積分）', CW / 2, 300, { align: 'center', size: 10.5 }); }
+function drawRotor() { const c = getCSS('--text'), cx = 180, cy = 190; ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, 60, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = getCSS('--upd'); ctx.globalAlpha = .2; ctx.fill(); ctx.restore(); dot(cx, cy, 6, c); line([[cx, cy], [cx + 60 * Math.cos(-.5), cy + 60 * Math.sin(-.5)]], getCSS('--neg'), 2.5); txt('δ', cx + 40, cy - 8, { size: 12, color: getCSS('--neg'), bold: true }); ctx.save(); ctx.strokeStyle = getCSS('--warm'); ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, 80, 2.4, 3.6); ctx.stroke(); ctx.restore(); txt('T_m（押す）', cx - 120, cy - 10, { align: 'center', size: 10.5, color: getCSS('--warm'), bold: true }); ctx.save(); ctx.strokeStyle = getCSS('--accent'); ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, 80, -.6, .6); ctx.stroke(); ctx.restore(); txt('T_e（引き止める）', cx + 110, cy + 4, { align: 'center', size: 10.5, color: getCSS('--accent'), bold: true }); txt('J·d²θ/dt² = T_m − T_e', CW / 2, 300, { align: 'center', size: 12, mono: true, bold: true }); txt('差が正 → 加速 ／ 負 → 減速', CW / 2, 325, { align: 'center', size: 10.5 }); }
+function drawHbars() { const rows = [['火力', 5.0, '--warm'], ['水力', 3.0, '--upd'], ['ガスタービン', 4.0, '--warm'], ['太陽光', 0, '--neg'], ['風力(インバータ)', 0, '--neg'], ['いまの H', H, '--accent']]; axes(110, 50, 335, 330, 'H [s]', ''); rows.forEach(([n, h, c], i) => { const y = 65 + i * 44; rect(110, y, h / 8 * 220, 28, getCSS(c), .8); txt(n, 104, y + 19, { align: 'right', size: 10.5 }); txt(h.toFixed(1) + ' s', 116 + h / 8 * 220, y + 19, { size: 10, mono: true, bold: true }); }); [0, 2, 4, 6, 8].forEach(h => txt(h, 110 + h / 8 * 220, 344, { align: 'center', size: 9, mono: true })); }
+function pdAxes() { const L = 45, R = 335, T = 40, B = 300; axes(L, T, R, B, 'δ [deg]', 'P [p.u.]'); const xOf = d => L + d / Math.PI * (R - L), yOf = p => B - p / 2.3 * (B - T); return { L, R, T, B, xOf, yOf }; }
+function drawPD(mode) { const { L, R, T, B, xOf, yOf } = pdAxes(); const e = equalArea(H); const dc = Math.min(e.d0 + W0 * PM / (4 * H) * TC * TC, e.dmax);
+  const curve = []; for (let d = 0; d <= Math.PI; d += .01) curve.push([xOf(d), yOf(PMAX * Math.sin(d))]);
+  if (mode >= 1) { const dEnd = mode === 3 ? e.dcr : dc; rect(xOf(e.d0), yOf(PM), xOf(dEnd) - xOf(e.d0), B - yOf(PM), getCSS('--neg'), .35); txt('S_A', (xOf(e.d0) + xOf(dEnd)) / 2, (yOf(PM) + B) / 2 + 4, { align: 'center', size: 11, bold: true, color: getCSS('--neg') }); }
+  if (mode >= 2) { const dStart = mode === 3 ? e.dcr : dc; const pts = [[xOf(dStart), yOf(PM)]]; for (let d = dStart; d <= e.dmax; d += .01) pts.push([xOf(d), yOf(PMAX * Math.sin(d))]); pts.push([xOf(e.dmax), yOf(PM)]); poly(pts, getCSS('--upd'), .35); txt('S_B', xOf((dStart + e.dmax) / 2), yOf(PM) - 30, { align: 'center', size: 11, bold: true, color: getCSS('--upd') }); }
+  line(curve, getCSS('--text'), 2); line([[L, yOf(PM)], [R, yOf(PM)]], getCSS('--warm'), 2, [5, 4]); txt('P_m', R - 4, yOf(PM) - 5, { align: 'right', size: 10, mono: true, color: getCSS('--warm') });
+  [0, 45, 90, 135, 180].forEach(d => txt(d, xOf(d * Math.PI / 180), B + 14, { align: 'center', size: 9, mono: true })); [0, 1, 2].forEach(p => txt(p, L - 4, yOf(p) + 4, { align: 'right', size: 9, mono: true }));
+  dot(xOf(e.d0), yOf(PM), 6, getCSS('--accent')); txt('δ₀', xOf(e.d0), B + 28, { align: 'center', size: 10, color: getCSS('--accent'), bold: true });
+  if (mode >= 1) { const dEnd = mode === 3 ? e.dcr : dc; line([[xOf(dEnd), T], [xOf(dEnd), B]], getCSS('--neg'), 1, [3, 3]); txt(mode === 3 ? 'δ_cr' : 'δ_c', xOf(dEnd), B + 28, { align: 'center', size: 10, color: getCSS('--neg'), bold: true }); }
+  if (mode >= 2) { line([[xOf(e.dmax), T], [xOf(e.dmax), B]], getCSS('--upd'), 1, [3, 3]); txt('δ_max', xOf(e.dmax), B + 28, { align: 'center', size: 10, color: getCSS('--upd'), bold: true }); }
+  if (mode === 1) txt('事故中：P_e = 0（曲線の下、横軸上を進む）', CW / 2, 350, { align: 'center', size: 10, color: getCSS('--neg') });
+  if (mode === 2) { const SA = PM * (dc - e.d0), SB = PMAX * (Math.cos(dc) - Math.cos(e.dmax)) - PM * (e.dmax - dc); txt('S_A = ' + f3(SA) + '  vs  S_B = ' + f3(SB) + '  → ' + (SB >= SA ? '安定' : '脱調'), CW / 2, 350, { align: 'center', size: 11, mono: true, bold: true, color: getCSS(SB >= SA ? '--accent' : '--neg') }); }
+  if (mode === 3) txt('S_A = S_B = ' + f3(PM * (e.dcr - e.d0)), CW / 2, 350, { align: 'center', size: 11, mono: true, bold: true }); }
+function drawTcr() { const e = equalArea(H); const L = 45, R = 335, T = 40, B = 300; axes(L, T, R, B, 't [ms]', 'δ [deg]'); const tmax = Math.max(e.tcr * 1.4, .35); const xOf = t => L + t / tmax * (R - L), yOf = d => B - d / 180 * (B - T); const pts = []; for (let t = 0; t <= tmax; t += .002) pts.push([xOf(t), yOf(rad2deg(e.d0 + W0 * PM / (4 * H) * t * t))]); line(pts, getCSS('--neg'), 2.5); line([[L, yOf(rad2deg(e.dcr))], [R, yOf(rad2deg(e.dcr))]], getCSS('--upd'), 1.5, [4, 3]); txt('δ_cr = ' + f1(rad2deg(e.dcr)) + '°', R - 4, yOf(rad2deg(e.dcr)) - 5, { align: 'right', size: 10, color: getCSS('--upd'), bold: true }); line([[xOf(e.tcr), T], [xOf(e.tcr), B]], getCSS('--neg'), 1.5, [4, 3]); dot(xOf(e.tcr), yOf(rad2deg(e.dcr)), 7, getCSS('--neg')); txt('t_cr = ' + (e.tcr * 1000).toFixed(0) + ' ms', xOf(e.tcr) - 6, T + 14, { align: 'right', size: 11, bold: true, color: getCSS('--neg') }); line([[xOf(.07), T], [xOf(.07), B]], getCSS('--accent'), 1.5); txt('保護 70 ms', xOf(.07) + 4, B - 8, { size: 9.5, color: getCSS('--accent'), bold: true }); [0, 100, 200, 300, 400].filter(t => t / 1000 <= tmax).forEach(t => txt(t, xOf(t / 1000), B + 14, { align: 'center', size: 9, mono: true })); [0, 45, 90, 135, 180].forEach(d => txt(d, L - 4, yOf(d) + 4, { align: 'right', size: 9, mono: true })); txt('事故中の δ(t) = δ₀ + (ω₀P_m/4H)t²', CW / 2, 340, { align: 'center', size: 10, mono: true, color: getCSS('--muted') }); }
+function drawTimeResp() { if (!SIM) runSim(); const L = 45, R = 335, T = 40, B = 300; axes(L, T, R, B, 't [s]', 'δ [deg]'); const xOf = t => L + t / 5 * (R - L), yOf = d => B - Math.min(d, 400) / 400 * (B - T); line([[L, yOf(180)], [R, yOf(180)]], getCSS('--faint'), 1, [4, 3]); txt('180°', L + 3, yOf(180) - 4, { size: 9, mono: true, color: getCSS('--muted') }); const draw1 = (s, col) => { const pts = s.T.map((t, k) => [xOf(t), yOf(rad2deg(s.DEL[k]))]).filter(p => p[1] >= T - 1); line(pts, col, 2.2); }; draw1(SIM_B, getCSS('--neg')); draw1(SIM, getCSS('--accent')); [0, 1, 2, 3, 4, 5].forEach(t => txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true })); [0, 100, 200, 300, 400].forEach(d => txt(d, L - 4, yOf(d) + 4, { align: 'right', size: 9, mono: true })); txt('t_c=' + (TC * 1000).toFixed(0) + 'ms ' + (SIM.stable ? '安定' : '脱調'), L + 8, T + 14, { size: 10.5, color: getCSS('--accent'), bold: true }); txt('t_c=300ms ' + (SIM_B.stable ? '安定' : '脱調'), L + 8, T + 30, { size: 10.5, color: getCSS('--neg'), bold: true }); txt('H = ' + f1(H) + ' s, t_cr = ' + (equalArea(H).tcr * 1000).toFixed(0) + ' ms', CW / 2, 340, { align: 'center', size: 10.5, mono: true }); }
+function drawPhase() { if (!SIM) runSim(); const L = 45, R = 335, T = 40, B = 300; axes(L, T, R, B, 'δ [deg]', 'Δω [Hz]'); const xOf = d => L + Math.min(d, 360) / 360 * (R - L), yOf = w => B - (w + 3) / 6 * (B - T); const draw1 = (s, col) => { const pts = []; for (let k = 0; k < s.T.length; k++) { const d = rad2deg(s.DEL[k]); if (d > 360) break; pts.push([xOf(d), yOf(s.OM[k] / (2 * Math.PI))]); } line(pts, col, 1.8); }; draw1(SIM_B, getCSS('--neg')); draw1(SIM, getCSS('--accent')); const e = equalArea(H); dot(xOf(rad2deg(e.d0)), yOf(0), 5, getCSS('--text')); txt('δ₀', xOf(rad2deg(e.d0)), yOf(0) + 16, { align: 'center', size: 10 }); [0, 90, 180, 270, 360].forEach(d => txt(d, xOf(d), B + 14, { align: 'center', size: 9, mono: true })); [-3, -1.5, 0, 1.5, 3].forEach(w => txt(w, L - 4, yOf(w) + 4, { align: 'right', size: 9, mono: true })); txt('緑 t_c=' + (TC * 1000).toFixed(0) + 'ms / 赤 300ms', L + 8, T + 14, { size: 10, color: getCSS('--muted') }); }
+function drawTcrCurve() { const L = 50, R = 335, T = 40, B = 300; axes(L, T, R, B, 'H [s]', 't_cr [ms]'); const xOf = h => L + h / 8 * (R - L), yOf = t => B - t / 400 * (B - T); const pts = []; for (let h = .3; h <= 8; h += .05) pts.push([xOf(h), yOf(equalArea(h).tcr * 1000)]); line(pts, getCSS('--upd'), 2.5); line([[L, yOf(70)], [R, yOf(70)]], getCSS('--neg'), 1.5, [4, 3]); txt('保護 70 ms', R - 4, yOf(70) - 5, { align: 'right', size: 9.5, color: getCSS('--neg') }); [[6, '従来'], [4, '現在'], [2, '再エネ50%'], [1, '大量導入']].forEach(([h, lab]) => { const t = equalArea(h).tcr * 1000; dot(xOf(h), yOf(t), 4, getCSS('--faint')); txt(lab, xOf(h), yOf(t) - 10, { align: 'center', size: 8.5, color: getCSS('--muted') }); }); const e = equalArea(H); dot(xOf(H), yOf(e.tcr * 1000), 8, getCSS('--accent')); txt('H=' + f1(H) + ' → ' + (e.tcr * 1000).toFixed(0) + ' ms', xOf(H) + (H > 5 ? -10 : 10), yOf(e.tcr * 1000) + 22, { align: H > 5 ? 'right' : 'left', size: 11, bold: true, color: getCSS('--accent') }); [0, 2, 4, 6, 8].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); [0, 100, 200, 300, 400].forEach(t => txt(t, L - 4, yOf(t) + 4, { align: 'right', size: 9, mono: true })); txt('δ_cr = ' + f1(rad2deg(e.dcr)) + '° は H によらず一定', CW / 2, 340, { align: 'center', size: 10.5, color: getCSS('--upd') }); }
+function drawHsys() { const L = 60, T = 50, R = 335, B = 300; axes(L, T, R, B, '', 'H_sys [s]'); const yOf = h => B - h / 5 * (B - T); [['現状\n再エネ 0%', 4.5, '--upd'], ['太陽光 300MW', 3.2, '--warm'], ['太陽光 500MW', 2.3, '--warm'], ['+同期調相機', 3.0, '--accent']].forEach(([n, h, c], i) => { const x = L + 15 + i * 68; rect(x, yOf(h), 50, B - yOf(h), getCSS(c), .8); const ls = n.split('\n'); txt(ls[0], x + 25, B + 14, { align: 'center', size: 8.5 }); if (ls[1]) txt(ls[1], x + 25, B + 26, { align: 'center', size: 8.5 }); txt(h.toFixed(1), x + 25, yOf(h) - 6, { align: 'center', size: 10, mono: true, bold: true }); }); [0, 1, 2, 3, 4, 5].forEach(h => txt(h, L - 4, yOf(h) + 4, { align: 'right', size: 9, mono: true })); txt('沖縄本島系統 約 1,500 MVA（概算）', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawMeasures() { const { L, R, T, B, xOf, yOf } = pdAxes(); const e = equalArea(H); const curve = [], curve2 = []; for (let d = 0; d <= Math.PI; d += .01) { curve.push([xOf(d), yOf(PMAX * Math.sin(d))]); curve2.push([xOf(d), yOf(PMAX * 1.15 * Math.sin(d))]); } line(curve2, getCSS('--accent'), 2, [5, 4]); line(curve, getCSS('--text'), 2); line([[L, yOf(PM)], [R, yOf(PM)]], getCSS('--warm'), 2, [5, 4]); txt('①④ 曲線を持ち上げる → 青↑', xOf(1.6), yOf(2.35), { align: 'center', size: 10, color: getCSS('--accent'), bold: true }); rect(xOf(e.d0), yOf(PM), xOf(e.d0 + .35) - xOf(e.d0), B - yOf(PM), getCSS('--neg'), .35); txt('② 早く切る → 赤↓', xOf(e.d0 + .18), B - 12, { align: 'center', size: 10, color: getCSS('--neg'), bold: true }); txt('③ 再閉路で 2 回線に戻す → 青↑', xOf(2.2), yOf(.6), { align: 'center', size: 10, color: getCSS('--upd'), bold: true }); [0, 90, 180].forEach(d => txt(d, xOf(d * Math.PI / 180), B + 14, { align: 'center', size: 9, mono: true })); txt('PSS・FACTS は制動 D を増やす', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur ? 'active' : (i < cur ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+function sync() { document.getElementById('tcVal').textContent = (TC * 1000).toFixed(0); document.getElementById('hVal').textContent = H.toFixed(1); }
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; TC = .24; H = 4.0; SIM = null; document.getElementById('tcRange').value = 240; document.getElementById('hRange').value = 4.0; sync(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('tcRange').oninput = e => { TC = +e.target.value / 1000; sync(); if (slideIdx >= 9) runSim(); renderAll(); draw_(); };
+document.getElementById('hRange').oninput = e => { H = +e.target.value; sync(); if (slideIdx >= 9) runSim(); renderAll(); draw_(); };
+sync(); goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第15回 沖縄系統・統合演習 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第15回 沖縄系統・統合演習 — 最も厳しい制約が連系可能量を決める</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch15.html">📖 講義ノート（第15回）</a><a class="e" href="../ex/ch15.html">✍ 演習で確かめる</a></div>
+  <div class="lead">「沖縄本島系統に太陽光を何 MW まで入れられるか」。この一見単純な問いに答えるには、電圧（第6回）・線路容量と N-1（第2・4回）・周波数（第8回）・同期安定度（第7回）・火力の最低出力（第14回）の<b>すべての制約を横断</b>する必要があります。このページは 6 つの制約それぞれの上限をブラウザ内で実計算し、<b>最小値が律速する</b>こと、そして<b>対策を打つと律速が別の制約に移る</b>ことを確かめます。前提は<a href="opf.html">第14回</a>。ここが本講義の到達点です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>1 つの制約だけ見て「まだ入る」と判断するのが事故のもとです。制約は複数あり、最も厳しいものが全体を決めます。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>連系可能量 = min(電圧, 容量, N-1, 周波数, 安定度, 最低出力)。対策は「今の律速」に打ち、律速が移ったら次へ。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>沖縄電力の再エネ接続可能量の公表値、系統連系申込みの技術検討、蓄電池・同期調相機の投資判断。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>太陽光 <input type="range" id="pvRange" min="0" max="900" step="25" value="300"> <span id="pvVal">300</span> MW</label>
+      <button id="pfBtn">力率0.95: OFF</button>
+      <button id="bfBtn">蓄電池(周波数): OFF</button>
+      <button id="bcBtn">蓄電池(充電): OFF</button>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>連系可能量は「系統の性能」ではなく<b>「いちばん弱い制約の位置」</b>で、対策とは弱い制約を 1 つずつ動かしていく作業です。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>送電線に容量の余裕があるなら、その分の太陽光は入る。</div>
+    <div class="row"><span class="o">✓</span>容量に余裕があっても、電圧上限・慣性低下・火力の最低出力割れが先に効くことがあります。図の 6 本の棒で<b>どれが最小か</b>を必ず確認してください。</div>
+    <div class="row"><span class="x">✗</span>蓄電池を入れればどんな制約も解決する。</div>
+    <div class="row"><span class="o">✓</span>蓄電池は周波数（H・K）と最低出力（充電で吸収）には効きますが、<b>電圧上限や線路容量には効きません</b>。対策と制約の対応を間違えると投資が空振りします。トグルで確かめてください。</div>
+  </div>
+  <details><summary>もっと詳しく：各制約の計算モデルと限界</summary><div class="det">
+    ①電圧：太陽光連系点を 132 kV 線路（<i>R</i>=0.08, <i>X</i>=0.12 p.u./300 MVA）で無限大母線（1.02 p.u.）に接続した 2 母線モデル。地元負荷 150 MW+60 Mvar。受電端電圧 ≤ 1.05 p.u. となる最大逆潮流を走査。力率 0.95 進みは Q 吸収として消費規約の +Q。
+    ②線路容量：2 回線合計 275 MW の送出容量。③N-1：1 回線開放で 137.5 MW。
+    ④周波数：<i>H</i><sub>sys</sub> = 4.5(1 − PV/900)、<i>K</i> = 150(1 − 0.75·PV/900) MW/Hz として 180 MW（最大単機相当）の脱落を RK4 でシミュレーション（第8回と同じモデル）、最低周波数 ≥ 57.0 Hz。蓄電池（周波数）は <i>H</i><sub>v</sub>=2.5 s・<i>K</i><sub>v</sub>=200 MW/Hz。
+    ⑤安定度：<i>t</i><sub>cr</sub>(<i>H</i>) ≥ 70 ms（第7回の等面積法、<i>P</i><sub>max</sub>=2, <i>P<sub>m</sub></i>=0.8）。
+    ⑥最低出力：日負荷曲線から太陽光（晴天・温度損失 15%）を引いた正味需要の最小値 ≥ 火力最低出力 320 MW。蓄電池（充電）は昼に 150 MW 吸収。
+    <b>限界：</b>すべて簡略モデルの概算です。実際の接続可能量評価は実系統データ・多母線潮流・多機の動的解析・年間 8760 時間の需給シミュレーションで行います。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+/* ---- パラメータ ---- */
+const S = 1500, H0 = 4.5, K0 = 150, FN = 60, PMIN_TH = 320, SB_V = 300, LOCAL_P = 0.5, LOCAL_Q = 0.2; let PV = 300, PF95 = false, BF = false, BC = false;
+const demand = h => 900 + 180 * Math.sin(2 * Math.PI * (h - 9) / 24) + 90 * Math.sin(4 * Math.PI * (h - 7) / 24);
+const pvProf = (h, cap) => cap * Math.max(0, Math.sin(Math.PI * (h - 6) / 13)) * 0.85;
+/* ① 電圧（2 母線・消費規約） */
+const RL = 0.08, XL = 0.12, VS = 1.02; function vr(P, Q) { const a = RL * P + XL * Q, b = RL * Q - XL * P; const B2 = 2 * a - VS * VS, C = a * a + b * b, disc = B2 * B2 - 4 * C; if (disc < 0) return null; return Math.sqrt((-B2 + Math.sqrt(disc)) / 2); }
+function vAt(pv, pf) { const p = LOCAL_P - pv / SB_V, q = LOCAL_Q + (pf ? pv / SB_V * Math.tan(Math.acos(.95)) : 0); return vr(p, q); }
+function limVoltage(pf) { for (let pv = 0; pv <= 900; pv += 5) { const v = vAt(pv, pf); if (v === null || v > 1.05) return Math.max(0, pv - 5); } return 900; }
+/* ②③ 容量 */
+const limThermal = () => 150 + 275, limN1 = () => 150 + 137.5;
+/* ④ 周波数（RK4） */
+const Hsys = pv => H0 * (1 - pv / 900) + (BF ? 2.5 : 0), Ksys = pv => K0 * (1 - 0.75 * pv / 900) + (BF ? 200 : 0);
+function nadir(pv) { const H = Math.max(Hsys(pv), .05), K = Math.max(Ksys(pv), 1), KG = .8 * K, KL = .2 * K, Tg = 8, dP = 180, dt = .02, T = 40; let y = [0, 0]; let mn = 0; const f = (s) => { const [dF, Pg] = s; return [FN * (-dP + Pg - KL * dF) / (2 * H * S), (-KG * dF - Pg) / Tg]; }; for (let t = 0; t <= T; t += dt) { mn = Math.min(mn, y[0]); const k1 = f(y), k2 = f(y.map((v, i) => v + dt / 2 * k1[i])), k3 = f(y.map((v, i) => v + dt / 2 * k2[i])), k4 = f(y.map((v, i) => v + dt * k3[i])); y = y.map((v, i) => v + dt / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])); } return FN + mn; }
+function limFreq() { for (let pv = 0; pv <= 900; pv += 10) if (nadir(pv) < 57.0) return Math.max(0, pv - 10); return 900; }
+/* ⑤ 安定度 */
+function tcr(H) { const pm = .8, pmax = 2, w0 = 2 * Math.PI * FN; const d0 = Math.asin(pm / pmax); const cc = pm / pmax * (Math.PI - 2 * d0) - Math.cos(d0); const dcr = Math.acos(Math.max(-1, Math.min(1, cc))); return Math.sqrt(4 * Math.max(H, .01) * (dcr - d0) / (w0 * pm)); }
+function limStab() { for (let pv = 0; pv <= 900; pv += 5) if (tcr(Hsys(pv)) < .07) return Math.max(0, pv - 5); return 900; }
+/* ⑥ 最低出力 */
+function minNet(cap) { let m = 1e9; for (let h = 0; h < 24; h += .25) m = Math.min(m, demand(h) - pvProf(h, cap)); return m; }
+function limMin() { const floor = PMIN_TH - (BC ? 150 : 0); for (let pv = 0; pv <= 900; pv += 5) if (minNet(pv) < floor) return Math.max(0, pv - 5); return 900; }
+function curtail(cap) { const floor = PMIN_TH - (BC ? 150 : 0); let e = 0; for (let h = 0; h < 24; h += .25) e += Math.max(0, floor - (demand(h) - pvProf(h, cap))) * .25; return e; }
+function allLimits() { return [['① 電圧上限', limVoltage(PF95), '--upd'], ['② 線路容量', limThermal(), '--warm'], ['③ N-1', limN1(), '--warm'], ['④ 周波数 UFR', limFreq(), '--neg'], ['⑤ 同期安定度', limStab(), '--neg'], ['⑥ 火力最低出力', limMin(), '--accent']]; }
+function binding() { const L = allLimits(); let b = L[0]; L.forEach(l => { if (l[1] < b[1]) b = l; }); return { list: L, min: b }; }
+const f0 = x => x.toFixed(0), f1 = x => x.toFixed(1), f2 = x => x.toFixed(2), f3 = x => x.toFixed(3);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 6 つのステップ', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ 制約の横断', c: 'var(--loss)', start: 7 }, { t: 'Ⅳ 対策・総括', c: 'var(--accent)', start: 11 } ];
+const SLIDES = [
+  { legend: '問い：太陽光を何 MW まで？ 答えは 6 つの制約の「最小値」',
+    html() { const b = binding(); return '<h3>問題：沖縄本島系統に太陽光は何 MW まで入るか</h3><div class="eq curr">連系可能量 = min(電圧, 容量, N-1, 周波数, 安定度, 最低出力)　→　いま <b class="res">' + f0(b.min[1]) + '</b> MW（律速：' + b.min[0] + '）<span class="read">読み：制約ごとに上限が違い、どれか 1 つでも破れば入らない。だから最小値。</span></div><div class="desc">この回は第1回からの道具を全部つないで、この数字を出します。右下のトグルで対策（力率 0.95・蓄電池 2 種）を打つと、<b>律速する制約が別のものに移る</b>ことも見ます。まず系統モデルから。</div>'; },
+    draw() { drawQuestion(); caption('答えは「性能」ではなく「弱い制約の位置」'); } },
+  { legend: '沖縄本島の簡略モデル：5 ノード・132 kV・太陽光は北部（ノード 5）に連系',
+    html() { return '<h3>題材：沖縄本島系統の簡略モデル</h3><div class="eq curr">具志川（スラック）— 牧港（PV 指定, 250 MW）— 那覇 400 MW — 中部 350 MW — 北部 150 MW ＋ 太陽光<span class="read">読み：第6回 問6-5 で構築した 5 ノードモデル。系統容量 1,500 MVA、H=4.5 s、%K=1.0 %MW/0.1Hz。</span></div><div class="desc">第6回の Python 実習で構築したモデルと同じ諸元です。このページでは各制約を扱いやすい 2 母線・集中定数に落として計算しますが、<b>手順は実系統でも同じ</b>です：潮流 → N-1 → 動特性 → 予測 → 最適化 → 総合。</div>'; },
+    draw() { drawNetwork(); caption('北部に太陽光。ここが電圧と容量の急所'); } },
+
+  { legend: 'Step 1 潮流：太陽光（スライダ）を入れたときの北部の電圧（2 母線モデルで実計算）',
+    mini: () => { const v = vAt(PV, PF95); return '<div>PV ' + PV + ' MW → V <b>' + (v === null ? '解なし' : f3(v)) + '</b></div>'; },
+    html() { const v0 = vAt(0, false), v = vAt(PV, PF95); return '<h3>Step 1 潮流：太陽光 ' + PV + ' MW で北部の電圧は ' + (v === null ? '解なし' : f3(v)) + ' p.u.</h3><div class="eq curr">太陽光なし：<b class="res">' + f3(v0) + '</b>　→　' + PV + ' MW（' + (PF95 ? '力率 0.95' : '力率 1') + '）：<b class="res">' + (v === null ? '—' : f3(v)) + '</b>　上限 1.05<span class="read">読み：第6回の受電端電圧の式。地元負荷 150 MW を超える分が逆潮流になり、電圧を押し上げる。</span></div><div class="desc">太陽光スライダを動かしてください。地元負荷（150 MW）を超えたあたりから電圧が上がり始め、' + (v !== null && v > 1.05 ? '<b>いま上限 1.05 を超えています</b>' : 'ある容量で 1.05 を超えます') + '。第4〜6回の潮流計算がこの「電圧」制約の出所です。</div>'; },
+    draw() { drawVoltage(); caption('逆潮流 → 末端の電圧が上がる'); } },
+  { legend: 'Step 2 N-1：2 回線（275 MW）のうち 1 回線が止まると送出容量が半分に',
+    html() { return '<h3>Step 2 N-1 事故解析：1 回線止まっても耐えられるか</h3><div class="eq curr">平常時：送出 ≤ 275 MW　／　N-1（1 回線開放）：送出 ≤ 137.5 MW　⇒　太陽光 ≤ 150 + 137.5 = <b class="res">' + f0(limN1()) + '</b> MW<span class="read">読み：地元負荷 150 MW を引いた残りが送電線に乗る。1 回線が欠けた状態でも過負荷しないことが日本の系統計画の基本原則（N-1 基準）。</span></div><div class="desc">第4回の Y 行列で「線路を 1 本切る」と行列の 2 か所と対角が変わるだけ、と学びました。実務では全線路について 1 本ずつ切って潮流計算を回します（第5回の高速デカップル法の出番）。<b>N-1 は平常時の容量の半分で効く</b>ので、容量制約より厳しくなります。</div>'; },
+    draw() { drawN1(); caption('N-1：平常時の半分が本当の上限'); } },
+  { legend: 'Step 3 動特性：太陽光が増えると H_sys と K が下がる（実計算：t_cr・nadir）',
+    mini: () => '<div>H <b>' + f2(Hsys(PV)) + ' s</b></div><div>t<sub>cr</sub> <b>' + f0(tcr(Hsys(PV)) * 1000) + ' ms</b></div><div>nadir <b>' + f2(nadir(PV)) + ' Hz</b></div>',
+    html() { return '<h3>Step 3 動特性：' + PV + ' MW で H = ' + f2(Hsys(PV)) + ' s、t<sub>cr</sub> = ' + f0(tcr(Hsys(PV)) * 1000) + ' ms、最低周波数 ' + f2(nadir(PV)) + ' Hz</h3><div class="eq curr"><i>H</i><sub>sys</sub> = 4.5(1 − PV/900)' + (BF ? ' + 2.5' : '') + ' = <b class="res">' + f2(Hsys(PV)) + '</b>,　<i>K</i> = 150(1 − 0.75·PV/900)' + (BF ? ' + 200' : '') + ' = <b class="res">' + f0(Ksys(PV)) + '</b> MW/Hz　→　180 MW 脱落で nadir <b class="res">' + f2(nadir(PV)) + '</b> Hz<span class="read">読み：太陽光が増えた分の同期機を止めると慣性と系統定数が下がる。第7回の t_cr∝√H、第8回の RK4 シミュレーションをそのまま使う。</span></div><div class="desc">t<sub>cr</sub> が保護時間 70 ms を割ると脱調、最低周波数が 57.0 Hz を割ると UFR で負荷遮断です。<b>沖縄は連系がないので隣の慣性も K も借りられません</b>（第8回）。スライダで太陽光を増やすと、両方が同時に悪化していく様子が見えます。</div>'; },
+    draw() { drawDynamics(); caption('H と K が同時に落ちる。沖縄は借りられない'); } },
+  { legend: 'Step 4 予測：正味需要（需要 − 太陽光）。昼の谷と夕方の坂',
+    mini: () => '<div>最小正味 <b>' + f0(minNet(PV)) + ' MW</b></div><div>抑制 <b>' + f0(curtail(PV)) + ' MWh/日</b></div>',
+    html() { return '<h3>Step 4 予測と正味需要：昼の谷が火力の最低出力に届くか</h3><div class="eq curr">正味需要の最小値 = <b class="res">' + f0(minNet(PV)) + '</b> MW　vs　火力最低出力 ' + (PMIN_TH - (BC ? 150 : 0)) + ' MW' + (BC ? '（蓄電池 150 MW 充電で緩和）' : '') + '<span class="read">読み：第10〜12回の予測が出す正味需要。昼に太陽光で谷ができ、火力が最低出力まで下げても余れば抑制するしかない。</span></div><div class="desc">' + (minNet(PV) < PMIN_TH - (BC ? 150 : 0) ? '<b>いま昼に ' + f0(curtail(PV)) + ' MWh/日 の出力抑制が必要</b>です。' : '現在は抑制なしで運用できます。') + '夕方の急坂（ランプ）に火力が追従できるかも第14回の UC の課題でした。<b>需要と再エネの両方の予測誤差</b>がここに合成されます。</div>'; },
+    draw() { drawDuck(); caption('谷が最低出力を割ったら抑制'); } },
+  { legend: 'Step 5 最適化：抑制量（MWh/日）と太陽光容量の関係。蓄電池充電で谷を埋める',
+    html() { const c0 = curtail(PV); const bc0 = BC; BC = true; const c1 = curtail(PV); BC = bc0; return '<h3>Step 5 最適化：抑制を減らすには谷を埋める</h3><div class="eq curr">抑制 = Σ<sub>h</sub> max(0, 最低出力 − 正味需要)　→　' + PV + ' MW：蓄電池なし <b class="res">' + f0(c0) + '</b> / 充電 150 MW あり <b class="res">' + f0(c1) + '</b> MWh/日<span class="read">読み：第14回の ELD/UC で火力を最低出力まで下げても余る分が抑制。蓄電池が昼に充電すれば、その分だけ谷が浅くなる。</span></div><div class="desc">出力抑制は再エネの価値を捨てるので最終手段ですが、<b>抑制率ゼロを目指すと蓄電池コストが跳ね上がる</b>のも事実です。数%の抑制を許容するのが世界の相場観。次章で 6 つの制約を並べます。</div>'; },
+    draw() { drawCurtail(); caption('蓄電池の充電 = 谷を埋める'); } },
+
+  { legend: '制約① 電圧：受電端電圧 ≤ 1.05 を守れる最大の太陽光（力率 1 / 0.95 進み）',
+    mini: () => '<div>力率1 <b>' + f0(limVoltage(false)) + '</b></div><div>0.95 <b>' + f0(limVoltage(true)) + '</b></div>',
+    html() { const a = limVoltage(false), b = limVoltage(true); return '<h3>制約①電圧：力率 1 で ' + f0(a) + ' MW、0.95 進みで ' + f0(b) + ' MW</h3><div class="eq curr">max PV s.t. <i>V</i><sub>北部</sub> ≤ 1.05　→　力率 1：<b class="res">' + f0(a) + '</b>　0.95 進み：<b class="res">' + f0(b) + '</b>（' + (b / Math.max(a, 1)).toFixed(2) + ' 倍）<span class="read">読み：第6回・第9回の連系可能量。インバータに無効電力を吸わせるだけで電圧上限までの余地が伸びる。</span></div><div class="desc">設備を増やさず制御だけで上限が伸びる、第9回の Volt-Var の結論がここに効きます。ただし電圧が律速でないときに力率を変えても<b>全体の連系可能量は増えません</b>（次のスライドから）。</div>'; },
+    draw() { drawLimitBars([0]); caption('電圧は制御で動かせる制約'); } },
+  { legend: '制約②③ 容量と N-1：どちらも「送出 = PV − 地元負荷」で決まる固定値',
+    html() { return '<h3>制約②③ 線路容量と N-1：設備で決まる</h3><div class="eq curr">②平常時：150 + 275 = <b class="res">' + f0(limThermal()) + '</b> MW　／　③N-1：150 + 137.5 = <b class="res">' + f0(limN1()) + '</b> MW<span class="read">読み：この 2 つは太陽光の制御では動かせない。動かすには線路増強か、地元負荷の増加（＝需要を作る）しかない。</span></div><div class="desc">力率制御も蓄電池も、この制約には効きません。<b>「蓄電池を入れれば何でも解決」は誤り</b>で、対策と制約の対応を正しく取る必要があります。N-1 が平常時の半分になる点も忘れずに。</div>'; },
+    draw() { drawLimitBars([1, 2]); caption('容量・N-1 は設備でしか動かない'); } },
+  { legend: '制約④⑤ 周波数と安定度：nadir ≥ 57.0 Hz、t_cr ≥ 70 ms を守れる最大の太陽光',
+    mini: () => '<div>周波数 <b>' + f0(limFreq()) + '</b></div><div>安定度 <b>' + f0(limStab()) + '</b></div>',
+    html() { return '<h3>制約④⑤ 周波数 ' + f0(limFreq()) + ' MW、安定度 ' + f0(limStab()) + ' MW</h3><div class="eq curr">④ nadir(PV) ≥ 57.0 Hz → PV ≤ <b class="res">' + f0(limFreq()) + '</b>　／　⑤ <i>t</i><sub>cr</sub>(<i>H</i>(PV)) ≥ 70 ms → PV ≤ <b class="res">' + f0(limStab()) + '</b>' + (BF ? '　（蓄電池 H_v=2.5, K_v=200 あり）' : '') + '<span class="read">読み：第7・8回の動特性を太陽光容量の関数として走査。慣性と系統定数の低下がどこで限界を割るか。</span></div><div class="desc">' + (BF ? '蓄電池の合成慣性＋疑似ガバナで両制約が大きく緩和されています。' : '<b>周波数が最初に効く</b>のが独立系統の特徴です。本土なら連系線の向こうの慣性が支えますが、沖縄は自前の慣性しかありません。') + '第9回で見たとおり、蓄電池に H<sub>v</sub> と K<sub>v</sub> を持たせるとこの 2 本が伸びます（トグルで確認）。</div>'; },
+    draw() { drawLimitBars([3, 4]); caption('独立系統では周波数が真っ先に効く'); } },
+  { legend: '制約⑥ 最低出力：昼の正味需要 ≥ 火力最低出力 320 MW を守れる最大の太陽光',
+    mini: () => '<div>最低出力 <b>' + f0(limMin()) + '</b></div>',
+    html() { return '<h3>制約⑥ 火力最低出力：' + f0(limMin()) + ' MW' + (BC ? '（蓄電池充電 150 MW あり）' : '') + '</h3><div class="eq curr">min<sub>h</sub>(需要 − PV) ≥ ' + (PMIN_TH - (BC ? 150 : 0)) + ' MW　→　PV ≤ <b class="res">' + f0(limMin()) + '</b> MW<span class="read">読み：抑制なしで運用できる上限。これを超えても「抑制すれば」入れられるので、他の制約と性格が違う（安全ではなく経済の制約）。</span></div><div class="desc">①〜⑤は破ると事故（安全の制約）ですが、⑥は破っても抑制で運用できます（経済の制約）。<b>接続可能量の議論では、この 2 種類を分けて考える</b>ことが大切です。次のスライドで 6 本を並べます。</div>'; },
+    draw() { drawLimitBars([5]); caption('⑥だけは「抑制すれば」超えられる'); } },
+
+  { legend: '総合：6 つの制約の上限（棒）。赤線=最小値=連系可能量。太線=律速している制約',
+    mini: () => { const b = binding(); return '<div>連系可能量 <b>' + f0(b.min[1]) + ' MW</b></div><div>律速 <b>' + b.min[0] + '</b></div>'; },
+    html() { const b = binding(); return '<h3>総合：連系可能量 = ' + f0(b.min[1]) + ' MW（律速：' + b.min[0] + '）</h3><div class="eq curr">' + b.list.map(l => l[0].slice(2) + ' <b class="res">' + f0(l[1]) + '</b>').join('　') + '<span class="read">読み：6 本の棒の最小値が答え。いちばん短い棒がその系統の「弱点」。</span></div><div class="desc">対策なし（トグル全 OFF）では<b>' + b.min[0] + '</b>が律速です。他の制約にどれだけ余裕があっても、この 1 本が全体を決めます。次のスライドで、律速している制約に対策を打つと何が起きるかを見ます。</div>'; },
+    draw() { drawLimitBars([0, 1, 2, 3, 4, 5], true); caption('最小値が答え。他の余裕は関係ない'); } },
+  { legend: 'A/B：対策トグル（力率 0.95 / 蓄電池 2 種）で棒が伸び、律速が別の制約に移る',
+    enter() { PF95 = true; BF = true; BC = true; syncBtns(); },
+    mini: () => { const b = binding(); return '<div>対策後 <b>' + f0(b.min[1]) + ' MW</b></div><div>律速 <b>' + b.min[0] + '</b></div>'; },
+    html() { const pf = PF95, bf = BF, bc = BC; PF95 = false; BF = false; BC = false; const b0 = binding(); PF95 = pf; BF = bf; BC = bc; const b1 = binding(); return '<h3>A/B：対策なし ' + f0(b0.min[1]) + ' MW → 対策あり ' + f0(b1.min[1]) + ' MW（' + (b1.min[1] / Math.max(b0.min[1], 1)).toFixed(2) + ' 倍）</h3><div class="eq curr">なし：律速 ' + b0.min[0] + ' <b class="res">' + f0(b0.min[1]) + '</b>　→　あり：律速 <b class="res">' + b1.min[0] + ' ' + f0(b1.min[1]) + '</b><span class="read">読み：力率 0.95 は①に、蓄電池（周波数）は④⑤に、蓄電池（充電）は⑥に効く。効いた制約が伸びると、次に短い制約が律速に移る。</span></div><div class="desc">トグルを 1 つずつ切り替えてください。<b>対策は「今の律速」に打たなければ 1 MW も増えません</b>。そして律速が移った先が②③（設備）なら、次は線路増強しかありません。これが系統計画の実際の思考手順です。</div>'; },
+    draw() { drawLimitBars([0, 1, 2, 3, 4, 5], true); caption('律速に打つ。移ったら次へ'); } },
+  { legend: '講義を貫いた 3 本の柱',
+    enter() { PF95 = false; BF = false; BC = false; syncBtns(); },
+    html() { return '<h3>講義の 3 本柱：P と Q ／ 慣性 ／ 沖縄</h3><div class="eq curr">① <i>P</i> は相差角・<i>Q</i> は電圧差（第3回）　② 慣性 <i>H</i> は見えない資産（第7回〜）　③ 独立・小規模・亜熱帯の沖縄（全回）<span class="read">読み：この 3 つが第1回から第15回までを繋ぐ背骨。</span></div><div class="desc">第3回の 1 本の式がヤコビアン・等面積法・周波数制御・市場価格まで繋がり、第7回の H が周波数・安定度・再エネ限界を貫き、沖縄という題材が「本土の常識が通じない場所」として全回に顔を出しました。<b>基礎を疎かにしないこと、制約は 1 つではないこと、答えのない問題があること</b>。</div>'; },
+    draw() { drawPillars(); caption('1 本の式・1 つの定数・1 つの島'); } },
+  { legend: '次のコマは最終試験。持ち込み可（電卓・自筆ノート）',
+    html() { return '<h3>おわりに：同期発電機がほぼない系統を、どう安定に運用するか</h3><div class="eq curr">未解決問題：慣性・同期化力・周波数制御の概念そのものが再定義されつつある<span class="read">読み：150 年の学問が、再エネ大量導入で根本から問い直されている。皆さんはその転換点にいる。</span></div><div class="desc">沖縄は日本で最も再エネ統合が難しく、同時に最もポテンシャルがある場所です。ここで有効な技術は、他の島嶼系統にも、将来の低慣性化した本土系統にも通用します。4 日間・16 コマ、お疲れさまでした。次のコマは最終試験です（90 分・70 点・持ち込み可）。</div>'; },
+    draw() { drawEnd(); caption('沖縄で学ぶ意味'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawQuestion() { txt('太陽光 ? MW', CW / 2, 90, { align: 'center', size: 20, bold: true, color: getCSS('--neg') }); const names = ['電圧', '容量', 'N-1', '周波数', '安定度', '最低出力']; names.forEach((n, i) => { const x = 40 + i * 56; rect(x, 150, 44, 120, getCSS('--faint'), .3); txt(n, x + 22, 290, { align: 'center', size: 9.5 }); txt('?', x + 22, 215, { align: 'center', size: 16, bold: true, color: getCSS('--muted') }); }); txt('6 つの上限を出して、最小を取る', CW / 2, 330, { align: 'center', size: 11 }); }
+function drawNetwork() { const c = getCSS('--text'); const nodes = [[60, 120, '具志川', 'スラック'], [180, 80, '牧港', 'G 250'], [300, 120, '那覇', 'L 400'], [260, 250, '中部', 'L 350'], [100, 260, '北部', 'L 150 + PV']]; const lines = [[0, 1, '15 km'], [1, 2, '25 km'], [2, 3, '20 km'], [3, 4, '35 km'], [0, 4, '45 km']]; lines.forEach(([a, b, l]) => { const [x0, y0] = nodes[a], [x1, y1] = nodes[b]; line([[x0, y0], [x1, y1]], c, 2); txt(l, (x0 + x1) / 2, (y0 + y1) / 2 - 6, { align: 'center', size: 8.5, mono: true, color: getCSS('--muted') }); }); nodes.forEach(([x, y, n, s], i) => { dot(x, y, 14, getCSS(i === 4 ? '--warm' : (i < 2 ? '--upd' : '--accent')), c); txt(i + 1, x, y + 4, { align: 'center', size: 11, bold: true, color: '#fff' }); txt(n, x, y + 30, { align: 'center', size: 10, bold: true }); txt(s, x, y + 44, { align: 'center', size: 9, mono: true, color: getCSS('--muted') }); }); txt('132 kV・S=1,500 MVA・H=4.5 s', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawVoltage() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '太陽光 [MW]', 'V 北部 [p.u.]'); const xOf = p => L + p / 900 * (R - L), yOf = v => B - (v - .9) / .25 * (B - T); [[false, '--neg', '力率 1'], [true, '--accent', '0.95 進み']].forEach(([pf, c, lab]) => { const pts = []; for (let p = 0; p <= 900; p += 10) { const v = vAt(p, pf); if (v !== null) pts.push([xOf(p), yOf(v)]); } line(pts, getCSS(c), pf === PF95 ? 2.8 : 1.5, pf === PF95 ? null : [4, 3]); txt(lab, xOf(860), (pts.length ? pts[pts.length - 1][1] : 100) + (pf ? 16 : -8), { align: 'right', size: 9.5, color: getCSS(c), bold: true }); }); line([[L, yOf(1.05)], [R, yOf(1.05)]], getCSS('--neg'), 1.5, [4, 3]); txt('上限 1.05', L + 3, yOf(1.05) - 4, { size: 9.5, mono: true, color: getCSS('--neg') }); const v = vAt(PV, PF95); if (v !== null) { dot(xOf(PV), yOf(v), 7, getCSS('--text')); txt(PV + ' MW → ' + f3(v), xOf(PV) + (PV > 500 ? -10 : 10), yOf(v) - 12, { align: PV > 500 ? 'right' : 'left', size: 10.5, bold: true }); } [0, 300, 600, 900].forEach(p => txt(p, xOf(p), B + 14, { align: 'center', size: 9, mono: true })); [.9, 1.0, 1.1].forEach(v => txt(v.toFixed(2), L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); }
+function drawN1() { const c = getCSS('--text'); dot(60, 180, 16, getCSS('--warm'), c); txt('北部', 60, 215, { align: 'center', size: 10, bold: true }); txt('PV − 150', 60, 232, { align: 'center', size: 9, mono: true, color: getCSS('--muted') }); dot(300, 180, 16, getCSS('--upd'), c); txt('系統', 300, 215, { align: 'center', size: 10, bold: true }); line([[76, 170], [284, 170]], c, 3); line([[76, 190], [284, 190]], getCSS('--neg'), 3, [6, 5]); txt('✕ 開放', 180, 208, { align: 'center', size: 10, color: getCSS('--neg'), bold: true }); txt('137.5 MW', 180, 160, { align: 'center', size: 10, mono: true }); txt('平常時 2 回線 275 MW → N-1 137.5 MW', CW / 2, 280, { align: 'center', size: 11 }); txt('PV ≤ 150 + 137.5 = ' + f0(limN1()) + ' MW', CW / 2, 310, { align: 'center', size: 12, mono: true, bold: true }); }
+function drawDynamics() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '太陽光 [MW]', ''); const xOf = p => L + p / 900 * (R - L); const yT = t => B - Math.min(t, 300) / 300 * (B - T), yN = n => B - (n - 55) / 5.5 * (B - T); const pt = [], pn = []; for (let p = 0; p <= 900; p += 20) { pt.push([xOf(p), yT(tcr(Hsys(p)) * 1000)]); pn.push([xOf(p), yN(Math.max(55, nadir(p)))]); } line(pt, getCSS('--upd'), 2.5); line(pn, getCSS('--neg'), 2.5); line([[L, yT(70)], [R, yT(70)]], getCSS('--upd'), 1, [4, 3]); txt('t_cr 70 ms', R - 4, yT(70) - 4, { align: 'right', size: 9, color: getCSS('--upd') }); line([[L, yN(57)], [R, yN(57)]], getCSS('--neg'), 1, [4, 3]); txt('UFR 57 Hz', R - 4, yN(57) + 12, { align: 'right', size: 9, color: getCSS('--neg') }); dot(xOf(PV), yT(tcr(Hsys(PV)) * 1000), 6, getCSS('--upd')); dot(xOf(PV), yN(Math.max(55, nadir(PV))), 6, getCSS('--neg')); txt('t_cr [ms]（紫）', L + 8, T + 14, { size: 10, color: getCSS('--upd'), bold: true }); txt('nadir [Hz]（赤）', L + 8, T + 30, { size: 10, color: getCSS('--neg'), bold: true }); [0, 300, 600, 900].forEach(p => txt(p, xOf(p), B + 14, { align: 'center', size: 9, mono: true })); }
+function drawDuck() { const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '時刻', 'MW'); const xOf = h => L + h / 24 * (R - L), yOf = v => B - (v - 100) / 1100 * (B - T); const d = [], n = []; for (let h = 0; h <= 24; h += .25) { d.push([xOf(h), yOf(demand(h))]); n.push([xOf(h), yOf(demand(h) - pvProf(h, PV))]); } line(d, getCSS('--text'), 1.5, [4, 3]); line(n, getCSS('--neg'), 2.5); const floor = PMIN_TH - (BC ? 150 : 0); line([[L, yOf(floor)], [R, yOf(floor)]], getCSS('--warm'), 1.5, [5, 4]); txt('最低出力 ' + floor, R - 4, yOf(floor) - 5, { align: 'right', size: 9.5, color: getCSS('--warm') }); ctx.save(); ctx.fillStyle = getCSS('--neg'); ctx.globalAlpha = .25; for (let h = 0; h <= 24; h += .25) { const nl = demand(h) - pvProf(h, PV); if (nl < floor) ctx.fillRect(xOf(h), yOf(floor), (R - L) / 96 + .5, yOf(nl) - yOf(floor)); } ctx.restore(); [0, 6, 12, 18, 24].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); txt('需要（点線）/ 正味需要 PV ' + PV, L + 8, T + 14, { size: 9.5 }); txt('赤塗り = 抑制 ' + f0(curtail(PV)) + ' MWh/日', L + 8, T + 30, { size: 9.5, color: getCSS('--neg'), bold: true }); }
+function drawCurtail() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '太陽光 [MW]', '抑制 [MWh/日]'); const xOf = p => L + p / 900 * (R - L); const bc0 = BC; BC = false; const a = []; for (let p = 0; p <= 900; p += 20) a.push([p, curtail(p)]); BC = true; const b = []; for (let p = 0; p <= 900; p += 20) b.push([p, curtail(p)]); BC = bc0; const m = Math.max(...a.map(v => v[1]), 1); const yOf = v => B - v / m * (B - T); line(a.map(([p, v]) => [xOf(p), yOf(v)]), getCSS('--neg'), 2.5); line(b.map(([p, v]) => [xOf(p), yOf(v)]), getCSS('--accent'), 2.5); txt('蓄電池なし', xOf(700), yOf(curtailAt(a, 700)) - 10, { size: 10, color: getCSS('--neg'), bold: true }); txt('充電 150 MW', xOf(850), yOf(curtailAt(b, 850)) + 16, { align: 'right', size: 10, color: getCSS('--accent'), bold: true }); line([[xOf(PV), T], [xOf(PV), B]], getCSS('--faint'), 1, [3, 3]); [0, 300, 600, 900].forEach(p => txt(p, xOf(p), B + 14, { align: 'center', size: 9, mono: true })); function curtailAt(arr, p) { const k = Math.min(arr.length - 1, Math.round(p / 20)); return arr[k][1]; } }
+function drawLimitBars(show, all) { const b = binding(); const L = 130, T = 40, R = 335, B = 330; axes(L, T, R, B, '太陽光 [MW]', ''); const xOf = v => L + Math.min(v, 900) / 900 * (R - L); b.list.forEach((l, i) => { const y = T + 10 + i * 46; const on = show.includes(i); const isMin = all && l[0] === b.min[0]; rect(L, y, xOf(l[1]) - L, 30, getCSS(l[2]), on ? (isMin ? .95 : .55) : .12); txt(l[0], L - 6, y + 20, { align: 'right', size: 10, bold: isMin }); if (on) txt(f0(l[1]), xOf(l[1]) + 4, y + 20, { size: 10, mono: true, bold: isMin }); }); if (all) { line([[xOf(b.min[1]), T], [xOf(b.min[1]), B]], getCSS('--neg'), 2, [5, 4]); txt('連系可能量 ' + f0(b.min[1]) + ' MW', xOf(b.min[1]) + (b.min[1] > 500 ? -6 : 6), T - 6, { align: b.min[1] > 500 ? 'right' : 'left', size: 11, bold: true, color: getCSS('--neg') }); } [0, 300, 600, 900].forEach(p => txt(p, xOf(p), B + 14, { align: 'center', size: 9, mono: true })); txt('力率0.95 ' + (PF95 ? 'ON' : 'OFF') + ' / 蓄電池(周波数) ' + (BF ? 'ON' : 'OFF') + ' / 蓄電池(充電) ' + (BC ? 'ON' : 'OFF'), CW / 2, 360, { align: 'center', size: 9, color: getCSS('--muted') }); }
+function drawPillars() { const rows = [['P と Q', 'P = VsVr sinδ/X ／ Q は電圧差', '第3→5・7・8・14回', '--upd'], ['慣性 H', 't_cr∝√H, RoCoF∝1/H, 再エネは H=0', '第7→8・9・13・15回', '--neg'], ['沖縄', '独立・小規模・亜熱帯・島嶼', '全回', '--accent']]; rows.forEach(([a, b, c, col], i) => { const y = 80 + i * 90; rect(20, y - 28, 320, 70, getCSS(col), .14); txt(a, 40, y - 2, { size: 14, bold: true, color: getCSS(col) }); txt(b, 40, y + 18, { size: 10 }); txt(c, 330, y + 30, { align: 'right', size: 9, color: getCSS('--muted') }); }); }
+function drawEnd() { txt('同期発電機のない系統は', CW / 2, 120, { align: 'center', size: 15, bold: true }); txt('成立するか？', CW / 2, 150, { align: 'center', size: 15, bold: true, color: getCSS('--neg') }); txt('慣性・同期化力・周波数制御', CW / 2, 210, { align: 'center', size: 11, color: getCSS('--muted') }); txt('— 概念の再定義が進行中 —', CW / 2, 232, { align: 'center', size: 11, color: getCSS('--muted') }); dot(CW / 2, 300, 40, getCSS('--warm'), getCSS('--text')); txt('沖縄', CW / 2, 306, { align: 'center', size: 13, bold: true, color: '#fff' }); txt('最も難しく、最もポテンシャルがある', CW / 2, 365, { align: 'center', size: 10.5 }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur2 = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur2 ? 'active' : (i < cur2 ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur2 ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+function syncBtns() { document.getElementById('pfBtn').textContent = '力率0.95: ' + (PF95 ? 'ON' : 'OFF'); document.getElementById('bfBtn').textContent = '蓄電池(周波数): ' + (BF ? 'ON' : 'OFF'); document.getElementById('bcBtn').textContent = '蓄電池(充電): ' + (BC ? 'ON' : 'OFF'); document.getElementById('pvVal').textContent = PV; }
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; PV = 300; PF95 = false; BF = false; BC = false; document.getElementById('pvRange').value = 300; syncBtns(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('pvRange').oninput = e => { PV = +e.target.value; syncBtns(); renderAll(); draw_(); };
+document.getElementById('pfBtn').onclick = () => { PF95 = !PF95; syncBtns(); renderAll(); draw_(); };
+document.getElementById('bfBtn').onclick = () => { BF = !BF; syncBtns(); renderAll(); draw_(); };
+document.getElementById('bcBtn').onclick = () => { BC = !BC; syncBtns(); renderAll(); draw_(); };
+syncBtns(); goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>教科書対応 — 講義ノート</title>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="notes.css">
+</head>
+<body>
+<header class="top">
+  <a class="home" href="../index.html">▲ 地図（トップ）</a>
+  <nav class="days"><span class="">Day 1 基礎と潮流計算入門</span><span class="">Day 2 潮流とダイナミクス</span><span class="">Day 3 インバータと予測</span><span class="">Day 4 AI と統合演習</span></nav>
+  <nav class="rounds"><a href="ch01.html" class="" title="第1回 エネルギー変換">1</a><a href="ch02.html" class="" title="第2回 電力システムの構成">2</a><a href="ch03.html" class="" title="第3回 P と Q の分離">3</a><a href="ch04.html" class="" title="第4回 Y行列と直流法潮流">4</a><a href="ch05.html" class="" title="第5回 ニュートン・ラフソン法">5</a><a href="ch06.html" class="" title="第6回 電圧と無効電力">6</a><a href="ch07.html" class="" title="第7回 等面積法と安定度">7</a><a href="ch08.html" class="" title="第8回 周波数と需給バランス">8</a><a href="ch09.html" class="" title="第9回 インバータと系統連系">9</a><a href="ch10.html" class="" title="第10回 気象と再エネ出力">10</a><a href="ch11.html" class="" title="第11回 電力需要予測">11</a><a href="ch12.html" class="" title="第12回 機械学習で予測する">12</a><a href="ch13.html" class="" title="第13回 AI × 系統解析">13</a><a href="ch14.html" class="" title="第14回 経済負荷配分と OPF">14</a><a href="ch15.html" class="" title="第15回 沖縄系統・統合演習">15</a></nav>
+</header>
+<div class="wrap">
+  <main class="doc">
+    <div class="chips"><a class="chip" href="../index.html">▲ 地図（トップ）</a></div>
+    <h1>教科書との対応</h1>
+<h2 id="s1">参考教科書（正本）</h2>
+<p><strong>『電力システム工学の基礎』加藤丈佳・田岡久雄 著</strong>（全7章・114ページ）</p>
+<p>原本 PDF:
+<code>001_/2019年度/001_講義/【講義】エネルギー伝送/電力システム工学の基礎(加藤,田岡).pdf</code></p>
+<blockquote>
+<p>本講義資料は<strong>この教科書の用語・記法に準拠</strong>する。
+学生が教科書で予復習できるよう、章・節番号を明示して対応づける。</p>
+</blockquote>
+<hr>
+<h2 id="s2">章対応表</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">教科書</th>
+<th align="left">章タイトル</th>
+<th align="center">頁</th>
+<th align="left">本資料の対応回</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">第1章</td>
+<td align="left">電力システム</td>
+<td align="center">1–14</td>
+<td align="left"><strong>第1回</strong>（エネルギー変換）、<strong>第2回</strong>（システム構成）</td>
+</tr>
+<tr>
+<td align="left">第2章</td>
+<td align="left">交流回路</td>
+<td align="center">15–26</td>
+<td align="left"><strong>第3回</strong> 3.2.1–3.2.2（複素電力・平衡三相）</td>
+</tr>
+<tr>
+<td align="left">第3章</td>
+<td align="left">送電系統</td>
+<td align="center">27–44</td>
+<td align="left"><strong>第3回</strong> 3.2.3–3.2.5（変圧器等価回路・<strong>単位法</strong>・送電線等価回路）</td>
+</tr>
+<tr>
+<td align="left">第4章</td>
+<td align="left">潮流計算</td>
+<td align="center">45–56</td>
+<td align="left"><strong>第4回</strong>（ノードアドミタンス行列・電力方程式）、<strong>第5回</strong>（NR法）、<strong>第6回</strong>（実習）</td>
+</tr>
+<tr>
+<td align="left">第5章</td>
+<td align="left">安定度計算</td>
+<td align="center">57–68</td>
+<td align="left"><strong>第7回</strong>（動揺方程式・等面積法・安定度向上対策）</td>
+</tr>
+<tr>
+<td align="left">第6章</td>
+<td align="left">電力システムにおける電圧の特性</td>
+<td align="center">69–80</td>
+<td align="left"><strong>第3回</strong>（Q-V 関係）、<strong>第6回</strong>（電圧変動の感度・VQC）</td>
+</tr>
+<tr>
+<td align="left">第7章</td>
+<td align="left">電力システムにおける周波数の特性</td>
+<td align="center">81–96</td>
+<td align="left"><strong>第8回</strong>（系統定数・LFC・FFC/TBC）</td>
+</tr>
+</tbody></table></div>
+<p><strong>教科書がカバーしない範囲</strong>（本講義の独自部分。第9回以降）:
+インバーター・系統連系（第9回）、気象／需要予測（第10〜12回）、
+AI による系統解析・最適化（第13〜14回）、総合演習（第15回）。</p>
+<hr>
+<h2 id="s3">用語の統一（教科書表記を正とする）</h2>
+<p>本資料で先に書いていた表記を、教科書に合わせて改める。
+一般的な別称は<strong>初出時に併記</strong>して、他書・英語文献との橋渡しをする。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">教科書の表記（<strong>採用</strong>）</th>
+<th align="left">併記する別称</th>
+<th align="left">備考</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>単位法</strong></td>
+<td align="left">パーユニット法、p.u. 法</td>
+<td align="left">教科書 3.2 節</td>
+</tr>
+<tr>
+<td align="left"><strong>ノードアドミタンス行列</strong></td>
+<td align="left">母線アドミタンス行列、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">Y</mi><mtext>bus</mtext></msub></mrow><annotation encoding="application/x-tex">\mathbf{Y}_\text{bus}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.0288em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0288em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">bus</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">教科書 4.1 節</td>
+</tr>
+<tr>
+<td align="left"><strong>自己アドミタンス</strong>（駆動点アドミタンス）</td>
+<td align="left">対角要素 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mrow><mi>i</mi><mi>i</mi></mrow></msub></mrow><annotation encoding="application/x-tex">Y_{ii}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">ii</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">〃</td>
+</tr>
+<tr>
+<td align="left"><strong>相互アドミタンス</strong>（伝達アドミタンス）</td>
+<td align="left">非対角要素 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">Y_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">〃</td>
+</tr>
+<tr>
+<td align="left"><strong>電力方程式</strong></td>
+<td align="left">潮流方程式、power flow equation</td>
+<td align="left">教科書 4.2 節</td>
+</tr>
+<tr>
+<td align="left"><strong>ノード</strong>（母線とも呼ぶ）</td>
+<td align="left">バス、bus</td>
+<td align="left">教科書 4.1 節</td>
+</tr>
+<tr>
+<td align="left"><strong>PV 指定ノード / PQ 指定ノード</strong></td>
+<td align="left">PV 母線 / PQ 母線</td>
+<td align="left">教科書 4.2 節</td>
+</tr>
+<tr>
+<td align="left"><strong>スラックノード / 基準ノード</strong></td>
+<td align="left">スラック母線</td>
+<td align="left">両者は別に選べるが通常同一</td>
+</tr>
+<tr>
+<td align="left"><strong>浮遊ノード</strong></td>
+<td align="left">—</td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo>=</mo><mi>Q</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">P=Q=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">Q</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> の中継ノード</td>
+</tr>
+<tr>
+<td align="left"><strong>交流法潮流計算</strong></td>
+<td align="left">AC 潮流計算</td>
+<td align="left">厳密解</td>
+</tr>
+<tr>
+<td align="left"><strong>直流法潮流計算</strong></td>
+<td align="left">DC 潮流計算</td>
+<td align="left">教科書 4.3 節</td>
+</tr>
+<tr>
+<td align="left"><strong>安定度</strong></td>
+<td align="left">安定性、stability</td>
+<td align="left">教科書 第5章。「安定性」は使わない</td>
+</tr>
+<tr>
+<td align="left"><strong>擾乱</strong>（じょうらん）</td>
+<td align="left">外乱、disturbance</td>
+<td align="left">教科書 5.1 節</td>
+</tr>
+<tr>
+<td align="left"><strong>相差角 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>δ</mi></mrow><annotation encoding="application/x-tex">\delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span></span></span></span></strong></td>
+<td align="left">ロータ角、位相角</td>
+<td align="left">教科書 5.2 節</td>
+</tr>
+<tr>
+<td align="left"><strong>電力相差角方程式 / 電力相差角曲線（P-δ 曲線）</strong></td>
+<td align="left">電力位相角曲線</td>
+<td align="left">教科書 5.3 節</td>
+</tr>
+<tr>
+<td align="left">同期化力（教科書 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi></mrow><annotation encoding="application/x-tex">S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span></span></span></span>）</td>
+<td align="left"><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mi>s</mi></msub></mrow><annotation encoding="application/x-tex">K_s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> を採用</strong></td>
+<td align="left">教科書 (5.8) 式。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi></mrow><annotation encoding="application/x-tex">S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span></span></span></span> は複素電力と衝突するため本資料は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mi>s</mi></msub></mrow><annotation encoding="application/x-tex">K_s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+</tr>
+<tr>
+<td align="left"><strong>加速エネルギー <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>S</mi><mi>A</mi></msub></mrow><annotation encoding="application/x-tex">S_A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> / 減速エネルギー <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>S</mi><mi>B</mi></msub></mrow><annotation encoding="application/x-tex">S_B</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0502em;">B</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></strong></td>
+<td align="left">加速面積 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">A_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> / 減速面積 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">A_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">教科書 5.3 節</td>
+</tr>
+<tr>
+<td align="left"><strong>背後電圧一定モデル</strong></td>
+<td align="left">定電圧背後リアクタンスモデル</td>
+<td align="left">教科書 5.2 節</td>
+</tr>
+<tr>
+<td align="left"><strong>超速応励磁</strong></td>
+<td align="left">高速励磁</td>
+<td align="left">教科書 5.4 節の対策(4)</td>
+</tr>
+<tr>
+<td align="left"><strong>速度調定率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ε</mi></mrow><annotation encoding="application/x-tex">\varepsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ε</span></span></span></span></strong></td>
+<td align="left">ドループ <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi></mrow><annotation encoding="application/x-tex">R</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span></td>
+<td align="left">教科書 (7.1) 式</td>
+</tr>
+<tr>
+<td align="left"><strong>系統定数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span></strong></td>
+<td align="left">系統周波数特性定数</td>
+<td align="left">教科書 (7.4) 式</td>
+</tr>
+<tr>
+<td align="left"><strong>負荷の自己制御性</strong></td>
+<td align="left">負荷の周波数特性</td>
+<td align="left">教科書 7.2.2 節</td>
+</tr>
+<tr>
+<td align="left"><strong>調速制御（ガバナ制御）</strong></td>
+<td align="left">ガバナフリー運転、GF</td>
+<td align="left">教科書 7.2.1 節</td>
+</tr>
+<tr>
+<td align="left"><strong>負荷周波数制御（LFC）</strong></td>
+<td align="left">—</td>
+<td align="left">教科書 7.4 節</td>
+</tr>
+<tr>
+<td align="left"><strong>経済負荷配分運転（ELD）</strong></td>
+<td align="left">EDC、経済負荷配分制御</td>
+<td align="left">教科書 7.4 節。<strong>ELD を採用</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>地域要求量（AR）/ 地域制御偏差（ACE）</strong></td>
+<td align="left">—</td>
+<td align="left">教科書 7.5 節</td>
+</tr>
+<tr>
+<td align="left"><strong>定周波数制御（FFC）/ 周波数バイアス連系線潮流制御（TBC）</strong></td>
+<td align="left">—</td>
+<td align="left">教科書 7.5 節</td>
+</tr>
+<tr>
+<td align="left"><strong>電圧無効電力制御（VQC）</strong></td>
+<td align="left">—</td>
+<td align="left">教科書 6.4 節</td>
+</tr>
+<tr>
+<td align="left"><strong>負荷時タップ切換装置（LTC）</strong></td>
+<td align="left">OLTC</td>
+<td align="left">教科書 6.4 節</td>
+</tr>
+<tr>
+<td align="left"><strong>短絡容量 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi><mo>=</mo><msubsup><mi>V</mi><mi>r</mi><mn>2</mn></msubsup><mi mathvariant="normal">/</mi><mi>Z</mi></mrow><annotation encoding="application/x-tex">C = V_r^2/Z</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-2.453em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0715em;">Z</span></span></span></span></strong></td>
+<td align="left">—</td>
+<td align="left">教科書 6.2 節の脚注</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="s4">記号の対応（教科書 ↔ 国際標準）</h2>
+<p>教科書は日本の電力工学の慣行に沿う。英語文献では別記号が使われることがあるため、
+本資料では<strong>教科書記号を主、国際標準を従</strong>として併記する。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">量</th>
+<th align="center">教科書</th>
+<th align="center">国際標準（併記）</th>
+<th align="left">関係式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">慣性定数</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi><mo>=</mo><mi>ω</mi><mi>J</mi></mrow><annotation encoding="application/x-tex">M = \omega J</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">M</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span></span></span></span></td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi></mrow><annotation encoding="application/x-tex">H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span></span> [s]</td>
+<td align="left">単位法で <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi><mo>=</mo><mn>2</mn><mi>H</mi><mi mathvariant="normal">/</mi><msub><mi>ω</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">M = 2H/\omega_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">M</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、教科書は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ω</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\omega=1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> として <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi><mover accent="true"><mi>δ</mi><mo>¨</mo></mover><mo>=</mo><msub><mi>P</mi><mi>m</mi></msub><mo>−</mo><msub><mi>P</mi><mi>e</mi></msub></mrow><annotation encoding="application/x-tex">M\ddot\delta = P_m - P_e</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9313em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">M</span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9313em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span></span><span style="top:-3.2634em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">¨</span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">m</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">e</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+</tr>
+<tr>
+<td align="left">同期化力</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi></mrow><annotation encoding="application/x-tex">S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0576em;">S</span></span></span></span></td>
+<td align="center"><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mi>s</mi></msub></mrow><annotation encoding="application/x-tex">K_s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>（本資料）</strong></td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mi>s</mi></msub><mo>=</mo><mstyle scriptlevel="0" displaystyle="true"><mfrac><mrow><mi>V</mi><msup><mi>E</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup></mrow><mi>X</mi></mfrac></mstyle><mi>cos</mi><mo>⁡</mo><mi>δ</mi></mrow><annotation encoding="application/x-tex">K_s = \dfrac{VE&#x27;}{X}\cos\delta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.1149em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.4289em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">X</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">E</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span></span></span></span></td>
+</tr>
+<tr>
+<td align="left">加速電力</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mi>a</mi></msub></mrow><annotation encoding="application/x-tex">P_a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">a</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="center">—</td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mi>a</mi></msub><mo>=</mo><msub><mi>P</mi><mi>m</mi></msub><mo>−</mo><msub><mi>P</mi><mi>e</mi></msub></mrow><annotation encoding="application/x-tex">P_a = P_m - P_e</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">a</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">m</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">e</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+</tr>
+<tr>
+<td align="left">系統定数</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> [MW/Hz]</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi></mrow><annotation encoding="application/x-tex">\beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0528em;">β</span></span></span></span></td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><msub><mi>K</mi><mi>G</mi></msub><mo>+</mo><msub><mi>K</mi><mi>L</mi></msub></mrow><annotation encoding="application/x-tex">K = K_G + K_L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">G</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">L</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+</tr>
+<tr>
+<td align="left">発電力特性</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mi>G</mi></msub></mrow><annotation encoding="application/x-tex">K_G</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">G</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="center">—</td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">%</mi><msub><mi>K</mi><mi>G</mi></msub><mo>=</mo><mstyle scriptlevel="0" displaystyle="true"><mfrac><mrow><mn>100</mn><mo>×</mo><mn>100</mn></mrow><mrow><mi>ε</mi><msub><mi>F</mi><mi>N</mi></msub></mrow></mfrac></mstyle></mrow><annotation encoding="application/x-tex">\%K_G = \dfrac{100\times100}{\varepsilon F_N}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9em;vertical-align:-0.15em;"></span><span class="mord">%</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">G</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.1574em;vertical-align:-0.836em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">ε</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">100</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">100</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></td>
+</tr>
+<tr>
+<td align="left">負荷の周波数特性</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>K</mi><mi>L</mi></msub></mrow><annotation encoding="application/x-tex">K_L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">L</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>D</mi></mrow><annotation encoding="application/x-tex">D</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">D</span></span></span></span></td>
+<td align="left">—</td>
+</tr>
+<tr>
+<td align="left">速度調定率</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ε</mi></mrow><annotation encoding="application/x-tex">\varepsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ε</span></span></span></span> [%]</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi></mrow><annotation encoding="application/x-tex">R</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span></td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ε</mi><mo>=</mo><mstyle scriptlevel="0" displaystyle="true"><mfrac><mrow><msub><mi>F</mi><mn>0</mn></msub><mo>−</mo><msub><mi>F</mi><mi>N</mi></msub></mrow><msub><mi>F</mi><mi>N</mi></msub></mfrac></mstyle><mo>×</mo><mn>100</mn></mrow><annotation encoding="application/x-tex">\varepsilon = \dfrac{F_0-F_N}{F_N}\times100</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ε</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.1963em;vertical-align:-0.836em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">N</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">100</span></span></span></span></td>
+</tr>
+<tr>
+<td align="left">過渡リアクタンス</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>X</mi><mi>d</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup></mrow><annotation encoding="application/x-tex">X_d&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.035em;vertical-align:-0.2831em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-2.4169em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2831em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="center">同じ</td>
+<td align="left">—</td>
+</tr>
+<tr>
+<td align="left">過渡背後電圧</td>
+<td align="center"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>E</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup></mrow><annotation encoding="application/x-tex">E&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">E</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span></span></span></span></td>
+<td align="center">同じ</td>
+<td align="left">—</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>慣性定数の注意</strong>: 教科書 (5.4) 式の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi><mo>=</mo><mi>ω</mi><mi>J</mi></mrow><annotation encoding="application/x-tex">M = \omega J</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">M</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span></span></span></span> と、国際的に使われる <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi></mrow><annotation encoding="application/x-tex">H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span></span> [s] は別物である。
+単位法・<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ω</mi><mo>≈</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\omega \approx 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4831em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> の下で <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi><mo>≃</mo><mn>2</mn><mi>H</mi><mi mathvariant="normal">/</mi><msub><mi>ω</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">M \simeq 2H/\omega_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">M</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≃</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">ω</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> の関係にある。
+本資料では<strong>動揺方程式を <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi></mrow><annotation encoding="application/x-tex">H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span></span> で書き、教科書の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi></mrow><annotation encoding="application/x-tex">M</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">M</span></span></span></span> 表記を併記</strong>する。
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi></mrow><annotation encoding="application/x-tex">H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span></span> を使う理由は、再エネ導入による慣性低下（第7〜8回、第13回）を
+「秒」という直感的な量で議論できるためである。</p>
+</blockquote>
+<hr>
+<h2 id="s5">教科書から本資料へ取り込んだ重要項目</h2>
+<p>初版で欠けていた、教科書の中核項目。改訂で追加した。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">項目</th>
+<th align="left">教科書</th>
+<th align="left">追加先</th>
+<th align="left">なぜ重要か</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>直流法潮流計算</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo>=</mo><mi>δ</mi><mi mathvariant="normal">/</mi><mi>X</mi></mrow><annotation encoding="application/x-tex">P = \delta/X</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0379em;">δ</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span></span></span></span></td>
+<td align="left">4.3 節</td>
+<td align="left">第4回 4.2.7</td>
+<td align="left">概略潮流を手計算で出せる。OPF・市場計算（第14回）の基礎</td>
+</tr>
+<tr>
+<td align="left"><strong>浮遊ノード</strong></td>
+<td align="left">4.2 節</td>
+<td align="left">第4回 4.2.5</td>
+<td align="left">中継ノードの扱い。実系統モデリングで必須</td>
+</tr>
+<tr>
+<td align="left"><strong>直交座標形式の電力方程式</strong></td>
+<td align="left">(4.6)–(4.8) 式</td>
+<td align="left">第4回 4.2.3</td>
+<td align="left">教科書の例題がこの形式。極座標形式と併記</td>
+</tr>
+<tr>
+<td align="left"><strong>発電機モデル3種</strong>（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>X</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">X_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> / <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>X</mi><mi>d</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup></mrow><annotation encoding="application/x-tex">X_d&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.035em;vertical-align:-0.2831em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-2.4169em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2831em;"><span></span></span></span></span></span></span></span></span></span> / <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>X</mi><mi>d</mi><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msubsup></mrow><annotation encoding="application/x-tex">X_d&#x27;&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.035em;vertical-align:-0.2831em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-2.4169em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2831em;"><span></span></span></span></span></span></span></span></span></span>）</td>
+<td align="left">図5.3</td>
+<td align="left">第7回 7.2.2</td>
+<td align="left">解析事象に応じたモデル選択</td>
+</tr>
+<tr>
+<td align="left"><strong>縮約・一機無限大母線系統の考え方</strong></td>
+<td align="left">5.3 節</td>
+<td align="left">第7回 7.2.3</td>
+<td align="left">なぜ1機に単純化してよいのか</td>
+</tr>
+<tr>
+<td align="left"><strong>超速応励磁</strong></td>
+<td align="left">5.4 節 (4)</td>
+<td align="left">第7回 7.2.5</td>
+<td align="left">安定度向上対策の4本柱のひとつ</td>
+</tr>
+<tr>
+<td align="left"><strong>電圧変動の感度 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi></mrow><annotation encoding="application/x-tex">\rho</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">ρ</span></span></span></span></strong></td>
+<td align="left">6.2 節</td>
+<td align="left">第6回 6.2.4</td>
+<td align="left">「なぜ電圧制御は無効電力なのか」の定量的根拠</td>
+</tr>
+<tr>
+<td align="left"><strong>無効電力供給源の5分類・調相設備</strong></td>
+<td align="left">6.3 節</td>
+<td align="left">第6回 6.2.5</td>
+<td align="left">電圧対策の選択肢</td>
+</tr>
+<tr>
+<td align="left"><strong>VQC・LTC タップ制御</strong></td>
+<td align="left">6.4 節</td>
+<td align="left">第6回 6.2.6</td>
+<td align="left">実系統の電圧制御はこれで行われる</td>
+</tr>
+<tr>
+<td align="left"><strong>速度調定率・発電力特性・系統定数</strong></td>
+<td align="left">7.2 節</td>
+<td align="left">第8回</td>
+<td align="left">周波数制御の定量的中核</td>
+</tr>
+<tr>
+<td align="left"><strong>連系系統の周波数-潮流特性</strong></td>
+<td align="left">7.3 節</td>
+<td align="left">第8回</td>
+<td align="left">沖縄（独立系統）との対比に必須</td>
+</tr>
+<tr>
+<td align="left"><strong>FFC / TBC / AR・ACE</strong></td>
+<td align="left">7.5 節</td>
+<td align="left">第8回</td>
+<td align="left">日本の実運用方式</td>
+</tr>
+<tr>
+<td align="left"><strong>負荷変動の制御分担図</strong></td>
+<td align="left">図7.5</td>
+<td align="left">第8回</td>
+<td align="left">自己制御性→調速制御→LFC→ELD の階層</td>
+</tr>
+</tbody></table></div>
+<h2 id="s6">本資料が教科書を補う点</h2>
+<p>教科書は 2010 年代前半の記述で、再エネ大量導入以降の論点が薄い。
+以下は本講義の独自の付加価値として明示する。</p>
+<ul>
+<li><strong>慣性低下問題</strong>（インバータ電源の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">H=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span>）— 第7回・第8回・第13回</li>
+<li><strong>沖縄本島系統＝独立系統</strong>としての特殊性 — 全回を貫く題材</li>
+<li><strong>逆潮流による電圧上昇</strong>と連系可能量 — 第6回・第9回</li>
+<li><strong>Python / pandapower による実装</strong>（教科書は手計算中心）— 第6回・第15回</li>
+<li>インバーター・系統連系技術 — 第9回</li>
+<li>気象・需要予測、AI 応用 — 第10〜14回</li>
+</ul>
+
+    
+  </main>
+  <aside class="side"><nav class="toc" aria-label="目次"><div class="toc-h">この回の目次</div><a class="lv2" href="#s1">参考教科書（正本）</a><a class="lv2" href="#s2">章対応表</a><a class="lv2" href="#s3">用語の統一（教科書表記を正とする）</a><a class="lv2" href="#s4">記号の対応（教科書 ↔ 国際標準）</a><a class="lv2" href="#s5">教科書から本資料へ取り込んだ重要項目</a><a class="lv2" href="#s6">本資料が教科書を補う点</a></nav></aside>
+</div>
+<footer class="bottom">教科書：加藤・田岡『電力システム工学の基礎』 ／ 電力エネルギーシステム解析の基礎と応用 ／ 数式描画：KaTeX（同梱・MIT）</footer>
+<script>
+// 目次の現在位置ハイライト（外部依存なし・file:// で動く）
+(function(){
+  var links=[].slice.call(document.querySelectorAll('.toc a')); if(!links.length) return;
+  var heads=links.map(function(a){return document.getElementById(a.getAttribute('href').slice(1));});
+  function upd(){ var y=window.scrollY+120, i=0; for(var k=0;k<heads.length;k++){ if(heads[k]&&heads[k].offsetTop<=y) i=k; }
+    links.forEach(function(a,k){ a.classList.toggle('on',k===i); }); }
+  window.addEventListener('scroll',upd,{passive:true}); upd();
+})();
+</script>
+</body>
+</html>

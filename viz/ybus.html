@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第4回 Y行列と直流法潮流 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第4回 Y行列と直流法潮流 — 系統を「1 枚の表」にすると解ける</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch04.html">📖 講義ノート（第4回）</a><a class="e" href="../ex/ch04.html">✍ 演習で確かめる</a></div>
+  <div class="lead">ループのある系統では電流の分かれ方が手計算では決まりません。<b>ノードアドミタンス行列 Y<sub>bus</sub></b> は系統のつながり方を 1 枚の表にしたもので、これを組めば電力方程式が立ち、<b>直流法潮流ならその場で一発で解けます</b>。教科書（加藤・田岡 第4章）の 図4.1 と 例題4.4 をそのままブラウザ内で解きます。前提は<a href="acpower.html">第3回</a>、次は<a href="newton.html">第5回 ニュートン・ラフソン法</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>Y 行列が組めないと潮流計算の入口に立てません。逆に組めれば、規模が 3 母線でも 1 万母線でも手順は同じです。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>対角は「つながる全部の和」、非対角は「線路の通しやすさに負号」。これだけで系統の表ができる。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>EMS の状態推定・想定事故解析、JEPX（電力市場）の混雑計算（直流法）、pandapower/MATPOWER の内部。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>線路を開放 <select id="cutSel"><option value="-1" selected>なし</option><option value="0">1–2 を切る</option><option value="1">1–3 を切る</option><option value="2">2–3 を切る</option></select></label>
+      <label>ノード1 供給 <input type="range" id="p1Range" min="0.2" max="1.6" step="0.05" value="1.0"> <span id="p1Val">1.00</span></label>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>Y 行列は「系統図の書き直し」に過ぎません — <b>図が描けるなら行列も組める</b>し、行の和が 0 にならなければ図のどこかを写し間違えています。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>発電機がつながっているノードは全部 PV 指定ノードにする。</div>
+    <div class="row"><span class="o">✓</span>PV かどうかは「<b>電圧を制御しているか</b>」で決まります。力率 1 固定の太陽光インバータは Q=0 が既知なので <b>PQ 指定ノード</b>です。発電機の有無ではなく、何を指定しているかで種別が決まります。</div>
+    <div class="row"><span class="x">✗</span>直流法潮流計算は直流送電の計算方法である。</div>
+    <div class="row"><span class="o">✓</span>交流系統の<b>近似計算法</b>です。P = δ/X が直流回路の I = V/R と同じ形なので「直流回路に見立てる」という意味で、実際に直流を流すわけではありません。</div>
+  </div>
+  <details><summary>もっと詳しく：極座標／直交座標の電力方程式・浮遊ノード・疎行列</summary><div class="det">
+    電力方程式は極座標形式 <i>P<sub>i</sub></i> = <i>V<sub>i</sub></i> Σ<sub>j</sub> <i>V<sub>j</sub></i>(<i>G<sub>ij</sub></i>cos θ<sub>ij</sub> + <i>B<sub>ij</sub></i>sin θ<sub>ij</sub>) のほか、教科書 (4.6)〜(4.8) 式のように <i>V</i> = <i>e</i> + j<i>f</i> と置く直交座標形式でも書けます。どちらも同じ方程式で、ニュートン法の実装で使い分けます。
+    送電線の中間点など電力の出入りがないノードは<b>浮遊ノード</b>と呼び、<i>P</i> = <i>Q</i> = 0 の PQ 指定ノードとして扱います（未知数には数えます）。
+    実系統の Y 行列は密度 0.1% 程度の疎行列で、密行列として扱うと 1 万母線で 1.6 GB のメモリを食います。疎行列の LU 分解を使うかどうかで計算時間が 100 倍以上変わります。
+    <b>限界：</b>直流法は電圧の大きさ・無効電力・損失を求められません。配電系統のように <i>R</i> ≈ <i>X</i> の系統では誤差が大きく、交流法（第5回）が必要です。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+/* ---- 系統（教科書 図4.1）：線路 x と各ノードの対地サセプタンス ---- */
+const LINES = [{ a: 0, b: 1, x: 0.8 }, { a: 0, b: 2, x: 0.5 }, { a: 1, b: 2, x: 1.0 }];
+const SHUNT = [0.11, 0.09, 0.10];        // j0.05+j0.06, j0.05+j0.04, j0.04+j0.06
+let CUT = -1, P1 = 1.0; const P_LOAD = 1.8;
+const active = () => LINES.filter((_, k) => k !== CUT);
+function buildB() {                       // 虚部だけ（G=0）：Y = jB
+  const B = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  active().forEach(l => { const y = -1 / l.x; B[l.a][l.b] -= y; B[l.b][l.a] -= y; B[l.a][l.a] += y; B[l.b][l.b] += y; });
+  for (let i = 0; i < 3; i++) B[i][i] += SHUNT[i];
+  return B; }
+const rowSums = B => B.map(r => r.reduce((s, v) => s + v, 0));
+/* 電力方程式（G=0）：P_i = V_i Σ V_j B_ij sin(θ_i−θ_j) */
+const V_EX = [1.0, 0.98, 0.96], TH_EX = [0, -3, -5].map(d => d * Math.PI / 180);
+function powerInj(B) { return V_EX.map((vi, i) => vi * V_EX.reduce((s, vj, j) => s + vj * B[i][j] * Math.sin(TH_EX[i] - TH_EX[j]), 0)); }
+/* 直流法：δ1=0、未知 δ2, δ3 */
+function dcSolve() { const P2 = P_LOAD - P1, P3 = -P_LOAD; const Bp = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  active().forEach(l => { const y = 1 / l.x; Bp[l.a][l.a] += y; Bp[l.b][l.b] += y; Bp[l.a][l.b] -= y; Bp[l.b][l.a] -= y; });
+  const a = Bp[1][1], b = Bp[1][2], c = Bp[2][1], d = Bp[2][2], det = a * d - b * c;
+  const d2 = (P2 * d - b * P3) / det, d3 = (a * P3 - c * P2) / det; const del = [0, d2, d3];
+  const flows = active().map(l => ({ ...l, p: (del[l.a] - del[l.b]) / l.x }));
+  return { del, flows, P2, P3 }; }
+const f2 = x => x.toFixed(2), f3 = x => x.toFixed(3), f4 = x => x.toFixed(4);
+const sj = v => (v >= 0 ? '+j' : '−j') + Math.abs(v).toFixed(2);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ Y 行列', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ 電力方程式', c: 'var(--loss)', start: 7 }, { t: 'Ⅳ 直流法', c: 'var(--accent)', start: 10 } ];
+const SLIDES = [
+  { legend: '三角形のループ系統。電源 ○ から負荷 ▽ へ、2 つの経路がある',
+    html() { return '<h3>問題：ループがあると、電流の分かれ方が手計算で決まらない</h3><div class="eq curr">経路 A：1→3　／　経路 B：1→2→3　　どちらにどれだけ流れる？<span class="read">読み：放射状なら道は 1 本で自明。ループでは 2 本の道の「通りやすさの比」で分かれるので、連立方程式が要ります。</span></div><div class="desc">第2回で見たとおり、ループ系統は信頼度が高い代わりに<b>潮流計算が必要</b>になります。この回は、その計算の土台である Y 行列を教科書 図4.1 の 3 ノード系統で実際に組み、最後に直流法で本当に解きます。右下の「線路を開放」で系統を変えると、行列も解も追従します。</div>'; },
+    draw() { drawNet(null, true); caption('どちらの道にどれだけ？ → 連立方程式'); } },
+  { legend: '教科書 図4.1：線路は j0.8 / j0.5 / j1.0、各ノードに対地容量 j0.05〜j0.06',
+    html() { return '<h3>題材：教科書 図4.1 の 3 ノード系統</h3><div class="eq curr">線路 1–2：j0.8　1–3：j0.5　2–3：j1.0　（インピーダンス）　対地：ノード1 j0.11、2 j0.09、3 j0.10<span class="read">読み：値はすべて単位法（p.u.）。線路はインピーダンス、対地容量はアドミタンスで与えられている点に注意。</span></div><div class="desc">無損失（<i>R</i> = 0）なので Y 行列の要素はすべて虚数になります。対地容量は π 型等価回路の両端に半分ずつ付くので、ノードごとに合計しておきます（ノード 1 は線路 1–2 の j0.05 と線路 1–3 の j0.06 で j0.11）。ここから 2 つのルールで表を組みます。</div>'; },
+    draw() { drawNet(null, false); caption('この図を「1 枚の表」に写し取る'); } },
+
+  { legend: '自己アドミタンス Y₁₁：ノード 1 につながる線路と対地の「全部の和」',
+    mini: () => { const B = buildB(); return '<div>Y₁₁ = <b>' + sj(B[0][0]) + '</b></div>'; },
+    html() { const B = buildB(); return '<h3>ルール 1：対角要素 = そのノードにつながる全部の和</h3><div class="eq curr"><i>Y</i><sub>11</sub> = j0.11 + <span class="frac"><span>1</span><span>j0.8</span></span> + <span class="frac"><span>1</span><span>j0.5</span></span> = j0.11 − j1.25 − j2.00 = <b class="res">' + sj(B[0][0]) + '</b><span class="read">読み：1/(jx) = −j/x なので線路の分は負の虚数。対地容量は正の虚数。全部足すと −j3.14（教科書 例題4.1 と一致）。</span></div><div class="desc">教科書は対角要素を<b>自己アドミタンス（駆動点アドミタンス）</b>と呼びます。ノード 1 に「つながっているものを全部足す」だけです。同じ手順で <i>Y</i><sub>22</sub> = ' + sj(B[1][1]) + '、<i>Y</i><sub>33</sub> = ' + sj(B[2][2]) + '。</div>'; },
+    draw() { drawNet(0, false); caption('ノード 1 に触れている枝を全部足す'); } },
+  { legend: '相互アドミタンス Y₁₂：線路 1–2 のアドミタンスに負号を付けたもの',
+    mini: () => { const B = buildB(); return '<div>Y₁₂ = <b>' + sj(B[0][1]) + '</b></div><div>Y₁₃ = <b>' + sj(B[0][2]) + '</b></div>'; },
+    html() { const B = buildB(); return '<h3>ルール 2：非対角要素 = 線路アドミタンスの符号反転</h3><div class="eq curr"><i>Y</i><sub>12</sub> = <i>Y</i><sub>21</sub> = −<span class="frac"><span>1</span><span>j0.8</span></span> = <b class="res">' + sj(B[0][1]) + '</b>,　<i>Y</i><sub>13</sub> = <b class="res">' + sj(B[0][2]) + '</b>,　<i>Y</i><sub>23</sub> = <b class="res">' + sj(B[1][2]) + '</b><span class="read">読み：2 つのノードを直接つなぐ線路のアドミタンスに負号。つながっていなければ 0。対称なので Y_ij = Y_ji。</span></div><div class="desc">教科書はこれを<b>相互アドミタンス（伝達アドミタンス）</b>と呼びます。負号が付く理由は、キルヒホッフの電流則で「隣のノードの電圧が高いほど電流が流れ込む」向きを表すためです。<b>この 2 つのルールだけで、どんな系統の Y 行列も機械的に組めます</b>。</div>'; },
+    draw() { drawNet(-2, false); caption('線路 1 本 = 非対角の 1 要素（対称に 2 か所）'); } },
+  { legend: '完成した Y 行列（虚部）。教科書 例題4.1 の答えと一致',
+    html() { const B = buildB(); return '<h3>完成：3×3 のノードアドミタンス行列</h3><div class="eq curr"><b>Y</b> = j × [ ' + B.map(r => '[' + r.map(v => f2(v)).join(', ') + ']').join(', ') + ' ]<span class="read">読み：対角が負（線路の分が勝つ）、非対角が正。教科書 例題4.1 の −j3.14 / j1.25 / j2.0 … と一致します。</span></div><div class="desc">図の色は値の大きさです。<b>対角が濃く、非対角が薄い</b>のは、対角が「つながる全部の和」だからです。これで <b>I</b> = <b>Y V</b> という 1 本の行列式で系統全体の電流と電圧の関係が書けました。次のスライドで、組み間違いを一発で見つける検算をします。</div>'; },
+    draw() { drawMatrix(buildB(), false); caption('I = Y·V — 系統が 1 本の式になった'); } },
+  { legend: '各行の和。対地容量の分だけ虚部が残り、線路の寄与は打ち消し合う',
+    mini: () => rowSums(buildB()).map((s, i) => '<div>行' + (i + 1) + ' <b>' + sj(s) + '</b></div>').join(''),
+    html() { const s = rowSums(buildB()); return '<h3>検算：各行の和は「対地容量」だけになる</h3><div class="eq curr">行1 の和 = ' + sj(s[0]) + '　行2 = ' + sj(s[1]) + '　行3 = ' + sj(s[2]) + '　（= 各ノードの対地アドミタンス）<span class="read">読み：線路の寄与は対角に +y、非対角に −y で入るので行ごとに打ち消し合い、対地の分だけが残ります。対地がなければ和はぴったり 0。</span></div><div class="desc">手計算で最も多い誤りは符号の付け忘れと足し忘れです。<b>行の和がノードの対地アドミタンスと一致しなければ、どこかを写し間違えています</b>。右下で線路を切って行列を変えても、この検算は必ず成り立ちます。試験でも必ずこの検算を書いてください。</div>'; },
+    draw() { drawMatrix(buildB(), true); caption('行の和 = 対地分。合わなければ写し間違い'); } },
+  { legend: 'A/B：線路 1–3 を切る。Y₁₃ が 0 になり、Y₁₁ と Y₃₃ が変わる',
+    enter() { if (CUT === -1) { CUT = 1; document.getElementById('cutSel').value = '1'; } },
+    mini: () => { const B = buildB(); return '<div>Y₁₃ = <b>' + sj(B[0][2]) + '</b></div><div>Y₁₁ = <b>' + sj(B[0][0]) + '</b></div>'; },
+    html() { const B = buildB(); return '<h3>A/B：線路を 1 本切ると、行列は「2 か所と対角」だけ変わる</h3><div class="eq curr">線路 1–3 開放 → <i>Y</i><sub>13</sub> = <i>Y</i><sub>31</sub> = <b class="res">' + sj(B[0][2]) + '</b>,　<i>Y</i><sub>11</sub> = <b class="res">' + sj(B[0][0]) + '</b>,　<i>Y</i><sub>33</sub> = <b class="res">' + sj(B[2][2]) + '</b><span class="read">読み：切った線路の非対角 2 か所が 0 になり、両端の対角からその線路の分が消える。他の要素は不変。</span></div><div class="desc">右下のセレクタで切る線路を変えてください。<b>系統構成の変化は行列の局所的な修正で済む</b>のが Y 行列の利点で、第15回の N-1 事故解析（線路を 1 本ずつ切って全ケース計算）はこの性質を使います。教科書 例題4.2 のノード追加も同じ考え方です。</div>'; },
+    draw() { drawMatrix(buildB(), true); caption('切った線路 → 非対角 2 か所が 0、対角が変化'); } },
+
+  { legend: '規模と疎性：IEEE 14 → 118 → 1000 → 10000 母線。非零の割合が急減',
+    html() { const cases = [[14, 20], [118, 186], [1000, 1500], [10000, 15000]]; return '<h3>大きな系統では、行列のほとんどが 0（疎行列）</h3><div class="eq curr">非零要素 ≈ <i>n</i> + 2 × ブランチ数　⇒　10000 母線で密度 <b class="res">' + ((10000 + 2 * 15000) / 1e8 * 100).toFixed(2) + '%</b><span class="read">読み：1 つの母線につながる線路は 3〜5 本程度なので、n が増えても 1 行の非零は増えません。</span></div><div class="desc">IEEE 14 母線で密度 ' + ((14 + 40) / 196 * 100).toFixed(0) + '%、1 万母線では 0.04%。<b>99.96% が 0</b> です。密行列として扱うと 1 億要素のメモリと n³ の計算になりますが、疎行列なら非零だけを持てばよく、計算量は n<sup>1.4</sup> 程度。<b>この差が「実系統が解けるかどうか」を分けます</b>。</div>'; },
+    draw() { drawSparsity(); caption('大きいほど疎 → 疎行列ソルバーが必須'); } },
+  { legend: '電力方程式：与えた V, θ から各ノードの注入電力 P を計算（G=0 の場合）',
+    mini: () => { const P = powerInj(buildB()); return P.map((p, i) => '<div>P' + (i + 1) + ' <b>' + f3(p) + '</b></div>').join(''); },
+    html() { const P = powerInj(buildB()); return '<h3>電力方程式：電圧が分かれば注入電力は計算できる</h3><div class="eq curr"><i>P<sub>i</sub></i> = <i>V<sub>i</sub></i> Σ<sub>j</sub> <i>V<sub>j</sub></i> (<i>G<sub>ij</sub></i> cos θ<sub>ij</sub> + <i>B<sub>ij</sub></i> sin θ<sub>ij</sub>)　→　P₂ = <b class="res">' + f3(P[1]) + '</b>（V=[1, .98, .96], θ=[0, −3°, −5°]）<span class="read">読み：S = V I* に I = Y V を代入し極座標で展開したもの。V の積と三角関数を含むので非線形です。</span></div><div class="desc">これが第3回の 2 母線の式を <i>n</i> 母線に一般化したものです。電圧を「与えれば」P は出ますが、実際に知りたいのは<b>逆</b>（P を指定して V を求める）で、それは非線形連立方程式になります。3 つの P の和 ' + f3(P[0] + P[1] + P[2]) + ' が損失（無損失なので ≈ 0）です。</div>'; },
+    draw() { drawNet(null, false, powerInj(buildB())); caption('順問題は簡単、逆問題（潮流計算）が本題'); } },
+  { legend: 'ノード種別：スラック（V,θ 既知）・PV（P,V 既知）・PQ（P,Q 既知）',
+    html() { return '<h3>ノード種別：4 つの量のうち 2 つを与え、2 つを解く</h3><div class="eq curr">未知数 = <i>N</i><sub>PV</sub> + 2<i>N</i><sub>PQ</sub>　　スラックは必ず 1 つ（損失の吸収 ＋ 位相の基準）<span class="read">読み：各ノードに P, Q, V, θ の 4 量。方程式は 2 本しかないので、2 つは既知として与える必要があります。</span></div><div class="desc">教科書は<b>スラックノード・PV 指定ノード・PQ 指定ノード</b>と呼びます。スラックが必要な理由は 2 つ：損失は解くまで分からないので 1 か所は P を「あとで決める」枠にすること、位相差しか式に現れないので 1 か所を θ = 0 に固定すること。<b>PV かどうかは電圧を制御しているかで決まり</b>、力率 1 固定の太陽光は PQ です。</div>'; },
+    draw() { drawNodeTypes(); caption('4 量のうち 2 つを与える → 未知数が数えられる'); } },
+
+  { legend: '3 つの近似で電力方程式が線形になる。P = δ/X は直流回路の I = V/R と同じ形',
+    html() { return '<h3>直流法潮流計算：3 つの近似で「一発で解ける」</h3><div class="eq curr">① <i>R</i> ≈ 0　② <i>V<sub>i</sub></i> ≈ 1.0　③ sin θ<sub>ij</sub> ≈ θ<sub>ij</sub>　⇒　<i>P<sub>ij</sub></i> = <span class="frac"><span>δ<sub>i</sub> − δ<sub>j</sub></span><span><i>x<sub>ij</sub></i></span></span><span class="read">読み：抵抗を無視し、電圧を全部 1 とし、小さい角度の正弦を角度そのもので置き換える。残るのは相差角の差をリアクタンスで割った線形式。</span></div><div class="desc">教科書 4.3 節の手法です。直流回路の「電圧 ↔ 相差角、電流 ↔ 有効電力、抵抗 ↔ リアクタンス」という<b>見立て</b>から「直流法」と呼びます。線形なので反復不要、必ず解けます。代わりに<b>電圧・無効電力・損失は求まりません</b>。次のスライドで教科書 例題4.4 を解きます。</div>'; },
+    draw() { drawAnalogy(); caption('V↔δ, I↔P, R↔X の見立て'); } },
+  { legend: '教科書 例題4.4：ノード1 から 1.0、ノード2 から 0.8 を供給、ノード3 が 1.8 消費。矢印=潮流',
+    enter() { CUT = -1; document.getElementById('cutSel').value = '-1'; },
+    mini: () => { const r = dcSolve(); return '<div>δ₂ <b>' + f3(r.del[1]) + '</b></div><div>δ₃ <b>' + f3(r.del[2]) + '</b></div>'; },
+    html() { const r = dcSolve(); const fl = k => r.flows.find(f => f.a === LINES[k].a && f.b === LINES[k].b); return '<h3>実解：教科書 例題4.4 をこの場で解く</h3><div class="eq curr">ノード1：' + f2(P1) + ' = <span class="frac"><span>0 − δ₂</span><span>0.8</span></span> + <span class="frac"><span>0 − δ₃</span><span>0.5</span></span>,　ノード2：' + f2(r.P2) + ' = <span class="frac"><span>δ₂</span><span>0.8</span></span> + <span class="frac"><span>δ₂ − δ₃</span><span>1.0</span></span>　⇒　δ₂ = <b class="res">' + f3(r.del[1]) + '</b>, δ₃ = <b class="res">' + f3(r.del[2]) + '</b><span class="read">読み：各ノードで「流出の合計 = 供給」を立て、δ₁=0 として 2 元連立を解く。</span></div><div class="desc">各線路の潮流は <i>P</i><sub>12</sub> = <b>' + f3(fl(0).p) + '</b>、<i>P</i><sub>13</sub> = <b>' + f3(fl(1).p) + '</b>、<i>P</i><sub>23</sub> = <b>' + f3(fl(2).p) + '</b>（教科書の −0.130 / 1.13 / 0.669 と一致）。<i>P</i><sub>12</sub> が負なのは<b>ノード 2 → 1 へ流れている</b>ことを意味します。検算：ノード 1 の流出 ' + f3(fl(0).p + fl(1).p) + ' = 供給 ' + f2(P1) + '。右下のスライダで供給を変えると解が追従します。</div>'; },
+    draw() { drawNet(null, false, null, dcSolve()); caption('P12<0：ノード2→1 へ逆流している'); } },
+  { legend: 'A/B：線路 1–3 を切ると、同じ供給でも潮流が 1→2→3 に迂回する',
+    enter() { CUT = 1; document.getElementById('cutSel').value = '1'; },
+    mini: () => { const r = dcSolve(); return r.flows.map(f => '<div>P' + (f.a + 1) + (f.b + 1) + ' <b>' + f3(f.p) + '</b></div>').join(''); },
+    html() { const r = dcSolve(); return '<h3>A/B：線路 1–3 を切ると潮流はどう迂回するか</h3><div class="eq curr">' + r.flows.map(f => '<i>P</i><sub>' + (f.a + 1) + (f.b + 1) + '</sub> = <b class="res">' + f3(f.p) + '</b>').join('　') + '　δ₃ = <b class="res">' + f3(r.del[2]) + '</b><span class="read">読み：残った 2 本で 1.8 を運ぶ。ノード 3 の相差角が大きく開き、線路 2–3 に全負荷が乗る。</span></div><div class="desc">「線路を開放」を切り替えて比べてください。1–3 を切ると <i>P</i><sub>12</sub> は<b>正に転じ</b>（1→2 へ流れる）、<i>P</i><sub>23</sub> は 1.8 まで増えます。δ₃ も ' + f3(dcSolve().del[2]) + ' rad と大きく開きます。<b>これが N-1 事故解析の 1 ケース</b>で、実務では数千ケースをこの直流法で高速に回します（第15回）。</div>'; },
+    draw() { drawNet(null, false, null, dcSolve()); caption('1 本切ると残りに負荷が集中し、δ が開く'); } },
+  { legend: 'この回の 2 つの成果：Y 行列（左）と直流法の解（右）',
+    enter() { CUT = -1; document.getElementById('cutSel').value = '-1'; },
+    html() { return '<h3>まとめ：表を組めば方程式が立ち、近似すれば一発で解ける</h3><div class="eq curr">Y：対角=つながる全部の和、非対角=−y　／　検算：行の和=対地分　／　直流法：<i>P<sub>ij</sub></i> = (δ<sub>i</sub>−δ<sub>j</sub>)/<i>x<sub>ij</sub></i><span class="read">読み：この 3 行が第4回の全部です。</span></div><div class="desc">直流法は速くて必ず解けますが、電圧と Q が分かりません。電圧が知りたい（電圧逸脱・無効電力・損失）なら、非線形のまま解く必要があります。次回は<b>ニュートン・ラフソン法</b>で、誤差の桁が毎回倍々で減っていく様子を実際に反復して見ます。</div>'; },
+    draw() { drawSummary(); caption('Y 行列 → 電力方程式 → 直流法（一発）／交流法（第5回）'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function arrow(x0, y0, x1, y1, color, w = 2) { line([[x0, y0], [x1, y1]], color, w); const a = Math.atan2(y1 - y0, x1 - x0); line([[x1, y1], [x1 - 9 * Math.cos(a - .4), y1 - 9 * Math.sin(a - .4)]], color, w); line([[x1, y1], [x1 - 9 * Math.cos(a + .4), y1 - 9 * Math.sin(a + .4)]], color, w); }
+const NP = [[70, 110], [290, 110], [180, 290]];
+function drawNet(hlNode, showQuestion, inj, dc) {
+  const c = getCSS('--text');
+  LINES.forEach((l, k) => { const cut = k === CUT, [x0, y0] = NP[l.a], [x1, y1] = NP[l.b];
+    const hl = (hlNode === 0 && (l.a === 0 || l.b === 0)) || (hlNode === -2 && k === 0);
+    let w = 2; if (dc && !cut) { const f = dc.flows.find(f => f.a === l.a && f.b === l.b); w = 1.5 + Math.abs(f.p) * 4; }
+    line([[x0, y0], [x1, y1]], cut ? getCSS('--neg') : (hl ? getCSS('--upd') : c), cut ? 1 : w, cut ? [5, 5] : null);
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2; txt('j' + l.x, mx + (l.a === 0 && l.b === 1 ? 0 : (l.b === 2 && l.a === 0 ? -22 : 22)), my - (l.a === 0 && l.b === 1 ? 8 : -4), { align: 'center', size: 10, mono: true, color: cut ? getCSS('--neg') : getCSS('--muted') });
+    if (cut) txt('✕ 開放', mx, my + 16, { align: 'center', size: 9.5, color: getCSS('--neg'), bold: true });
+    if (dc && !cut) { const f = dc.flows.find(f => f.a === l.a && f.b === l.b); const dir = f.p >= 0 ? 1 : -1; const ax = mx - dir * (x1 - x0) * .08, ay = my - dir * (y1 - y0) * .08, bx = mx + dir * (x1 - x0) * .08, by = my + dir * (y1 - y0) * .08; arrow(ax, ay, bx, by, getCSS('--accent'), 2.5); txt('P' + (l.a + 1) + (l.b + 1) + '=' + f3(f.p), mx + (l.a === 0 && l.b === 1 ? 0 : (l.b === 2 && l.a === 0 ? -30 : 30)), my + (l.a === 0 && l.b === 1 ? 24 : 20), { align: 'center', size: 9.5, mono: true, color: getCSS('--accent'), bold: true }); } });
+  NP.forEach(([x, y], i) => { const hl = hlNode === i; dot(x, y, 14, hl ? getCSS('--upd') : getCSS('--panel'), c); txt(i + 1, x, y + 4, { align: 'center', size: 11, bold: true, color: hl ? '#fff' : c });
+    txt(i < 2 ? '○ 電源' : '▽ 負荷', x + (i === 0 ? -40 : (i === 1 ? 40 : 0)), y + (i === 2 ? 30 : 4), { align: 'center', size: 9.5, color: getCSS('--muted') });
+    txt('j' + SHUNT[i].toFixed(2), x + (i === 0 ? -40 : (i === 1 ? 40 : 40)), y + (i === 2 ? 4 : 20), { align: 'center', size: 9, mono: true, color: getCSS('--muted') });
+    if (inj) txt('P=' + f3(inj[i]), x, y - 22, { align: 'center', size: 10, mono: true, color: getCSS('--upd'), bold: true });
+    if (dc) { txt(i === 0 ? '供給 ' + f2(P1) : (i === 1 ? '供給 ' + f2(dc.P2) : '需要 1.80'), x, y - 22, { align: 'center', size: 10, mono: true, color: getCSS('--warm'), bold: true }); txt('δ=' + f3(dc.del[i]), x + (i === 2 ? 55 : 0), y + (i === 2 ? 4 : 36), { align: 'center', size: 9.5, mono: true, color: getCSS('--upd') }); } });
+  if (showQuestion) { txt('？', 125, 225, { align: 'center', size: 22, bold: true, color: getCSS('--neg') }); txt('？', 235, 225, { align: 'center', size: 22, bold: true, color: getCSS('--neg') }); }
+}
+function drawMatrix(B, showSum) {
+  const x0 = 60, y0 = 70, cw = 70, chh = 60; const vmax = 3.2;
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { const v = B[i][j], x = x0 + j * cw, y = y0 + i * chh; rect(x, y, cw - 4, chh - 4, getCSS(v < 0 ? '--upd' : '--accent'), Math.min(.9, .12 + Math.abs(v) / vmax * .8)); txt(sj(v), x + cw / 2 - 2, y + chh / 2 + 4, { align: 'center', size: 11, mono: true, bold: Math.abs(v) > 2 }); }
+  for (let i = 0; i < 3; i++) { txt('行' + (i + 1), x0 - 8, y0 + i * chh + chh / 2 + 4, { align: 'right', size: 10 }); txt('列' + (i + 1), x0 + i * cw + cw / 2 - 2, y0 - 8, { align: 'center', size: 10 }); }
+  if (showSum) { const s = rowSums(B); for (let i = 0; i < 3; i++) { const y = y0 + i * chh + chh / 2 + 4; txt('Σ = ' + sj(s[i]), x0 + 3 * cw + 8, y, { size: 10.5, mono: true, bold: true, color: getCSS('--accent') }); } txt('行の和 = 対地容量 (j0.11 / j0.09 / j0.10)', CW / 2, 285, { align: 'center', size: 10.5, color: getCSS('--accent') }); }
+  txt('紫=負（対角）／ 緑=正（非対角）／ 濃さ=大きさ', CW / 2, 320, { align: 'center', size: 10, color: getCSS('--muted') });
+  if (CUT >= 0) txt('線路 ' + (LINES[CUT].a + 1) + '–' + (LINES[CUT].b + 1) + ' 開放中', CW / 2, 345, { align: 'center', size: 11, bold: true, color: getCSS('--neg') });
+}
+function drawSparsity() {
+  const cases = [[14, 20], [118, 186], [1000, 1500], [10000, 15000]]; const L = 70, T = 50, R = 335, B = 300; line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1);
+  const yOf = pct => B - (Math.log10(pct) + 2) / 4 * (B - T);
+  cases.forEach(([n, nl], i) => { const pct = (n + 2 * nl) / (n * n) * 100, x = L + 20 + i * 65; rect(x, yOf(pct), 40, B - yOf(pct), getCSS('--upd'), .8); txt(n.toLocaleString(), x + 20, B + 14, { align: 'center', size: 9, mono: true }); txt(pct.toFixed(pct < 1 ? 2 : 0) + '%', x + 20, yOf(pct) - 6, { align: 'center', size: 10, mono: true, bold: true }); });
+  [.01, .1, 1, 10, 100].forEach(p => { txt(p + '%', L - 4, yOf(p) + 4, { align: 'right', size: 9, mono: true }); line([[L, yOf(p)], [R, yOf(p)]], getCSS('--grid'), 1, [3, 3]); });
+  txt('母線数', R, B + 14, { align: 'right', size: 10, color: getCSS('--muted') }); txt('非零要素の密度（対数）', L, T - 8, { size: 10, color: getCSS('--muted') });
+  txt('密行列 O(n³) → 疎行列 O(n^1.4)：1 万母線で 250 万倍', CW / 2, 345, { align: 'center', size: 10.5 });
+}
+function drawNodeTypes() {
+  const rows = [['スラック', 'V, θ', 'P, Q', '系統最大の発電機', '--neg'], ['PV 指定', 'P, V', 'Q, θ', '発電機（AVR あり）', '--upd'], ['PQ 指定', 'P, Q', 'V, θ', '負荷・力率固定の太陽光', '--accent']];
+  txt('種別', 30, 60, { size: 10, color: getCSS('--muted') }); txt('既知', 130, 60, { size: 10, color: getCSS('--muted') }); txt('未知', 200, 60, { size: 10, color: getCSS('--muted') }); txt('該当', 265, 60, { size: 10, color: getCSS('--muted') });
+  rows.forEach(([n, k, u, w, c], i) => { const y = 95 + i * 62; rect(20, y - 22, 325, 50, getCSS(c), .12); txt(n, 30, y + 4, { size: 11, bold: true, color: getCSS(c) }); txt(k, 130, y + 4, { size: 11, mono: true, bold: true }); txt(u, 200, y + 4, { size: 11, mono: true, color: getCSS('--muted') }); txt(w, 265, y + 4, { size: 9 }); });
+  txt('未知数 = N_PV + 2·N_PQ　（例：IEEE14 → 4 + 2×9 = 22）', CW / 2, 300, { align: 'center', size: 11, mono: true }); txt('スラックの役割 ①損失の吸収 ②位相の基準', CW / 2, 330, { align: 'center', size: 10.5, color: getCSS('--neg'), bold: true });
+}
+function drawAnalogy() {
+  const c = getCSS('--text'); rect(20, 50, 150, 240, getCSS('--warm'), .1); rect(190, 50, 150, 240, getCSS('--accent'), .1);
+  txt('直流回路', 95, 75, { align: 'center', size: 12, bold: true, color: getCSS('--warm') }); txt('直流法潮流', 265, 75, { align: 'center', size: 12, bold: true, color: getCSS('--accent') });
+  [['電圧 V', '相差角 δ'], ['電流 I', '有効電力 P'], ['抵抗 R', 'リアクタンス X'], ['I = V/R', 'P = δ/X']].forEach(([a, b], i) => { const y = 115 + i * 45; txt(a, 95, y, { align: 'center', size: 11.5, mono: true, bold: i === 3 }); txt('⇔', 180, y, { align: 'center', size: 12, color: getCSS('--muted') }); txt(b, 265, y, { align: 'center', size: 11.5, mono: true, bold: i === 3 }); });
+  txt('見立て（実際に直流を流すわけではない）', CW / 2, 320, { align: 'center', size: 10.5, color: getCSS('--muted') }); txt('線形 → 反復なし・必ず解ける', CW / 2, 345, { align: 'center', size: 11, bold: true });
+}
+function drawSummary() { drawMatrix(buildB(), false); const r = dcSolve(); txt('直流法の解（P1=' + f2(P1) + '）：δ₂=' + f3(r.del[1]) + ', δ₃=' + f3(r.del[2]), CW / 2, 350, { align: 'center', size: 10.5, mono: true, color: getCSS('--accent'), bold: true }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur ? 'active' : (i < cur ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; CUT = -1; P1 = 1.0; document.getElementById('cutSel').value = '-1'; document.getElementById('p1Range').value = 1.0; document.getElementById('p1Val').textContent = '1.00'; goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('cutSel').onchange = e => { CUT = +e.target.value; renderAll(); draw_(); };
+document.getElementById('p1Range').oninput = e => { P1 = +e.target.value; document.getElementById('p1Val').textContent = P1.toFixed(2); renderAll(); draw_(); };
+goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

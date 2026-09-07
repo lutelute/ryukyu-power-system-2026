@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>電力エネルギーシステム解析 — 講義ポータル</title>
+<meta name="description" content="電力エネルギーシステム解析の基礎と応用 — 全15回：講義ノート・動くインフォグラフ・演習。">
+<style>
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#6e6a60;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);line-height:1.7;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:960px;margin:0 auto;padding:34px 22px 64px;}
+  header{border-bottom:1px solid var(--text);padding-bottom:16px;margin-bottom:22px;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:26px;margin:0;letter-spacing:.03em;}
+  .sub{color:var(--muted);font-size:13px;margin-top:8px;}
+  .intro{font-size:13.5px;color:var(--muted);margin-bottom:18px;max-width:760px;}
+  .intro b{color:var(--text);}
+  .howto{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:26px;}
+  @media (max-width:700px){.howto{grid-template-columns:1fr}}
+  .how{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--muted)}
+  .how b{display:block;font-size:13.5px;color:var(--text);margin-bottom:2px}
+  .how.n b{color:var(--text)} .how.v b{color:var(--accent)} .how.e b{color:var(--warm)} .how.s b{color:var(--upd)}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:12px;}
+  .step-h{display:flex;align-items:baseline;gap:12px;margin-bottom:8px;}
+  .step-n{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--accent);border:1px solid currentColor;border-radius:3px;padding:1px 8px;white-space:nowrap;}
+  .step-t{font-family:var(--mincho);font-size:16px;font-weight:600;}
+  .row{display:grid;grid-template-columns:64px minmax(0,1fr) auto;align-items:center;gap:10px;padding:7px 0;border-top:1px dashed var(--line);font-size:13.5px}
+  .row:first-of-type{border-top:0}
+  .rn{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.06em}
+  .rt{font-weight:600}
+  .links{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .links a{font-size:12px;text-decoration:none;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:4px 10px;transition:.15s;white-space:nowrap}
+  .links a:hover{color:var(--text);border-color:var(--text);}
+  .links a.v{color:var(--accent);border-color:#bfe3dc}.links a.v:hover{border-color:var(--accent)}
+  .links a.e{color:var(--warm);border-color:#e6d3ae}.links a.e:hover{border-color:var(--warm)}
+  .links a.s{color:var(--upd);border-color:#d6cdef}.links a.s:hover{border-color:var(--upd)}
+  .links a .bd{font-family:var(--mono);font-size:10px;margin-left:4px;color:var(--accent);font-weight:700}
+  @media (max-width:640px){.row{grid-template-columns:1fr}.links{justify-content:flex-start}}
+  .arrow{text-align:center;color:var(--faint);font-size:11px;margin:2px 0 10px;letter-spacing:.3em;}
+  .extra{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .extra a{font-size:12.5px;text-decoration:none;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 11px}
+  .extra a:hover{color:var(--text);border-color:var(--text)}
+  footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--faint);}
+  code{font-family:var(--mono);font-size:11.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>電力エネルギーシステム解析の基礎と応用</h1>
+    <div class="sub">全15回 — 講義ノート・動くインフォグラフ・演習・スライド</div>
+  </header>
+
+  <div class="intro">
+    各回は <b>読む → 見る → 解く</b> の 3 点セットに、講義用の <b>スライド</b> が付きます。上から順に進めば前提が揃うように並んでいます。このフォルダを開くだけで動き、サーバーもインストールも要りません。
+  </div>
+  <div class="howto">
+    <div class="how n"><b>📖 ノート</b>教科書（加藤・田岡）準拠の講義本文。理論・例題・Python コード・事例とたとえ話。</div>
+    <div class="how v"><b>🖥 動く図</b>各回の核心を 1 つ、ブラウザ内で実際に計算しながら「次へ ▶」で追う。</div>
+    <div class="how e"><b>✍ 演習</b>学籍番号ごとに数値が変わる問題。採点・途中式・答え。結果はこの端末に保存。</div>
+    <div class="how s"><b>📊 スライド</b>講義で使う PowerPoint（17 枚）。一言・事例・たとえ話・数値例・誤解・持ち帰る 3 点。</div>
+  </div>
+
+  <div id="steps"></div>
+
+  <div class="step">
+    <div class="step-h"><span class="step-n">SPECIAL</span><span class="step-t">特別編</span></div>
+    <div class="row">
+      <span class="rn">EX</span>
+      <span class="rt">方程式の難易度 — 電力系統で辿る解法の地図</span>
+      <span class="links"><a class="v" href="方程式の難易度.html">🖥 スライドを開く</a></span>
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.6">
+      線形代数方程式から混合整数計画まで、解法の難易度を一本の階段として辿る 1 コマ分のスライドです。
+      ガウス消去・反復法・ニュートン法を <b>1 手ずつ</b>追え、数式の記号と図の色が対応しています。
+      <span class="m">←</span> <span class="m">→</span> でスライド送り、<span class="m">Space</span> で次のステップ。
+    </div>
+  </div>
+
+  <div class="extra">
+    <a href="notes/symbols.html">記号表</a>
+    <a href="notes/textbook.html">教科書対応表</a>
+    <a href="方程式の難易度.html">方程式の難易度（特別編）</a>
+  </div>
+
+  <footer>
+    教科書：加藤・田岡『電力システム工学の基礎』／動く図：process_nn 流儀（viz-note-kit）／数式：KaTeX（同梱）
+  </footer>
+</div>
+
+<script src="viz/site.js"></script>
+<script>
+"use strict";
+// site.js の cats をそのまま STEP カードに展開する。
+// → ナビ・学習順路フッター・この地図の 3 つが常に同じ順序になる（ズレようがない）。
+(function () {
+  const cats = (window.SITE && window.SITE.cats) || [];
+  function solved(n) {
+    try { const st = JSON.parse(localStorage.getItem('ex.ch' + String(n).padStart(2, '0')) || '{}'); return Object.keys(st.solved || {}).length; } catch (e) { return 0; }
+  }
+  let n = 0;
+  document.getElementById('steps').innerHTML = cats.map(function (c, i) {
+    const rows = c.items.map(function (p) {
+      n++;
+      const k = solved(n);
+      return '<div class="row"><span class="rn">第' + n + '回</span>'
+        + '<span class="rt">' + p.label.replace(/^第\d+回\s*/, '') + '</span>'
+        + '<span class="links"><a href="notes/' + p.note + '">📖 ノート</a>'
+        + '<a class="v" href="viz/' + p.href + '">🖥 動く図</a>'
+        + '<a class="e" href="ex/' + p.ex + '">✍ 演習' + (k ? '<span class="bd">✓' + k + '</span>' : '') + '</a>'
+        + '<a class="s" href="スライド/' + p.note.replace('.html', '.pptx') + '" download>📊 スライド</a></span></div>';
+    }).join('');
+    return '<div class="step">'
+      + '<div class="step-h"><span class="step-n">DAY ' + (i + 1) + '</span>'
+      + '<span class="step-t">' + c.name.replace(/^Day\s*\d+\s*/, '') + '</span></div>'
+      + rows + '</div>'
+      + (i < cats.length - 1 ? '<div class="arrow">▼</div>' : '');
+  }).join('');
+})();
+</script>
+</body>
+</html>

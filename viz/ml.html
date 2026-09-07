@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第12回 機械学習で予測する — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第12回 機械学習で予測する — 木は残差を積み、リークは検証を嘘にする</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch12.html">📖 講義ノート（第12回）</a><a class="e" href="../ex/ch12.html">✍ 演習で確かめる</a></div>
+  <div class="lead">第11回の重回帰は解釈できて実用的ですが、非線形な相互作用を手で設計する必要があります。この回は<b>勾配ブースティング（切り株の木を残差に積む）をブラウザ内で本当に学習</b>させ、線形モデルと比べます。そして最大の落とし穴——<b>データリークがあると検証は完璧なのに運用で全滅する</b>——を、同じデータで実測します。前提は<a href="demand.html">第11回</a>、次は<a href="ai.html">第13回 AI×系統解析</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「検証で RMSE 5 MW」を信じて運用に出したら 60 MW 外れる、という事故はほぼ全部リークです。仕組みを知らないと気づけません。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>木を積めば非線形は勝手に見つかる。でも未来の情報が 1 つ混ざれば、その精度は嘘になる。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>電力会社の需要・再エネ予測（LightGBM/XGBoost が主力）、JEPX 価格予測、蓄電池の充放電計画。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>木の本数 M <input type="range" id="mRange" min="5" max="150" step="5" value="80"> <span id="mVal">80</span></label>
+      <button id="leakBtn">リーク: なし</button>
+      <button id="diceBtn">🎲</button>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>モデルの性能を決めるのはアルゴリズムではなく<b>「予測する時点で何を知っていたか」</b>です — 知らないはずの情報を 1 列入れた瞬間、どんな検証も意味を失います。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>検証データでの精度が良ければ、運用でも同じ精度が出る。</div>
+    <div class="row"><span class="o">✓</span>検証にも同じリークが入っていれば、検証は<b>運用では手に入らない情報</b>で当てています。図の A/B で、リークありは検証 RMSE が数分の 1 になる一方、運用（予報値に置き換え）では逆転する様子を実測してください。</div>
+    <div class="row"><span class="x">✗</span>木モデルは万能で、学習範囲の外でも線形より賢く予測する。</div>
+    <div class="row"><span class="o">✓</span>木は<b>学習範囲の外を外挿できません</b>（一番端の葉の値で頭打ち）。観測史上最高気温の日に太陽光需要を過小予測するのはこの性質です。線形モデルは（良くも悪くも）伸ばします。</div>
+  </div>
+  <details><summary>もっと詳しく：ブースティングの更新式・分位点損失・LSTM</summary><div class="det">
+    勾配ブースティングは <i>F<sub>k</sub></i>(<i>x</i>) = <i>F<sub>k−1</sub></i>(<i>x</i>) + ν <i>h<sub>k</sub></i>(<i>x</i>)、<i>h<sub>k</sub></i> は残差に当てはめた木（このページは深さ 2、ν = 0.2）。深さ 1 の切り株では加法モデルにしかならず交互作用を表せません。XGBoost は 2 次近似・正則化・欠損処理を加えたもの。
+    分位点予測は Pinball loss <i>L</i><sub>τ</sub> = τ(<i>y</i>−<i>ŷ</i>) (<i>y</i>≥<i>ŷ</i>), (1−τ)(<i>ŷ</i>−<i>y</i>) (<i>y</i>&lt;<i>ŷ</i>) を最小化。このページは簡便に、検証残差の経験分位点で区間を作り PICP（被覆率）と PINAW（幅）を計算しています。
+    LSTM はセル状態 <i>c<sub>t</sub></i> = <i>f<sub>t</sub></i>⊙<i>c<sub>t−1</sub></i> + <i>i<sub>t</sub></i>⊙<i>c̃<sub>t</sub></i> の加算更新で勾配消失を防ぎます（このページの図は構造説明の固定図で、学習はしていません）。
+    <b>限界：</b>合成データ（700 点・気温×昼×平日の交互作用あり）と深さ 2 の木なので、実データでの LightGBM の挙動（深い木・カテゴリ処理・早期停止）とは細部が異なります。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const gauss = () => { const u = Math.max(rng(), 1e-9), v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+/* ---- データ ---- */
+let M = 80, LEAK = false, ROUND = 0; const NPTS = 700; let DATA = null;
+function gen() { seed = 314 + ROUND * 7919; const rows = []; for (let i = 0; i < NPTS; i++) { const t = 15 + 20 * rng(), h = 24 * rng(), wk = rng() < 2 / 7 ? 1 : 0; const day = (h > 9 && h < 18) ? 1.0 : 0.35, wkf = wk ? 0.5 : 1.0; const y = 650 + 14 * Math.pow(Math.max(t - 24, 0), 1.3) * day * wkf + 120 * Math.sin(2 * Math.PI * (h - 9) / 24) - 60 * wk + 20 * gauss(); rows.push({ t, h, wk, y, leakTrain: y + 3 * gauss(), leakDeploy: y + 60 * gauss() }); } DATA = rows; }
+gen();
+const FN = ['気温', 'sin h', 'cos h', '週末', 'CDD'];
+function feats(r, leak, deploy) { const f = [r.t, Math.sin(2 * Math.PI * r.h / 24), Math.cos(2 * Math.PI * r.h / 24), r.wk, Math.max(r.t - 24, 0)]; if (leak) f.push(deploy ? r.leakDeploy : r.leakTrain); return f; }
+const SPLIT = [0, 420, 560, 700];
+/* ---- OLS ---- */
+function solve(A, b) { const n = b.length, Mx = A.map((r, i) => [...r, b[i]]); for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(Mx[r][c]) > Math.abs(Mx[p][c])) p = r; [Mx[c], Mx[p]] = [Mx[p], Mx[c]]; if (Math.abs(Mx[c][c]) < 1e-12) continue; for (let r = 0; r < n; r++) { if (r === c) continue; const f = Mx[r][c] / Mx[c][c]; for (let k = c; k <= n; k++) Mx[r][k] -= f * Mx[c][k]; } } return Mx.map((r, i) => r[n] / (r[i] || 1)); }
+function ols(X, y) { const p = X[0].length + 1; const A = Array.from({ length: p }, () => Array(p).fill(0)), b = Array(p).fill(0); X.forEach((x, i) => { const xx = [1, ...x]; for (let a = 0; a < p; a++) { b[a] += xx[a] * y[i]; for (let c = 0; c < p; c++) A[a][c] += xx[a] * xx[c]; } }); const beta = solve(A, b); return x => beta.reduce((s, w, k) => s + w * (k === 0 ? 1 : x[k - 1]), 0); }
+/* ---- 勾配ブースティング（深さ 2 の小さな木） ---- */
+function bestSplit(idx, r, X, thr) { let best = null; const p = X[0].length; for (let j = 0; j < p; j++) for (const t of thr[j]) { let sL = 0, nL = 0, sR = 0, nR = 0; for (const i of idx) { if (X[i][j] <= t) { sL += r[i]; nL++; } else { sR += r[i]; nR++; } } if (!nL || !nR) continue; const gain = sL * sL / nL + sR * sR / nR; if (!best || gain > best.gain) best = { gain, j, t, vL: sL / nL, vR: sR / nR, L: null, R: null }; } return best; }
+function boost(X, y, m, lr = 0.2) { const n = X.length, p = X[0].length; const base = y.reduce((s, v) => s + v, 0) / n; let F = Array(n).fill(base); const trees = [], curve = []; const thr = []; for (let j = 0; j < p; j++) { const vals = X.map(x => x[j]).sort((a, b) => a - b); const ts = []; for (let q = 1; q < 15; q++) { const v = vals[Math.floor(q / 15 * n)]; if (!ts.length || v !== ts[ts.length - 1]) ts.push(v); } thr.push(ts); }
+  const all = X.map((_, i) => i);
+  for (let k = 0; k < m; k++) { const r = y.map((v, i) => v - F[i]); const root = bestSplit(all, r, X, thr); if (!root) break; const idxL = all.filter(i => X[i][root.j] <= root.t), idxR = all.filter(i => X[i][root.j] > root.t); root.L = bestSplit(idxL, r, X, thr); root.R = bestSplit(idxR, r, X, thr); trees.push(root); for (let i = 0; i < n; i++) F[i] += lr * treeVal(root, X[i]); let sse = 0; for (let i = 0; i < n; i++) sse += (y[i] - F[i]) ** 2; curve.push(Math.sqrt(sse / n)); }
+  return { predict: x => base + lr * trees.reduce((s, t) => s + treeVal(t, x), 0), stumps: trees, curve, base }; }
+function treeVal(t, x) { const side = x[t.j] <= t.t; const child = side ? t.L : t.R; if (child) return x[child.j] <= child.t ? child.vL : child.vR; return side ? t.vL : t.vR; }
+const rmse = (yt, yp) => Math.sqrt(yt.reduce((s, v, i) => s + (v - yp[i]) ** 2, 0) / yt.length);
+let CACHE = {};
+function models(leak) { const key = M + '_' + leak + '_' + ROUND; if (CACHE[key]) return CACHE[key]; const tr = DATA.slice(SPLIT[0], SPLIT[1]), va = DATA.slice(SPLIT[1], SPLIT[2]), te = DATA.slice(SPLIT[2], SPLIT[3]); const Xtr = tr.map(r => feats(r, leak, false)), ytr = tr.map(r => r.y); const lin = ols(Xtr, ytr), gb = boost(Xtr, ytr, M); const ev = (rows, deploy) => { const yt = rows.map(r => r.y); return { lin: rmse(yt, rows.map(r => lin(feats(r, leak, deploy)))), gb: rmse(yt, rows.map(r => gb.predict(feats(r, leak, deploy)))) }; }; const out = { lin, gb, val: ev(va, false), test: ev(te, false), deploy: ev(te, true), va, te, Xtr, ytr }; CACHE[key] = out; return out; }
+function permImportance() { const m = models(false); const te = m.te; const yt = te.map(r => r.y); const base = rmse(yt, te.map(r => m.gb.predict(feats(r, false, false)))); const out = []; for (let j = 0; j < 5; j++) { seed = 777 + j; const idx = te.map((_, i) => i); for (let i = idx.length - 1; i > 0; i--) { const k = Math.floor(rng() * (i + 1)); [idx[i], idx[k]] = [idx[k], idx[i]]; } const X = te.map(r => feats(r, false, false)); const Xp = X.map((x, i) => { const c = [...x]; c[j] = X[idx[i]][j]; return c; }); out.push(rmse(yt, Xp.map(x => m.gb.predict(x))) - base); } return out; }
+function quantiles() { const m = models(false); const res = m.va.map(r => r.y - m.gb.predict(feats(r, false, false))).sort((a, b) => a - b); const q = p => res[Math.floor(p * (res.length - 1))]; const lo = q(.05), hi = q(.95); let inside = 0; m.te.forEach(r => { const p = m.gb.predict(feats(r, false, false)); if (r.y >= p + lo && r.y <= p + hi) inside++; }); const ymean = m.te.reduce((s, r) => s + r.y, 0) / m.te.length; return { lo, hi, picp: inside / m.te.length * 100, pinaw: (hi - lo) / ymean * 100 }; }
+const f1 = x => x.toFixed(1), f2 = x => x.toFixed(2), f0 = x => x.toFixed(0);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 木を積む', c: 'var(--upd)', start: 1 }, { t: 'Ⅲ リーク・外挿', c: 'var(--loss)', start: 5 }, { t: 'Ⅳ 区間・まとめ', c: 'var(--accent)', start: 9 } ];
+const SLIDES = [
+  { legend: '第11回の限界：交互作用（気温×時刻）を手で設計する必要がある',
+    html() { return '<h3>問題：統計モデルは「交互作用」を自分で見つけない</h3><div class="eq curr">冷房需要は「暑い」×「昼」×「平日」で跳ねる　→　線形回帰には <i>x</i><sub>1</sub><i>x</i><sub>2</sub><i>x</i><sub>3</sub> を手で足す必要<span class="read">読み：重回帰は足し算のモデル。掛け算の効果は説明変数として自分で作らないと表せない。</span></div><div class="desc">木モデルは「気温 &gt; 26 なら → 時刻 &gt; 8 なら → …」と<b>分岐で自動的に交互作用を見つけます</b>。この回のデータは合成の 700 点（気温・時刻・週末 → 需要）で、同じデータで線形と木を戦わせ、そのあと「リーク」と「外挿」という 2 つの落とし穴を実測します。</div>'; },
+    draw() { drawInteraction(); caption('足し算では表せない「掛け算」の効果'); } },
+
+  { legend: '小さな木（深さ 2）：まず 1 つのしきい値で分け、左右をもう 1 回ずつ分ける。図は根の分割',
+    html() { const m = models(false); const s = m.gb.stumps[0]; return '<h3>決定木の最小単位：深さ 2 の小さな木</h3><div class="eq curr">1 本目の木の根：「' + FN[s.j] + ' ≤ ' + f2(s.t) + '」→ 左 ' + f0(s.vL) + ' / 右 ' + f0(s.vR) + '<span class="read">読み：残差の 2 乗和が最も減る特徴量としきい値を全探索で選ぶ。左右それぞれの平均が葉の値。</span></div><div class="desc">深さ 2 なので「気温が高く、かつ昼」のような<b>交互作用を 1 本で表せます</b>（深さ 1 の切り株は足し算しかできません）。1 本では粗すぎますが、<b>前の木が取りこぼした残差に次の木を当てる</b>ことを繰り返すと、滑らかな非線形関数が組み上がります。それが勾配ブースティングで、次のスライドで本数 M を増やしていきます。</div>'; },
+    draw() { drawStump(); caption('根で分け、左右をもう一度分ける。粗いが、積める'); } },
+  { legend: '学習曲線：木を 1 本足すごとの学習 RMSE（M スライダ）。残差が減っていく',
+    mini: () => { const m = models(false); return '<div>M=<b>' + M + '</b></div><div>学習 RMSE <b>' + f1(m.gb.curve[m.gb.curve.length - 1]) + '</b></div>'; },
+    html() { const m = models(false); return '<h3>ブースティング：残差を順番に学ぶ</h3><div class="eq curr"><i>F<sub>k</sub></i>(<i>x</i>) = <i>F<sub>k−1</sub></i>(<i>x</i>) + ν <i>h<sub>k</sub></i>(<i>x</i>)　→　M = ' + M + ' 本で学習 RMSE <b class="res">' + f1(m.gb.curve[m.gb.curve.length - 1] || 0) + '</b>（1 本目 ' + f1(m.gb.curve[0]) + '）<span class="read">読み：k 本目の木 h_k は k−1 本目までの残差に当てはめる。学習率 ν=0.2 で少しずつ足す。</span></div><div class="desc">右下の M スライダを動かしてください。<b>木が増えるほど学習誤差は下がりますが、検証誤差はある本数で下げ止まります</b>（過学習）。実務では検証誤差が悪化し始めたら止める「早期停止」を使います。ランダムフォレストが「分散を減らす（並列）」のに対し、ブースティングは「バイアスを減らす（逐次）」です。</div>'; },
+    draw() { drawLearningCurve(); caption('木を足すほど残差が減る（学習）。検証は途中で止まる'); } },
+  { legend: 'A/B：線形（橙）vs ブースティング（緑）。検証 RMSE の比較',
+    mini: () => { const m = models(false); return '<div>線形 <b>' + f1(m.val.lin) + '</b></div><div>木 <b>' + f1(m.val.gb) + '</b></div>'; },
+    html() { const m = models(false); return '<h3>A/B：線形 ' + f1(m.val.lin) + ' vs ブースティング ' + f1(m.val.gb) + '（検証 RMSE）</h3><div class="eq curr">線形：<b class="res">' + f1(m.val.lin) + '</b> MW　／　ブースティング（M=' + M + '）：<b class="res">' + f1(m.val.gb) + '</b> MW　→ ' + (m.val.gb < m.val.lin ? '木が ' + ((1 - m.val.gb / m.val.lin) * 100).toFixed(0) + '% 良い' : '線形が良い') + '<span class="read">読み：同じ特徴量・同じ学習データ。ノイズの標準偏差 20 MW が理論下限なので、それにどこまで迫れるか。</span></div><div class="desc">このデータでは冷房の効き方が「昼か夜か」「平日か週末か」で変わります（交互作用）。線形モデルは足し算なので<b>昼と夜を同じ傾きで扱うしかなく</b>、系統的に外します。深さ 2 の木は「気温 &gt; 27 かつ昼」のような分岐でこれを拾います。ただし<b>「木が常に勝つ」わけではなく</b>、データが小さい・関係が本当に線形・外挿が要る、では線形が勝ちます。</div>'; },
+    draw() { drawPredScatter(); caption('非線形は木が拾う。ただし万能ではない'); } },
+  { legend: 'Permutation Importance：特徴量を 1 列シャッフルしたときの RMSE の悪化量',
+    html() { const imp = permImportance(); const top = imp.map((v, i) => [FN[i], v]).sort((a, b) => b[1] - a[1]); return '<h3>どの特徴量が効いているか：シャッフルして壊す</h3><div class="eq curr">重要度 = RMSE(列 <i>j</i> をシャッフル) − RMSE(そのまま)　→　1 位 <b class="res">' + top[0][0] + ' +' + f1(top[0][1]) + '</b>、2 位 ' + top[1][0] + ' +' + f1(top[1][1]) + '<span class="read">読み：その列の情報を壊したとき予測がどれだけ悪くなるか。悪化が大きいほど頼っていた特徴量。</span></div><div class="desc">Gain 重要度（分割時の損失減少）は相関する特徴量で不安定なので、<b>Permutation 重要度</b>を推奨します。気温と CDD は同じ情報を持つので片方を壊しても他方が補い、重要度が分散して見えることがあります。相関のある特徴量の解釈には注意が要ります。</div>'; },
+    draw() { drawImportance(); caption('壊して困る列が、効いている列'); } },
+
+  { legend: 'リークの典型例：その日の実測平均（当日が終わるまで確定しない）を特徴量に入れる',
+    html() { return '<h3>リーク：予測時点で知り得ない情報が混ざる</h3><div class="eq curr">❌ その日の実測平均気温　❌ 全期間で計算した標準化　❌ 1 時間前の実績（前日予測で）　✅ 予報値・過去の実績<span class="read">読み：リークかどうかは「いつ何を予測するか」で決まる。1 時間前の実績は 1 時間先予測なら正当、前日予測ではリーク。</span></div><div class="desc">このページでは「その日の需要の実測平均」に相当する列（真値＋小ノイズ）をリーク特徴量として用意しました。学習・検証ではそれが使えますが、<b>運用時は予報値（真値＋大ノイズ）しか手に入りません</b>。次のスライドで、その差がどう出るかを実測します。</div>'; },
+    draw() { drawLeakTable(); caption('「いつ手に入るか」だけがリークの判定基準'); } },
+  { legend: 'A/B：リークなし（緑）vs あり（赤）。検証 RMSE と運用 RMSE（リーク列を予報値に置換）',
+    enter() { LEAK = true; document.getElementById('leakBtn').textContent = 'リーク: あり'; },
+    mini: () => { const a = models(false), b = models(true); return '<div>なし 検証 <b>' + f1(a.val.gb) + '</b> 運用 <b>' + f1(a.deploy.gb) + '</b></div><div>あり 検証 <b>' + f1(b.val.gb) + '</b> 運用 <b>' + f1(b.deploy.gb) + '</b></div>'; },
+    html() { const a = models(false), b = models(true); return '<h3>A/B：リークありは検証 ' + f1(b.val.gb) + ' → 運用 ' + f1(b.deploy.gb) + ' に逆転する</h3><div class="eq curr">リークなし：検証 <b class="res">' + f1(a.val.gb) + '</b> / 運用 <b class="res">' + f1(a.deploy.gb) + '</b>　　リークあり：検証 <b class="res">' + f1(b.val.gb) + '</b> / 運用 <b class="res">' + f1(b.deploy.gb) + '</b><span class="read">読み：リークありは検証では圧勝（真値の写しを見ている）。運用でその列を予報値に置き換えると、その列に頼り切ったモデルは崩壊する。</span></div><div class="desc">「検証で ' + f1(b.val.gb) + ' MW」を信じて運用に出すと ' + f1(b.deploy.gb) + ' MW 外れます。リークなしのモデルは検証と運用がほぼ同じ（' + f1(a.val.gb) + ' → ' + f1(a.deploy.gb) + '）。<b>検証と運用の差がリークの症状</b>です。右下のボタンで切り替えて確かめてください。</div>'; },
+    draw() { drawLeakAB(); caption('検証だけ良い = 疑え'); } },
+  { legend: '外挿：学習範囲（気温 15〜35 °C）の外で、木は平ら・線形は伸びる',
+    enter() { LEAK = false; document.getElementById('leakBtn').textContent = 'リーク: なし'; },
+    html() { const m = models(false); const x38 = feats({ t: 38, h: 14, wk: 0 }, false, false), x35 = feats({ t: 35, h: 14, wk: 0 }, false, false); const tru = t => 650 + 14 * Math.pow(t - 24, 1.3) + 120 * Math.sin(2 * Math.PI * 5 / 24); return '<h3>外挿：観測史上最高の日に、木は答えを持っていない</h3><div class="eq curr">気温 38 °C（学習の最大 35 °C 超）：真値 ≈ <b class="res">' + f0(tru(38)) + '</b>　木 <b class="res">' + f0(m.gb.predict(x38)) + '</b>（35 °C と同じ ' + f0(m.gb.predict(x35)) + '）　線形 <b class="res">' + f0(m.lin(x38)) + '</b><span class="read">読み：木は一番端の葉の値で頭打ち。線形は傾きを伸ばす。どちらが真値に近いかは関係の形次第。</span></div><div class="desc">記録更新の猛暑日は<b>需要も記録更新</b>なのに、木モデルは「見たことがある最大値」しか出せません。実務では学習範囲外の入力を検知して警告する、線形とのハイブリッドにする、物理的な上限（設備容量）を置く、といった対策を取ります。</div>'; },
+    draw() { drawExtrap(); caption('端の葉で頭打ち。記録更新に弱い'); } },
+
+  { legend: 'LSTM のセル：忘却・入力・出力の 3 ゲートと、加算で流れるセル状態（固定図・学習なし）',
+    html() { return '<h3>LSTM：長期の記憶を「加算」で運ぶ</h3><div class="eq curr"><i>c<sub>t</sub></i> = <i>f<sub>t</sub></i> ⊙ <i>c<sub>t−1</sub></i> + <i>i<sub>t</sub></i> ⊙ <i>c̃<sub>t</sub></i>　（加算なので勾配が消えにくい）<span class="read">読み：セル状態は前の状態に「掛けて足す」だけで更新される。f≈1 なら過去の情報がそのまま流れ、勾配消失を防ぐ。</span></div><div class="desc">図は構造の固定図で、このページでは学習していません。表形式の需要データでは<b>データが中規模なら木モデルのほうが強い</b>ことが多く、LSTM が勝つのは大規模・多地点・生の時系列から特徴を自動抽出したいときです。解釈性は木のほうが高い。</div>'; },
+    draw() { drawLSTM(); caption('固定図：ゲート構造の説明のみ'); } },
+  { legend: '分位点予測：検証残差の 5%・95% 分位点で区間を作り、テストで被覆率を測る',
+    mini: () => { const q = quantiles(); return '<div>PICP <b>' + f1(q.picp) + '%</b></div><div>PINAW <b>' + f1(q.pinaw) + '%</b></div>'; },
+    html() { const q = quantiles(); return '<h3>点予測では足りない：区間で答える</h3><div class="eq curr">90% 区間 = [<i>ŷ</i> + ' + f0(q.lo) + ', <i>ŷ</i> + ' + f0(q.hi) + ']　→　テストで被覆率 PICP = <b class="res">' + f1(q.picp) + '%</b>、幅 PINAW = <b class="res">' + f1(q.pinaw) + '%</b><span class="read">読み：名目 90% に対して実際に何%入ったか（PICP）と、区間の平均幅（PINAW）。狭くて当たる区間が良い。</span></div><div class="desc">「±∞」なら被覆率 100% ですが役に立ちません。<b>PICP と PINAW を同時に見る</b>のが作法です。本格的には分位点損失（Pinball loss）で τ=0.05, 0.95 のモデルを直接学習します。第10回で見たとおり、この幅が予備力の設計に直結します。</div>'; },
+    draw() { drawQuantile(); caption('狭くて、当たる。両方を測る'); } },
+  { legend: '予備力：固定（3σ、毎日同じ）vs 動的（日ごとの分位点幅）',
+    html() { const q = quantiles(); return '<h3>確率予測の価値：予備力を日ごとに変えられる</h3><div class="eq curr">固定予備力 = 3σ（最悪日に合わせて毎日）　／　動的 = その日の分位点幅　→　不確実性の小さい日は薄くできる<span class="read">読み：幅の情報があれば、静かな日は待機火力を減らせる。第10回 例題 10-3 の「45 MW で年 10 億円規模」の根拠。</span></div><div class="desc">上側の分位点（95%）が「供給不足のリスク」を、下側（5%）が「余剰のリスク」を表します。<b>供給不足に備えるなら上側の分位点</b>を見ること（下側 5% からは上振れリスクは読めません）。試験に出ます。</div>'; },
+    draw() { drawReserve(); caption('幅を知れば、予備力を最適化できる'); } },
+  { legend: '社会インフラでの注意点：説明責任・外挿・分布シフト・フォールバック',
+    html() { return '<h3>電力系統は社会インフラ：AI 運用の 4 つの規律</h3><div class="eq curr">①説明できるか　②学習範囲外を検知するか　③構造変化（EV・省エネ）で再学習するか　④異常時に前週同曜日へ戻せるか<span class="read">読み：精度が 3.8% 良いブラックボックスより、説明できて 3.8% 悪いモデルのほうが運用できることがある。</span></div><div class="desc">推奨アーキテクチャは<b>統計モデル＋木モデル＋（必要なら）LSTM の加重平均に、妥当性チェックとフォールバック</b>を付けたものです。第13回では AI を予測ではなく<b>系統解析そのもの</b>（潮流・異常検知・制御）に使うときの規律を扱います。</div>'; },
+    draw() { drawInfra(); caption('説明・検知・再学習・逃げ道'); } },
+  { legend: '第12回の要点',
+    html() { const a = models(false), b = models(true); return '<h3>まとめ：木は残差を積み、リークは検証を嘘にする</h3><div class="eq curr">木 ' + f1(a.val.gb) + ' vs 線形 ' + f1(a.val.lin) + '　／　リーク：検証 ' + f1(b.val.gb) + ' → 運用 ' + f1(b.deploy.gb) + '　／　外挿：木は頭打ち<span class="read">読み：この 3 つの実測値が第12回。</span></div><div class="desc">アルゴリズムより特徴量、特徴量より「いつ手に入るか」。点予測より区間。そして社会インフラでは説明とフォールバック。次回は AI を予測から<b>系統解析の高速化</b>へ広げます — 電力系統がグラフであることと GNN の相性、異常検知、強化学習、そして物理を捨てない学習（PINN）です。</div>'; },
+    draw() { drawSummary(); caption('次回：AI × 系統解析'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawInteraction() { const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '気温 [°C]', '需要 [MW]'); const xOf = t => L + (t - 15) / 20 * (R - L), yOf = y => B - (y - 450) / 500 * (B - T); DATA.slice(0, 300).forEach(r => dot(xOf(r.t), yOf(r.y), 2.2, getCSS(r.h > 9 && r.h < 18 && !r.wk ? '--neg' : '--faint'))); txt('赤=平日の昼', L + 8, T + 14, { size: 10, color: getCSS('--neg'), bold: true }); txt('灰=それ以外', L + 8, T + 30, { size: 10, color: getCSS('--muted') }); txt('同じ気温でも昼の平日だけ跳ねる = 交互作用', CW / 2, 340, { align: 'center', size: 10.5 }); }
+function drawStump() { const m = models(false); const s = m.gb.stumps[0]; const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, FN[s.j], '残差'); const X = m.Xtr, y = m.ytr, base = m.gb.base; const xs = X.map(x => x[s.j]); const xmin = Math.min(...xs), xmax = Math.max(...xs); const xOf = v => L + (v - xmin) / (xmax - xmin + 1e-9) * (R - L), yOf = r => B - (r + 250) / 500 * (B - T); X.forEach((x, i) => dot(xOf(x[s.j]), yOf(y[i] - base), 2, getCSS('--faint'))); line([[xOf(xmin), yOf(s.vL)], [xOf(s.t), yOf(s.vL)]], getCSS('--upd'), 3); line([[xOf(s.t), yOf(s.vR)], [xOf(xmax), yOf(s.vR)]], getCSS('--upd'), 3); line([[xOf(s.t), T], [xOf(s.t), B]], getCSS('--neg'), 1.5, [4, 3]); txt(FN[s.j] + ' ≤ ' + f2(s.t), xOf(s.t) + 4, T + 12, { size: 10, color: getCSS('--neg'), bold: true }); txt(f0(s.vL), xOf(xmin) + 4, yOf(s.vL) - 6, { size: 10, mono: true, color: getCSS('--upd'), bold: true }); txt(f0(s.vR), xOf(xmax) - 4, yOf(s.vR) - 6, { align: 'right', size: 10, mono: true, color: getCSS('--upd'), bold: true }); }
+function drawLearningCurve() { const m = models(false); const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '木の本数', 'RMSE'); const c = m.gb.curve; const xOf = k => L + k / Math.max(c.length, 1) * (R - L), yOf = v => B - (v - 15) / 100 * (B - T); line(c.map((v, k) => [xOf(k + 1), yOf(v)]), getCSS('--upd'), 2.5); line([[L, yOf(20)], [R, yOf(20)]], getCSS('--neg'), 1, [4, 3]); txt('ノイズ下限 20', R - 4, yOf(20) - 5, { align: 'right', size: 9.5, color: getCSS('--neg') }); line([[L, yOf(m.val.gb)], [R, yOf(m.val.gb)]], getCSS('--accent'), 1.5, [5, 3]); txt('検証 ' + f1(m.val.gb), R - 4, yOf(m.val.gb) + 14, { align: 'right', size: 9.5, color: getCSS('--accent'), bold: true }); [0, .25, .5, .75, 1].forEach(f => txt(Math.round(f * c.length), xOf(f * c.length), B + 14, { align: 'center', size: 9, mono: true })); [20, 40, 60, 80, 100].forEach(v => txt(v, L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); txt('学習 RMSE（緑線=検証）', L + 8, T + 14, { size: 10, color: getCSS('--upd') }); }
+function drawPredScatter() { const m = models(false); const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '実績', '予測'); const ys = m.va.map(r => r.y); const mn = Math.min(...ys) - 20, mx = Math.max(...ys) + 20; const xOf = v => L + (v - mn) / (mx - mn) * (R - L), yOf = v => B - (v - mn) / (mx - mn) * (B - T); line([[xOf(mn), yOf(mn)], [xOf(mx), yOf(mx)]], getCSS('--faint'), 1, [4, 3]); m.va.forEach(r => { const x = feats(r, false, false); dot(xOf(r.y), yOf(m.lin(x)), 2.2, getCSS('--warm')); dot(xOf(r.y), yOf(m.gb.predict(x)), 2.2, getCSS('--accent')); }); txt('線形 ' + f1(m.val.lin), L + 8, T + 14, { size: 10.5, color: getCSS('--warm'), bold: true }); txt('木 ' + f1(m.val.gb), L + 8, T + 30, { size: 10.5, color: getCSS('--accent'), bold: true }); txt('対角線に近いほど良い', R - 4, B - 8, { align: 'right', size: 9.5, color: getCSS('--muted') }); }
+function drawImportance() { const imp = permImportance(); const L = 90, T = 50, R = 335, B = 300; axes(L, T, R, B, 'RMSE 悪化 [MW]', ''); const m = Math.max(...imp, 1) * 1.15; imp.forEach((v, j) => { const y = T + 15 + j * 48; rect(L, y, Math.max(0, v) / m * (R - L), 30, getCSS('--upd'), .8); txt(FN[j], L - 6, y + 20, { align: 'right', size: 10.5 }); txt('+' + f1(v), L + Math.max(0, v) / m * (R - L) + 4, y + 20, { size: 10, mono: true, bold: true }); }); }
+function drawLeakTable() { const rows = [['その日の実測平均気温', '❌ 当日が終わるまで不明', '--neg'], ['全期間の平均で標準化', '❌ 未来を含む統計量', '--neg'], ['1 時間前の実績（前日予測）', '❌ まだ存在しない', '--neg'], ['予報の平均気温（前日発表）', '✅ 前日に入手可', '--accent'], ['前週同曜日の実績', '✅ 確定済み', '--accent']]; rows.forEach(([a, b, c], i) => { const y = 75 + i * 55; rect(20, y - 22, 325, 44, getCSS(c), .12); txt(a, 30, y - 2, { size: 10.5, bold: true }); txt(b, 30, y + 16, { size: 9.5, color: getCSS(c) }); }); txt('判定基準は「いつ手に入るか」だけ', CW / 2, 350, { align: 'center', size: 10.5 }); }
+function drawLeakAB() { const a = models(false), b = models(true); const L = 70, T = 50, R = 335, B = 300; axes(L, T, R, B, '', 'RMSE [MW]'); const m = Math.max(a.val.gb, a.deploy.gb, b.val.gb, b.deploy.gb) * 1.2; const yOf = v => B - v / m * (B - T); [['なし\n検証', a.val.gb, '--accent'], ['なし\n運用', a.deploy.gb, '--accent'], ['あり\n検証', b.val.gb, '--neg'], ['あり\n運用', b.deploy.gb, '--neg']].forEach(([n, v, c], i) => { const x = L + 15 + i * 65; rect(x, yOf(v), 48, B - yOf(v), getCSS(c), i % 2 ? .95 : .55); const ls = n.split('\n'); txt(ls[0], x + 24, B + 14, { align: 'center', size: 9.5 }); txt(ls[1], x + 24, B + 27, { align: 'center', size: 9.5 }); txt(f1(v), x + 24, yOf(v) - 6, { align: 'center', size: 10, mono: true, bold: true }); }); txt('リークあり：検証で圧勝、運用で崩壊', CW / 2, 350, { align: 'center', size: 10.5, color: getCSS('--neg'), bold: true }); }
+function drawExtrap() { const m = models(false); const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '気温 [°C]', '需要（14 時・平日）'); const xOf = t => L + (t - 15) / 25 * (R - L), yOf = y => B - (y - 600) / 500 * (B - T); const tru = [], gb = [], li = []; for (let t = 15; t <= 40; t += .5) { const x = feats({ t, h: 14, wk: 0 }, false, false); tru.push([xOf(t), yOf(650 + 14 * Math.pow(Math.max(t - 24, 0), 1.3) + 120 * Math.sin(2 * Math.PI * 5 / 24))]); gb.push([xOf(t), yOf(m.gb.predict(x))]); li.push([xOf(t), yOf(m.lin(x))]); } line(tru, getCSS('--text'), 1.5, [4, 3]); line(gb, getCSS('--accent'), 2.5); line(li, getCSS('--warm'), 2); rect(xOf(35), T, xOf(40) - xOf(35), B - T, getCSS('--neg'), .1); txt('学習範囲外', xOf(37.5), T + 14, { align: 'center', size: 9.5, color: getCSS('--neg'), bold: true }); txt('真値（点線）', L + 8, T + 14, { size: 9.5 }); txt('木', L + 8, T + 30, { size: 9.5, color: getCSS('--accent'), bold: true }); txt('線形', L + 8, T + 46, { size: 9.5, color: getCSS('--warm'), bold: true }); [15, 20, 25, 30, 35, 40].forEach(t => txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true })); }
+function drawLSTM() { const c = getCSS('--text'); line([[30, 120], [330, 120]], getCSS('--upd'), 4); txt('c_{t−1}', 30, 108, { size: 10, mono: true }); txt('c_t', 320, 108, { align: 'right', size: 10, mono: true }); txt('⊙ f_t', 110, 108, { align: 'center', size: 10, mono: true, color: getCSS('--neg') }); dot(110, 120, 10, getCSS('--panel'), c); txt('×', 110, 124, { align: 'center', size: 12, bold: true }); txt('⊕', 210, 108, { align: 'center', size: 10, mono: true, color: getCSS('--accent') }); dot(210, 120, 10, getCSS('--panel'), c); txt('+', 210, 125, { align: 'center', size: 13, bold: true }); [['忘却 f', 110, '--neg'], ['入力 i', 180, '--warm'], ['候補 c̃', 240, '--upd'], ['出力 o', 300, '--accent']].forEach(([n, x, col]) => { rect(x - 28, 190, 56, 34, getCSS(col), .25); txt(n, x, 212, { align: 'center', size: 10, bold: true }); line([[x, 190], [x, x === 110 ? 130 : (x === 300 ? 250 : 140)]], c, 1.5); }); line([[180, 140], [210, 130]], c, 1.5); line([[240, 140], [210, 130]], c, 1.5); txt('h_t', 300, 275, { align: 'center', size: 10, mono: true }); line([[30, 260], [330, 260]], getCSS('--faint'), 1); txt('x_t, h_{t−1} → 各ゲート', 180, 285, { align: 'center', size: 10, color: getCSS('--muted') }); txt('セル状態は「掛けて足す」だけ → 勾配が消えにくい', CW / 2, 340, { align: 'center', size: 10.5 }); }
+function drawQuantile() { const m = models(false), q = quantiles(); const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, 'テスト点（先頭 60）', 'MW'); const rows = m.te.slice(0, 60); const preds = rows.map(r => m.gb.predict(feats(r, false, false))); const all = [...rows.map(r => r.y), ...preds.map(p => p + q.hi), ...preds.map(p => p + q.lo)]; const mn = Math.min(...all) - 10, mx = Math.max(...all) + 10; const xOf = k => L + k / 60 * (R - L), yOf = v => B - (v - mn) / (mx - mn) * (B - T); ctx.save(); ctx.globalAlpha = .25; ctx.fillStyle = getCSS('--upd'); ctx.beginPath(); preds.forEach((p, k) => k ? ctx.lineTo(xOf(k), yOf(p + q.hi)) : ctx.moveTo(xOf(k), yOf(p + q.hi))); for (let k = 59; k >= 0; k--) ctx.lineTo(xOf(k), yOf(preds[k] + q.lo)); ctx.closePath(); ctx.fill(); ctx.restore(); line(preds.map((p, k) => [xOf(k), yOf(p)]), getCSS('--upd'), 1.5); rows.forEach((r, k) => { const inside = r.y >= preds[k] + q.lo && r.y <= preds[k] + q.hi; dot(xOf(k), yOf(r.y), 3, getCSS(inside ? '--text' : '--neg')); }); txt('PICP ' + f1(q.picp) + '% / PINAW ' + f1(q.pinaw) + '%', L + 8, T + 14, { size: 10.5, mono: true, bold: true }); txt('赤=区間外', R - 4, T + 14, { align: 'right', size: 9.5, color: getCSS('--neg') }); }
+function drawReserve() { const L = 60, T = 50, R = 335, B = 280; axes(L, T, R, B, '日', '予備力 [MW]'); seed = 21; const days = 14; const xOf = d => L + (d + .5) / days * (R - L), yOf = v => B - v / 160 * (B - T); const fixed = 120; line([[L, yOf(fixed)], [R, yOf(fixed)]], getCSS('--neg'), 2, [5, 4]); txt('固定 3σ = ' + fixed, R - 4, yOf(fixed) - 5, { align: 'right', size: 9.5, color: getCSS('--neg') }); let sum = 0; for (let d = 0; d < days; d++) { const v = 40 + 70 * rng(); sum += v; rect(xOf(d) - 8, yOf(v), 16, B - yOf(v), getCSS('--accent'), .8); } txt('動的（平均 ' + f0(sum / days) + '）', L + 8, T + 14, { size: 10.5, color: getCSS('--accent'), bold: true }); txt('静かな日は薄く、荒れる日は厚く', CW / 2, 320, { align: 'center', size: 10.5 }); txt('（模式図：スプレッドに応じた例）', CW / 2, 345, { align: 'center', size: 9.5, color: getCSS('--muted') }); }
+function drawInfra() { const rows = [['説明責任', 'SHAP・重要度・係数の符号', '--upd'], ['外挿の検知', '入力が学習範囲外なら警告', '--neg'], ['分布シフト', 'EV・省エネ・コロナ → 再学習', '--warm'], ['フォールバック', '異常なら前週同曜日へ', '--accent']]; rows.forEach(([a, b, c], i) => { const y = 75 + i * 68; rect(20, y - 24, 325, 54, getCSS(c), .14); txt(a, 40, y + 4, { size: 11.5, bold: true, color: getCSS(c) }); txt(b, 150, y + 4, { size: 10 }); }); }
+function drawSummary() { const rows = [['木を積む', '残差 → 非線形を自動発見', '--upd'], ['リーク', '検証と運用の差を疑え', '--neg'], ['外挿', '木は頭打ち', '--warm'], ['区間', 'PICP と PINAW', '--accent']]; rows.forEach(([a, b, c], i) => { const y = 75 + i * 68; rect(40, y - 22, 280, 52, getCSS(c), .15); txt(a, 180, y - 2, { align: 'center', size: 12, bold: true }); txt(b, 180, y + 18, { align: 'center', size: 10, color: getCSS('--muted') }); }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur2 = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur2 ? 'active' : (i < cur2 ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur2 ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+document.getElementById('resetBtn').onclick = () => { stopAuto(); M = 80; LEAK = false; ROUND = 0; CACHE = {}; gen(); document.getElementById('mRange').value = 80; document.getElementById('mVal').textContent = '80'; document.getElementById('leakBtn').textContent = 'リーク: なし'; goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('mRange').oninput = e => { M = +e.target.value; document.getElementById('mVal').textContent = M; renderAll(); draw_(); };
+document.getElementById('leakBtn').onclick = () => { LEAK = !LEAK; document.getElementById('leakBtn').textContent = 'リーク: ' + (LEAK ? 'あり' : 'なし'); renderAll(); draw_(); };
+document.getElementById('diceBtn').onclick = () => { ROUND++; CACHE = {}; gen(); renderAll(); draw_(); };
+goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

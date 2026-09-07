@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第5回 演習 — ニュートン・ラフソン法とヤコビアン</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第5回: NR 法の 1 反復・ヤコビアン要素・ミスマッチ・2 次収束・高速デカップル法・ガウス・ザイデル法。
+// 約束: 無損失線路では Y_bus の非対角の虚部 B_ij = +1/X_ij、対角 B_ii = −Σ1/X_ij（第4回）。
+//       母線への注入を正（負荷は負）。角度は rad で計算し、答えは deg で聞く。ミスマッチ ΔP = P^sch − P^calc。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+const deg = r => r * 180 / Math.PI;
+const rad = d => d * Math.PI / 180;
+
+EX.page({
+  ch: 5,
+  intro: '潮流方程式は非線形なので反復で解きます。「ミスマッチを接線で割って修正する」という 1 行（Δx = −f/f′）を、1 変数の 2 母線系で実際に回し、ヤコビアン要素・収束判定・2 次収束・高速デカップル法・ガウス・ザイデル法の順に手を動かして確かめます。',
+  problems: [
+    {
+      id: 'nr-step', title: 'ニュートン・ラフソン法の 1 反復（2 母線・1 変数）', tags: ['5.2.2', '問 5-4 の前段'],
+      gen(rng) {
+        const V1 = 1.0;
+        const V2 = pick(rng, [0.96, 0.98, 1.0]);
+        const X = pick(rng, [0.3, 0.4, 0.5]);
+        const P = -pick(rng, [0.5, 0.6, 0.7, 0.8]);          // 負荷なので注入は負
+        const Pmax = V1 * V2 / X;
+        const th0 = 0, P0 = Pmax * Math.sin(th0);
+        const dP0 = P - P0, H0 = Pmax * Math.cos(th0);
+        const th1 = th0 + dP0 / H0;
+        const P1 = Pmax * Math.sin(th1);
+        const dP1 = P - P1, H1 = Pmax * Math.cos(th1);
+        const th2 = th1 + dP1 / H1;
+        const thStar = Math.asin(P / Pmax);
+        return {
+          given: [['母線 1（スラック）', 'V<sub>1</sub> = 1.0∠0°'], ['母線 2 の電圧の大きさ V<sub>2</sub>', V2 + ' p.u.（既知とする）'], ['線路リアクタンス X（無損失、R = 0）', X + ' p.u.'], ['母線 2 の指定注入 P<sub>2</sub><sup>sch</sup>', P + ' p.u.（負荷）'], ['初期値', 'フラットスタート θ<sub>2</sub><sup>(0)</sup> = 0']],
+          q: '無損失 2 母線系では P<sub>2</sub> = (V<sub>1</sub>V<sub>2</sub>/X) sin θ<sub>2</sub> なので、未知数は θ<sub>2</sub> だけの 1 変数問題になる。ヤコビアンは H = ∂P<sub>2</sub>/∂θ<sub>2</sub> = (V<sub>1</sub>V<sub>2</sub>/X) cos θ<sub>2</sub>。<br>(a) 1 回目の修正後の <b>θ<sub>2</sub><sup>(1)</sup></b> を度で求めよ。<br>(b) θ<sub>2</sub><sup>(1)</sup> におけるミスマッチ <b>ΔP<sub>2</sub><sup>(1)</sup> = P<sub>2</sub><sup>sch</sup> − P<sub>2</sub>(θ<sub>2</sub><sup>(1)</sup>)</b> を求めよ（θ は 5 桁以上で持つこと）。<br>(c) 2 回目の修正後の <b>θ<sub>2</sub><sup>(2)</sup></b> を度で求めよ。',
+          answers: [
+            { key: 'th1', label: '(a) θ₂⁽¹⁾', unit: 'deg', value: deg(th1), tol: 0.01 },
+            { key: 'dP1', label: '(b) ΔP₂⁽¹⁾', unit: 'p.u.', value: dP1, tol: 0.1, abs: 0.0003 },
+            { key: 'th2', label: '(c) θ₂⁽²⁾', unit: 'deg', value: deg(th2), tol: 0.01 },
+          ],
+          steps: [
+            '係数をまとめる: ' + eq('V<sub>1</sub>V<sub>2</sub>/X = 1.0 × ' + V2 + ' / ' + X + ' = ' + fmt(Pmax, 4) + ' p.u.') + '。フラットスタートでは P<sub>2</sub>(0) = 0 なので ' + eq('ΔP<sub>2</sub><sup>(0)</sup> = ' + P + ' − 0 = ' + P) + '、' + eq('H<sup>(0)</sup> = ' + fmt(Pmax, 4) + ' × cos 0 = ' + fmt(H0, 4)) + '。',
+            '(a) 修正方程式 ΔP = H Δθ より ' + eq('Δθ<sub>2</sub> = ΔP<sub>2</sub> / H = ' + P + ' / ' + fmt(H0, 4) + ' = ' + fmt(th1, 5) + ' rad') + ' → ' + eq('θ<sub>2</sub><sup>(1)</sup> = 0 + (' + fmt(th1, 5) + ') = ' + fmt(deg(th1), 3) + '°') + '。負荷側の位相が遅れる（負）のは直感どおり。',
+            '(b) 新しい点で P<sub>2</sub> を計算し直す: ' + eq('P<sub>2</sub>(θ<sub>2</sub><sup>(1)</sup>) = ' + fmt(Pmax, 4) + ' × sin(' + fmt(th1, 5) + ') = ' + fmt(P1, 5)) + ' → ' + eq('ΔP<sub>2</sub><sup>(1)</sup> = ' + P + ' − (' + fmt(P1, 5) + ') = ' + fmt(dP1, 5) + ' p.u.') + '。1 回で |ΔP| が ' + fmt(Math.abs(P), 1) + ' から ' + fmt(Math.abs(dP1)) + ' に縮んだ。',
+            '(c) ヤコビアンも更新する: ' + eq('H<sup>(1)</sup> = ' + fmt(Pmax, 4) + ' × cos(' + fmt(th1, 5) + ') = ' + fmt(H1, 4)) + ' → ' + eq('θ<sub>2</sub><sup>(2)</sup> = ' + fmt(th1, 5) + ' + (' + fmt(dP1, 5) + ') / ' + fmt(H1, 4) + ' = ' + fmt(th2, 6) + ' rad = ' + fmt(deg(th2), 4) + '°') + '。厳密解 arcsin(' + P + ' / ' + fmt(Pmax, 4) + ') = ' + fmt(deg(thStar), 4) + '° にほぼ一致している。',
+          ],
+          insight: '1 反復目の誤差 ' + fmt(Math.abs(deg(th1 - thStar)), 3) + '° が 2 反復目で ' + fmt(Math.abs(deg(th2 - thStar)), 5) + '° になった。誤差の桁が倍々で減るのが 2 次収束で、多母線でも同じことが起きる。',
+        };
+      },
+    },
+    {
+      id: 'jacobian', title: 'ヤコビアン要素の計算', tags: ['5.2.3', '例題 5-2'],
+      gen(rng) {
+        const B23 = pick(rng, [4.0, 5.0, 6.0, 8.0, 10.0]);
+        const B22 = -pick(rng, [12.0, 15.0, 18.0, 20.0]);
+        const V2 = pick(rng, [0.97, 0.98, 1.0, 1.02]);
+        const V3 = pick(rng, [0.95, 0.96, 0.98, 1.0]);
+        const t2 = -pick(rng, [2, 3, 4, 5]);
+        const dt = pick(rng, [1, 2, 3, 4]);
+        const t3 = t2 - dt;
+        const Q2 = pick(rng, [-0.3, -0.2, -0.1, 0.1, 0.2, 0.3]);
+        const th23 = rad(t2 - t3);
+        const H23 = -V2 * V3 * B23 * Math.cos(th23);
+        const N23 = V2 * V3 * B23 * Math.sin(th23);
+        const H22 = -Q2 - B22 * V2 * V2;
+        return {
+          given: [['系統', '無損失（G<sub>ij</sub> = 0）'], ['B<sub>23</sub>（Y<sub>bus</sub> の虚部、非対角）', B23 + ' p.u.'], ['B<sub>22</sub>（対角）', B22 + ' p.u.'], ['V<sub>2</sub>, V<sub>3</sub>', V2 + ', ' + V3 + ' p.u.'], ['θ<sub>2</sub>, θ<sub>3</sub>', t2 + '°, ' + t3 + '°'], ['母線 2 の無効電力注入 Q<sub>2</sub>（計算済み）', Q2 + ' p.u.']],
+          q: '(a) 非対角要素 <b>H<sub>23</sub> = ∂P<sub>2</sub>/∂θ<sub>3</sub></b> を求めよ。<br>(b) 非対角要素 <b>N<sub>23</sub> = V<sub>3</sub> ∂P<sub>2</sub>/∂V<sub>3</sub></b> を求めよ。<br>(c) 対角要素 <b>H<sub>22</sub> = ∂P<sub>2</sub>/∂θ<sub>2</sub></b> を求めよ。',
+          answers: [
+            { key: 'H23', label: '(a) H₂₃', unit: 'p.u.', value: H23 },
+            { key: 'N23', label: '(b) N₂₃', unit: 'p.u.', value: N23, abs: 0.005 },
+            { key: 'H22', label: '(c) H₂₂', unit: 'p.u.', value: H22 },
+          ],
+          steps: [
+            '位相差は ' + eq('θ<sub>23</sub> = θ<sub>2</sub> − θ<sub>3</sub> = ' + t2 + '° − (' + t3 + '°) = ' + (t2 - t3) + '°') + '。無損失なので公式の G の項が消える。',
+            '(a) ' + eq('H<sub>23</sub> = V<sub>2</sub>V<sub>3</sub>(G<sub>23</sub> sin θ<sub>23</sub> − B<sub>23</sub> cos θ<sub>23</sub>) = −' + V2 + ' × ' + V3 + ' × ' + B23 + ' × cos ' + (t2 - t3) + '° = ' + fmt(H23, 3)) + '。負なのは「母線 3 の位相を進めると P<sub>2</sub> が減る」ことを表す。',
+            '(b) ' + eq('N<sub>23</sub> = V<sub>2</sub>V<sub>3</sub>(G<sub>23</sub> cos θ<sub>23</sub> + B<sub>23</sub> sin θ<sub>23</sub>) = ' + V2 + ' × ' + V3 + ' × ' + B23 + ' × sin ' + (t2 - t3) + '° = ' + fmt(N23, 4)) + '。H<sub>23</sub> に比べて 1 桁小さい。これが高速デカップル法で N ≈ 0 とおける根拠（sin θ ≪ cos θ）。',
+            '(c) 対角要素は計算済みの Q<sub>2</sub> を再利用する: ' + eq('H<sub>22</sub> = −Q<sub>2</sub> − B<sub>22</sub>V<sub>2</sub><sup>2</sup> = −(' + Q2 + ') − (' + B22 + ') × ' + V2 + '<sup>2</sup> = ' + fmt(H22, 3)) + '。ミスマッチ計算のついでに求まるので、別途ループを回さない。',
+          ],
+          insight: '同じ 4 つの量（V, V, B, θ）から H・N・M・L がすべて出る。M₂₃ = −N₂₃、L₂₃ = H₂₃ なので、実装では非対角要素を 2 つ計算すれば 4 ブロック分が埋まる。',
+        };
+      },
+    },
+    {
+      id: 'mismatch', title: 'ミスマッチと収束判定', tags: ['5.2.2', '5.3.2'],
+      gen(rng) {
+        const Sb = pick(rng, [100, 500, 1000]);
+        const P2s = -pick(rng, [0.6, 0.8, 1.0, 1.2]);
+        const Q2s = -pick(rng, [0.2, 0.3, 0.4]);
+        const P3s = pick(rng, [0.4, 0.5, 0.6]);
+        const d1 = pick(rng, [-0.034, -0.021, -0.013, 0.008, 0.017, 0.026]);
+        const d2 = pick(rng, [-0.019, -0.011, 0.006, 0.014, 0.023]);
+        const d3 = pick(rng, [-0.028, -0.009, 0.004, 0.012, 0.031]);
+        const P2c = P2s - d1, Q2c = Q2s - d2, P3c = P3s - d3;
+        const maxm = Math.max(Math.abs(d1), Math.abs(d2), Math.abs(d3));
+        const which = maxm === Math.abs(d1) ? 'ΔP₂' : (maxm === Math.abs(d2) ? 'ΔQ₂' : 'ΔP₃');
+        const eps = 1e-4;
+        return {
+          given: [['基準容量 S<sub>base</sub>', Sb + ' MVA'], ['母線 2（PQ）: 指定値 P<sub>2</sub><sup>sch</sup>, Q<sub>2</sub><sup>sch</sup>', P2s + ', ' + Q2s + ' p.u.'], ['母線 2: 現在の推定値から計算した P<sub>2</sub><sup>calc</sup>, Q<sub>2</sub><sup>calc</sup>', fmt(P2c, 3) + ', ' + fmt(Q2c, 3) + ' p.u.'], ['母線 3（PV）: P<sub>3</sub><sup>sch</sup>, P<sub>3</sub><sup>calc</sup>', P3s + ', ' + fmt(P3c, 3) + ' p.u.'], ['収束判定閾値 ε', '10<sup>−4</sup> p.u.']],
+          q: 'ある反復の途中の状態である。<br>(a) 母線 2 の有効電力ミスマッチ <b>ΔP<sub>2</sub></b> を求めよ（符号込み）。<br>(b) 母線 2 の無効電力ミスマッチ <b>ΔQ<sub>2</sub></b> を求めよ。<br>(c) ミスマッチベクトル [ΔP<sub>2</sub>, ΔP<sub>3</sub>, ΔQ<sub>2</sub>] の<b>最大絶対値を MW（Mvar）単位</b>で求めよ。この反復で収束しているかも判断せよ。',
+          answers: [
+            { key: 'dP2', label: '(a) ΔP₂', unit: 'p.u.', value: d1, abs: 0.0005 },
+            { key: 'dQ2', label: '(b) ΔQ₂', unit: 'p.u.', value: d2, abs: 0.0005 },
+            { key: 'max', label: '(c) 最大ミスマッチ', unit: 'MW', value: maxm * Sb },
+          ],
+          steps: [
+            'ミスマッチの定義は「指定値 − 計算値」: ' + eq('ΔP<sub>2</sub> = P<sub>2</sub><sup>sch</sup> − P<sub>2</sub><sup>calc</sup> = (' + P2s + ') − (' + fmt(P2c, 3) + ') = ' + fmt(d1, 3) + ' p.u.') + '。正なら「まだ注入が足りない」、負なら「計算値が指定より多い」。',
+            eq('ΔQ<sub>2</sub> = (' + Q2s + ') − (' + fmt(Q2c, 3) + ') = ' + fmt(d2, 3) + ' p.u.') + '、' + eq('ΔP<sub>3</sub> = ' + P3s + ' − (' + fmt(P3c, 3) + ') = ' + fmt(d3, 3) + ' p.u.') + '。母線 3 は PV なので ΔQ<sub>3</sub> の行は方程式に入らない。',
+            '(c) 最大は ' + which + ' の ' + fmt(maxm, 3) + ' p.u. → ' + eq(fmt(maxm, 3) + ' × ' + Sb + ' = ' + fmt(maxm * Sb) + ' MW') + '。ε = 10<sup>−4</sup> p.u.（= ' + fmt(eps * Sb, 2) + ' MW）より大きいので<b>まだ収束していない</b>。次の反復に進む。',
+          ],
+          insight: 'ミスマッチは「今の推定値で系統に流れる電力が、指定した電力とどれだけ食い違うか」。収束判定は最大絶対値で行い、MW に直すと運用者の感覚（数 MW 以下なら十分）と結びつく。',
+        };
+      },
+    },
+    {
+      id: 'quadratic', title: '2 次収束の誤差列', tags: ['5.2.4', '例題 5-1'],
+      gen(rng) {
+        const e0 = pick(rng, [0.05, 0.1, 0.2, 0.3]);
+        const C = pick(rng, [0.5, 1, 2]);
+        const rho = pick(rng, [0.5, 0.7, 0.8, 0.9]);
+        const e1 = C * e0 * e0, e2 = C * e1 * e1, e3 = C * e2 * e2;
+        const nGS = Math.ceil(Math.log(e3 / e0) / Math.log(rho));
+        return {
+          given: [['ニュートン法の初期誤差 ‖e<sup>(0)</sup>‖', e0 + ''], ['1 反復後の誤差 ‖e<sup>(1)</sup>‖', fmt(e1, 4) + ''], ['ガウス・ザイデル法の収束比 ρ', rho + '']],
+          q: 'ニュートン法の誤差が ‖e<sup>(ν+1)</sup>‖ = C‖e<sup>(ν)</sup>‖<sup>2</sup> に従うとする。<br>(a) 定数 <b>C</b> を求めよ。<br>(b) 3 反復後の誤差 <b>‖e<sup>(3)</sup>‖</b> を求めよ。<br>(c) ガウス・ザイデル法（‖e<sup>(ν+1)</sup>‖ = ρ‖e<sup>(ν)</sup>‖）で同じ初期誤差から ‖e<sup>(3)</sup>‖ 以下に達するのに必要な<b>反復回数 n</b>（整数）を求めよ。',
+          answers: [
+            { key: 'C', label: '(a) C', unit: '', value: C },
+            { key: 'e3', label: '(b) ‖e⁽³⁾‖', unit: '', value: e3 },
+            { key: 'n', label: '(c) n（GS の反復回数）', unit: '回', value: nGS, abs: 1 },
+          ],
+          steps: [
+            '(a) 定義式を 1 反復目に当てはめる: ' + eq('C = ‖e<sup>(1)</sup>‖ / ‖e<sup>(0)</sup>‖<sup>2</sup> = ' + fmt(e1, 4) + ' / ' + e0 + '<sup>2</sup> = ' + C) + '。',
+            '(b) 2 乗を 2 回繰り返す: ' + eq('‖e<sup>(2)</sup>‖ = ' + C + ' × ' + fmt(e1, 4) + '<sup>2</sup> = ' + e2.toExponential(3)) + '、' + eq('‖e<sup>(3)</sup>‖ = ' + C + ' × (' + e2.toExponential(3) + ')<sup>2</sup> = ' + e3.toExponential(3)) + '。指数部が ' + Math.floor(Math.log10(e0)) + ' → ' + Math.floor(Math.log10(e1)) + ' → ' + Math.floor(Math.log10(e2)) + ' → ' + Math.floor(Math.log10(e3)) + ' と倍々で深くなる。',
+            '(c) 1 次収束は等比数列: ρ<sup>n</sup> e<sup>(0)</sup> ≤ e<sup>(3)</sup> より ' + eq('n ≥ ln(' + e3.toExponential(2) + ' / ' + e0 + ') / ln ' + rho + ' = ' + fmt(Math.log(e3 / e0) / Math.log(rho), 1)) + ' → 切り上げて <b>' + nGS + ' 回</b>。ニュートン法の 3 回に対して 1 桁多い。',
+          ],
+          insight: '2 次収束は「正しい桁数が毎回倍になる」。だから母線が 1,000 でも 10,000 でも 3〜5 回で終わる。1 次収束は「毎回同じ割合しか減らない」ので、精度を 1 桁上げるたびに同じ回数を追加で払う。',
+        };
+      },
+    },
+    {
+      id: 'fdlf', title: '高速デカップル法の B′ 行列と 1 反復', tags: ['5.2.6', '問 5-3'],
+      gen(rng) {
+        const X12 = pick(rng, [0.1, 0.2, 0.25]);
+        const X13 = pick(rng, [0.2, 0.4, 0.5]);
+        const X23 = pick(rng, [0.1, 0.2, 0.25, 0.4]);
+        const a = -pick(rng, [0.4, 0.3, 0.2, 0.1]);
+        const b = pick(rng, [-0.3, -0.2, -0.1, 0.1, 0.2]);
+        const B22 = 1 / X12 + 1 / X23, B33 = 1 / X13 + 1 / X23, B23 = -1 / X23;
+        const det = B22 * B33 - B23 * B23;
+        const dth2 = (a * B33 - B23 * b) / det;
+        const dth3 = (B22 * b - B23 * a) / det;
+        return {
+          given: [['母線 1', 'スラック'], ['線路リアクタンス X<sub>12</sub>, X<sub>13</sub>, X<sub>23</sub>', X12 + ', ' + X13 + ', ' + X23 + ' p.u.（抵抗・充電容量は無視）'], ['ある反復での ΔP<sub>2</sub>/V<sub>2</sub>, ΔP<sub>3</sub>/V<sub>3</sub>', a + ', ' + b + ' p.u.']],
+          q: '高速デカップル法の P–θ 反復は ΔP/V = B′Δθ で、B′ は「R と充電容量を無視した −B」（B′<sub>ij</sub> = −1/X<sub>ij</sub>、B′<sub>ii</sub> = Σ<sub>j</sub> 1/X<sub>ij</sub>）である。<br>(a) <b>B′<sub>22</sub></b> を求めよ。<br>(b) <b>B′<sub>23</sub></b> を求めよ。<br>(c) 2×2 の方程式を解き、母線 2 の位相修正量 <b>Δθ<sub>2</sub></b> を度で求めよ。',
+          answers: [
+            { key: 'B22', label: '(a) B′₂₂', unit: 'p.u.', value: B22 },
+            { key: 'B23', label: '(b) B′₂₃', unit: 'p.u.', value: B23 },
+            { key: 'dth2', label: '(c) Δθ₂', unit: 'deg', value: deg(dth2), abs: 0.05 },
+          ],
+          steps: [
+            '(a)(b) 母線 2 につながる線路は 1–2 と 2–3: ' + eq('B′<sub>22</sub> = 1/' + X12 + ' + 1/' + X23 + ' = ' + fmt(B22, 3)) + '、' + eq('B′<sub>23</sub> = −1/' + X23 + ' = ' + fmt(B23, 3)) + '。同様に ' + eq('B′<sub>33</sub> = 1/' + X13 + ' + 1/' + X23 + ' = ' + fmt(B33, 3)) + '。電圧にも位相にもよらない<b>定数</b>である。',
+            '(c) クラメルの公式で解く: ' + eq('det = B′<sub>22</sub>B′<sub>33</sub> − B′<sub>23</sub><sup>2</sup> = ' + fmt(B22, 3) + ' × ' + fmt(B33, 3) + ' − ' + fmt(B23 * B23, 3) + ' = ' + fmt(det, 3)) + '。',
+            eq('Δθ<sub>2</sub> = (a B′<sub>33</sub> − B′<sub>23</sub> b) / det = ((' + a + ') × ' + fmt(B33, 3) + ' − (' + fmt(B23, 3) + ') × (' + b + ')) / ' + fmt(det, 3) + ' = ' + fmt(dth2, 5) + ' rad = ' + fmt(deg(dth2), 3) + '°') + '。参考に ' + eq('Δθ<sub>3</sub> = ' + fmt(deg(dth3), 3) + '°') + '。',
+            'B′ が定数なので、この 2×2（実系統では数千×数千）の LU 分解は<b>最初の 1 回だけ</b>。以後の反復は右辺 ΔP/V を入れ替えて前進・後退代入するだけで済む。',
+          ],
+          insight: 'ニュートン法は毎回ヤコビアンを作り直して分解するが、高速デカップル法は「型紙」を一度作って使い回す。反復回数は増えても 1 回が軽いので、N-1 事故を数百ケース回す用途（第15回）で効く。',
+        };
+      },
+    },
+    {
+      id: 'gs-step', title: 'ガウス・ザイデル法の 1 反復', tags: ['5.2.1', '5.3.1'],
+      gen(rng) {
+        const R = pick(rng, [0.01, 0.02, 0.03, 0.04]);
+        const X = pick(rng, [0.06, 0.08, 0.10, 0.12]);
+        const P = -pick(rng, [0.5, 0.6, 0.8, 1.0]);
+        const Q = -pick(rng, [0.2, 0.3, 0.4]);
+        const alpha = pick(rng, [1.4, 1.6]);
+        // V2^(1) = z (P − jQ)/conj(V2^(0)) + V1 で、V1 = 1、V2^(0) = 1。
+        // (P − jQ)(R + jX) = (PR + QX) + j(PX − QR)
+        const re = P * R + Q * X, im = P * X - Q * R;
+        const v2r = 1 + re, v2i = im;
+        const mag = Math.hypot(v2r, v2i), ang = deg(Math.atan2(v2i, v2r));
+        const ar = 1 + alpha * re, ai = alpha * im;
+        const magA = Math.hypot(ar, ai);
+        return {
+          given: [['母線 1（スラック）', 'V<sub>1</sub> = 1.0∠0°'], ['線路インピーダンス ż = R + jX', R + ' + j' + X + ' p.u.（充電容量無視）'], ['母線 2（PQ）の注入 P<sub>2</sub>, Q<sub>2</sub>', P + ', ' + Q + ' p.u.（負荷）'], ['初期値', 'V<sub>2</sub><sup>(0)</sup> = 1.0∠0°'], ['加速係数 α', alpha + '']],
+          q: 'ガウス・ザイデル法の更新式 V<sub>2</sub><sup>(1)</sup> = (1/Y<sub>22</sub>)[(P<sub>2</sub> − jQ<sub>2</sub>)/(V<sub>2</sub><sup>(0)</sup>)<sup>*</sup> − Y<sub>21</sub>V<sub>1</sub>] を 1 回だけ回す。<br>(a) 更新後の電圧の大きさ <b>|V<sub>2</sub><sup>(1)</sup>|</b> を求めよ。<br>(b) その位相角 <b>θ<sub>2</sub><sup>(1)</sup></b> を度で求めよ。<br>(c) 加速係数 α を掛けた場合の <b>|V<sub>2</sub><sup>(1)</sup>|</b>（V<sub>2</sub> ← V<sub>2</sub><sup>(0)</sup> + α(V<sub>2</sub><sup>(1)</sup> − V<sub>2</sub><sup>(0)</sup>)）を求めよ。',
+          answers: [
+            { key: 'mag', label: '(a) |V₂⁽¹⁾|', unit: 'p.u.', value: mag, tol: 0.005 },
+            { key: 'ang', label: '(b) θ₂⁽¹⁾', unit: 'deg', value: ang, tol: 0.03 },
+            { key: 'magA', label: '(c) 加速後の |V₂|', unit: 'p.u.', value: magA, tol: 0.005 },
+          ],
+          steps: [
+            '2 母線では Y<sub>22</sub> = 1/ż、Y<sub>21</sub> = −1/ż なので、更新式は ' + eq('V<sub>2</sub><sup>(1)</sup> = ż (P<sub>2</sub> − jQ<sub>2</sub>) / (V<sub>2</sub><sup>(0)</sup>)<sup>*</sup> + V<sub>1</sub>') + ' と整理できる（1/Y<sub>22</sub> = ż を掛けて −Y<sub>21</sub>V<sub>1</sub>/Y<sub>22</sub> = V<sub>1</sub>）。',
+            '複素数の積を実部・虚部に分ける: ' + eq('(P − jQ)(R + jX) = (PR + QX) + j(PX − QR) = (' + P + ' × ' + R + ' + (' + Q + ') × ' + X + ') + j(' + P + ' × ' + X + ' − (' + Q + ') × ' + R + ') = ' + fmt(re, 4) + ' + j(' + fmt(im, 4) + ')') + '。',
+            '(a)(b) ' + eq('V<sub>2</sub><sup>(1)</sup> = 1 + ' + fmt(re, 4) + ' + j(' + fmt(im, 4) + ') = ' + fmt(v2r, 4) + ' + j(' + fmt(v2i, 4) + ')') + ' → ' + eq('|V<sub>2</sub>| = ' + fmt(mag, 4) + ' p.u.,  θ<sub>2</sub> = atan2(' + fmt(v2i, 4) + ', ' + fmt(v2r, 4) + ') = ' + fmt(ang, 3) + '°') + '。',
+            '(c) 修正量を α 倍に伸ばす: ' + eq('V<sub>2</sub> = 1 + ' + alpha + ' × (' + fmt(re, 4) + ' + j(' + fmt(im, 4) + ')) = ' + fmt(ar, 4) + ' + j(' + fmt(ai, 4) + ')') + ' → ' + eq('|V<sub>2</sub>| = ' + fmt(magA, 4) + ' p.u.') + '。真の解に近い方向へ「行き過ぎ気味」に進めて反復回数を減らす。',
+          ],
+          insight: 'ガウス・ザイデル法は 1 反復が軽い代わりに毎回一定の割合しか近づかない。実務ではこの 1〜2 反復をニュートン法の初期値づくりに使う。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

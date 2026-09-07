@@ -1,0 +1,3630 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>方程式の難易度 — 電力系統で辿る解法の地図</title>
+<style>
+:root{
+  --paper:#ffffff; --chrome:#f4f6f8; --rule:#dfe5eb; --hair:#eef2f5;
+  --ink:#141c25; --body:#3d4c5a; --dim:#6d7f8f; --faint:#a4b2be;
+  --d:#c2410c; --l:#0e7490; --u:#7e22ce; --ok:#15803d; --ng:#be123c; --gold:#a16207;
+  --sans:"Hiragino Kaku Gothic ProN","Yu Gothic Medium","Yu Gothic",-apple-system,"Segoe UI","Noto Sans JP",sans-serif;
+  --math:"STIX Two Math","Cambria Math","Latin Modern Roman","Hiragino Mincho ProN",Georgia,"Times New Roman",serif;
+  --mono:ui-monospace,"SF Mono","Roboto Mono","DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:#e7ebef}
+body{font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+
+/* ── 16:9 固定ステージ（ウィンドウに合わせて等比縮小） ── */
+#wrap{position:fixed;inset:0 0 58px 0;display:flex;align-items:center;justify-content:center}
+#stage{width:1600px;height:900px;background:var(--paper);position:relative;flex:none;
+  transform-origin:center center;box-shadow:0 2px 24px rgba(20,32,45,.14);overflow:hidden}
+.sl{position:absolute;inset:0;padding:40px 72px 40px;display:none;font-size:17px;line-height:1.72}
+.sl.on{display:block}
+
+/* ヘッダ */
+.shead{display:flex;align-items:baseline;gap:16px;height:26px}
+.shead .lv{font-family:var(--mono);font-size:13px;letter-spacing:.16em;color:var(--faint)}
+.shead .tp{font-size:13px;color:var(--dim);letter-spacing:.04em}
+.shead .no{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--faint)}
+h2{font-size:40px;font-weight:700;line-height:1.26;letter-spacing:-.02em;margin-top:14px;
+  height:52px;overflow:hidden}
+.msg{font-size:19px;color:var(--body);margin-top:10px;line-height:1.62;height:32px;overflow:hidden}
+.rulez{height:1px;background:var(--hair);margin-top:16px}
+
+/* コンテンツ枠：ヘッダ下からバーまでを埋める */
+.body{position:absolute;left:72px;right:72px;top:212px;bottom:40px}
+.sl.tall .body{top:170px}
+.sl.tall h2{height:auto;min-height:52px}
+
+/* 数式 */
+.eqz{text-align:center}
+.mq{font-family:var(--math);font-size:34px;line-height:1.7;color:var(--ink);display:inline-block;
+  text-align:left;white-space:nowrap;max-width:100%}
+.mq.wrap{white-space:normal}
+.mq.sm{font-size:24px} .mq.xs{font-size:19px;line-height:1.9}
+.mq .v{font-style:italic}
+.mq .o{font-style:normal;margin:0 .30em;color:var(--dim)}
+.mq .fn{font-style:normal;margin-right:.14em}
+.mq sub{font-size:.60em;font-style:normal;vertical-align:-.32em}
+.mq sup{font-size:.60em;vertical-align:.52em}
+.mq .fr{display:inline-flex;flex-direction:column;vertical-align:-.62em;text-align:center;margin:0 .22em}
+.mq .fr>b{font-weight:inherit;border-bottom:1.5px solid currentColor;padding:0 .36em;display:block;font-size:.86em}
+.mq .fr>i{font-style:inherit;padding:0 .36em;display:block;font-size:.86em}
+.mq .sg{font-size:1.42em;vertical-align:-.14em;font-style:normal;margin-right:.05em}
+.mq .t{transition:opacity .3s,color .3s;padding:0 .06em;border-radius:3px}
+.mq .t.dim{opacity:.2}
+.mq .t.hot{background:rgba(20,28,37,.055);box-shadow:0 3px 0 currentColor}
+.cap{font-family:var(--sans);font-size:14px;color:var(--faint);margin-top:14px}
+
+/* 図 */
+.figz{display:flex;align-items:center;justify-content:center}
+canvas{display:block}
+.cap2{font-size:14.5px;color:var(--dim);line-height:1.7;max-width:104ch;margin:0 auto}
+.cap2 b{color:var(--ink)}
+
+/* 語り（高さ固定でガタつかせない） */
+.say{font-size:18px;color:var(--body);line-height:1.66;border-left:4px solid var(--hair);
+  padding-left:20px;transition:border-color .3s;overflow:hidden}
+.say.k{border-left-color:currentColor}
+.say b{color:var(--ink)}
+
+/* レイアウト種別 */
+.body.hero{display:grid;grid-template-rows:auto 1fr auto;gap:14px}
+.body.hero .figz{min-height:0}
+.body.hero .say{height:92px;display:flex;align-items:center;font-size:17px}
+.body.split{display:grid;grid-template-columns:1fr 1fr;gap:52px;align-items:center}
+.body.split .lft{display:flex;flex-direction:column;gap:26px}
+.body.split .say{height:150px}
+.body.algo{display:grid;grid-template-rows:auto 1fr;gap:12px}
+.body.algo .row{display:grid;grid-template-columns:1fr 700px;gap:36px;min-height:0;height:100%}
+.body.algo .row>div{min-height:0;overflow:hidden}
+.body.board{overflow:hidden}
+.body.derive{display:grid;grid-template-rows:auto auto auto auto 1fr;gap:8px;text-align:center}
+.dvPrev{min-height:44px;display:flex;align-items:center;justify-content:center;opacity:.5}
+.dvArrow{min-height:42px;display:flex;align-items:center;justify-content:center;gap:16px}
+.dvArrow .ar{font-size:26px;color:var(--d);line-height:1}
+.dvArrow .asm{font-size:17px;color:var(--d);border:1px solid rgba(194,65,12,.35);
+  background:rgba(194,65,12,.07);border-radius:22px;padding:5px 20px;font-weight:600}
+.dvNow{min-height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.body.derive .say{text-align:left;max-width:104ch;margin:2px auto 0;height:74px;
+  display:flex;align-items:center;font-size:16.5px}
+.dvFoot{display:grid;grid-template-columns:1fr 1fr;gap:44px;text-align:left;align-self:start;
+  max-width:1200px;margin:0 auto;width:100%}
+.dvFoot ol{padding-left:24px;font-size:15.5px;line-height:1.85;color:var(--body)}
+.dvFoot li{margin-bottom:2px}
+.dvFoot li.fresh{color:var(--ink);font-weight:600}
+.mq .kill{color:var(--ng);text-decoration:line-through;text-decoration-thickness:1.6px;
+  text-decoration-color:rgba(190,18,60,.75)}
+.mq .keep{color:var(--ok)}
+.body.board table.tb{font-size:15px}
+.body.board .tb th,.body.board .tb td{padding:7px 11px}
+.body.board .card p,.body.board .card li{font-size:15px}
+.body.split>div{max-height:100%;overflow:hidden}
+.body.split .card p,.body.split .card li{font-size:14.5px;line-height:1.6}
+.body.split table.tb{font-size:14px}
+.body.split .tb th,.body.split .tb td{padding:6px 9px}
+
+/* カード */
+.cards{display:grid;gap:26px}
+.cards.c2{grid-template-columns:1fr 1fr} .cards.c3{grid-template-columns:repeat(3,1fr)}
+.card{border-top:2px solid var(--hair);padding-top:12px}
+.card h4{font-size:14px;color:var(--dim);font-weight:700;margin-bottom:7px}
+.card p,.card li{font-size:16px;color:var(--body);line-height:1.66}
+.card ul{padding-left:19px}
+table.tb{border-collapse:collapse;width:100%;font-size:16px}
+.tb th,.tb td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--hair)}
+.tb th{color:var(--dim);font-weight:700;font-size:13.5px}
+.tb td{color:var(--body)} .tb td.n,.tb th.n{font-family:var(--mono);text-align:right}
+.tb tr.hi td{color:var(--ok);font-weight:600}
+.tag{display:inline-block;font-size:12px;font-family:var(--mono);padding:1px 7px;border-radius:2px;
+  border:1px solid var(--rule);color:var(--dim)}
+.tag.on{color:var(--ng);border-color:rgba(190,18,60,.4);background:rgba(190,18,60,.06)}
+.tag.free{color:var(--ok);border-color:rgba(21,128,61,.35);background:rgba(21,128,61,.06)}
+
+/* ステッパー */
+.stp{border:1px solid var(--rule);border-radius:6px;background:#fff;overflow:hidden;
+  display:flex;flex-direction:column;min-height:0;height:100%}
+.stwork{padding:14px 18px 6px;overflow:auto;background:#fcfdfe;border-bottom:1px solid var(--hair);flex:0 1 auto}
+.strow{display:flex;gap:14px;align-items:baseline;padding:8px 18px;border-top:1px solid var(--hair)}
+.stlab{flex:0 0 34px;font-size:12px;color:var(--faint);text-align:right}
+.stv{flex:1;line-height:1.85;min-width:0}
+.stv.sym{font-family:var(--math);font-size:19px;color:var(--body)}
+.stv.num{font-family:var(--mono);font-size:14px;color:var(--body)}
+.stv.res{font-family:var(--mono);font-size:15.5px;color:var(--ok);font-weight:600}
+.stnote{padding:9px 18px 14px 66px;font-size:14px;color:var(--dim);line-height:1.6}
+.stph{font-size:12.5px;color:var(--d);font-family:var(--mono)}
+
+/* 行列 */
+.mx{display:inline-block;font-family:var(--mono);font-size:14px;vertical-align:middle;
+  position:relative;padding:0 11px;margin:2px 6px}
+.mx::before,.mx::after{content:"";position:absolute;top:0;bottom:0;width:8px;border:1.5px solid var(--faint)}
+.mx::before{left:0;border-right:0} .mx::after{right:0;border-left:0}
+.mx table{border-collapse:collapse}
+.mx td{padding:3px 10px;text-align:right;color:var(--dim);border-radius:2px;transition:.2s}
+.mx td.D{color:var(--d)} .mx td.L{color:var(--l)} .mx td.U{color:var(--u)} .mx td.z{color:#ccd6de}
+.mx td.hl{background:rgba(21,128,61,.12);color:var(--ok);font-weight:700}
+.mx td.hl2{background:rgba(194,65,12,.11);color:var(--d);font-weight:600}
+.mx td.hl3{background:rgba(190,18,60,.09);color:var(--ng)}
+.mx td.old{color:var(--faint)} .mx td.sep{border-left:1px solid var(--rule)}
+.mxlab{font-family:var(--math);font-style:italic;font-size:17px;color:var(--dim);margin:0 5px;vertical-align:middle}
+.mx td{height:26px}
+.mx td.row{background:rgba(20,28,37,.035)}
+.mop{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mop .arw{font-size:24px;color:var(--faint);font-family:var(--math)}
+.mtab{display:inline-flex;align-items:center;gap:5px}
+.mtab .rlab,.mtab .rnote{display:flex;flex-direction:column;font-size:12.5px}
+.mtab .rlab{font-family:var(--math);font-style:italic;font-size:15px;color:var(--faint);text-align:right}
+.mtab .rlab>span,.mtab .rnote>span{height:26px;display:flex;align-items:center}
+.mtab .rlab>span{justify-content:flex-end}
+.mtab .rnote{color:var(--d);white-space:nowrap}
+.mtag{font-size:12.5px;color:var(--dim);font-family:var(--sans);
+  border:1px solid var(--rule);border-radius:3px;padding:2px 9px;background:var(--chrome)}
+.calc{margin-top:12px;font-family:var(--mono);font-size:13px;color:var(--body);line-height:1.95;
+  border-top:1px dashed var(--rule);padding-top:9px}
+.calc .lbl{font-family:var(--sans);font-size:12px;color:var(--faint);margin-bottom:3px}
+.calc b{color:var(--ok);font-weight:700}
+.calc b.z0{color:var(--ng)}
+table.lh{border-collapse:collapse;margin:6px 0 2px;font-family:var(--mono);font-size:14px}
+.lh td{padding:4px 12px;text-align:right;color:var(--body);white-space:nowrap}
+.lh td.sep{border-left:1px solid var(--rule)}
+.lh td.hi{background:rgba(190,18,60,.09);color:var(--ng);font-weight:700;border-radius:2px}
+.lh .lh-op{color:var(--dim);font-size:17px;padding-right:2px;text-align:right;width:22px}
+.lh .lh-lab{font-family:var(--math);font-style:italic;font-size:15px;color:var(--faint);
+  text-align:right;padding-right:16px}
+.lh .lh-note{font-family:var(--sans);font-size:12px;color:var(--d);text-align:left;padding-left:14px}
+.lh tr.pv td{color:var(--d)}
+.lh tr.mul td{color:var(--dim);height:20px;padding:1px 12px}
+.lh tr.rule td{border-top:1.6px solid var(--ink);padding-top:6px}
+.lh tr.res td{color:var(--ok);font-weight:700}
+.lh tr.res td.lh-lab,.lh tr.res td.lh-note{font-weight:400}
+.cD{color:var(--d)}.cL{color:var(--l)}.cU{color:var(--u)}.cO{color:var(--ok)}.cN{color:var(--ng)}.cM{color:var(--faint)}
+.dimtx{color:var(--dim)} .m{font-family:var(--mono);font-size:.9em;color:var(--ok)}
+
+/* コントロール */
+.ctl{display:flex;align-items:center;gap:14px;font-size:15px;color:var(--dim)}
+.ctl label{flex:0 0 auto;min-width:110px}
+.ctl input[type=range]{width:300px;-webkit-appearance:none;appearance:none;height:4px;
+  background:var(--rule);border-radius:2px;outline:none}
+.ctl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;
+  border-radius:50%;background:var(--ok);cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px var(--rule)}
+.ctl input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--ok);
+  cursor:pointer;border:2px solid #fff}
+.ctl .val{font-family:var(--mono);color:var(--ink);font-weight:600;min-width:72px}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:5px;overflow:hidden;background:#fff}
+.seg button{background:transparent;border:0;border-right:1px solid var(--rule);color:var(--dim);
+  font:inherit;font-size:15px;padding:7px 18px;cursor:pointer;transition:.15s}
+.seg button:last-child{border-right:0}
+.seg button:hover{color:var(--ink);background:var(--chrome)}
+.seg button.on{background:var(--ok);color:#fff;font-weight:600}
+
+/* ── 下部バー ── */
+#bar{position:fixed;left:0;right:0;bottom:0;height:58px;background:#fff;border-top:1px solid var(--rule);
+  display:flex;align-items:center;gap:10px;padding:0 22px;z-index:40}
+.bt{border:1px solid var(--rule);background:#fff;border-radius:5px;color:var(--dim);
+  font:inherit;font-size:13.5px;padding:7px 15px;cursor:pointer;transition:.14s}
+.bt:hover:not(:disabled){color:var(--ink);border-color:var(--dim)}
+.bt:disabled{opacity:.3;cursor:default}
+.bt.go{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:600;padding:7px 22px}
+.bt.go:hover:not(:disabled){background:#17703a}
+.bt.go:disabled{background:var(--chrome);color:var(--faint);border-color:var(--rule)}
+#where{font-size:13px;color:var(--dim);margin-left:6px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:38vw}
+#where b{color:var(--ink)}
+#dots{display:flex;gap:6px;margin-left:auto}
+#dots i{width:8px;height:8px;border-radius:50%;background:var(--rule);display:block;transition:.2s}
+#dots i.on{background:var(--ok);transform:scale(1.4)} #dots i.past{background:#a8cfb6}
+#hint{font-size:12px;color:var(--faint);font-family:var(--mono);margin-left:16px}
+#hint kbd{border:1px solid var(--rule);border-radius:2px;padding:0 4px;background:var(--chrome)}
+@media(max-width:1100px){#hint{display:none}}
+
+/* ── 目次ドロワー ── */
+#rail{position:fixed;left:0;top:0;bottom:58px;width:330px;background:#fff;border-right:1px solid var(--rule);
+  overflow-y:auto;z-index:50;transform:translateX(-100%);transition:transform .22s;padding:18px 0 24px;
+  box-shadow:4px 0 24px rgba(20,32,45,.08)}
+body.nav #rail{transform:none}
+#rail h1{font-size:13px;font-weight:700;color:var(--dim);padding:0 20px 14px;line-height:1.6;
+  border-bottom:1px solid var(--rule)}
+.grp{font-size:11px;font-family:var(--mono);color:var(--faint);letter-spacing:.14em;padding:14px 20px 4px}
+.rw{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;font-size:14px;
+  color:var(--dim);padding:5px 20px 5px 24px;cursor:pointer;border-left:3px solid transparent;
+  transition:.15s;line-height:1.5}
+.rw:hover{color:var(--ink);background:var(--chrome)}
+.rw.on{color:var(--ink);font-weight:700;border-left-color:var(--ok);background:var(--chrome)}
+.rw.done{color:var(--faint)}
+#scrim{position:fixed;inset:0;background:rgba(20,32,45,.18);z-index:45;opacity:0;pointer-events:none;
+  transition:opacity .2s}
+body.nav #scrim{opacity:1;pointer-events:auto}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="scrim"></div>
+<nav id="rail"><h1>方程式の難易度<br>電力系統で辿る解法の地図</h1><div id="rws"></div></nav>
+<div id="wrap"><div id="stage"></div></div>
+<div id="bar">
+  <button class="bt" id="bNav">目次</button>
+  <button class="bt" id="bPrev">◀</button>
+  <button class="bt go" id="bNext">次へ ▶</button>
+  <button class="bt" id="bSkip">10手</button>
+  <button class="bt" id="bAuto">自動</button>
+  <span id="where"></span>
+  <div id="dots"></div>
+  <span id="hint"><kbd>←</kbd><kbd>→</kbd> スライド <kbd>Space</kbd> ステップ <kbd>M</kbd> 目次</span>
+</div>
+<script>
+/* =========================================================
+   描画基盤
+   ========================================================= */
+const CSSV=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+const COL={};
+['ink','body','dim','faint','rule','hair','d','l','u','ok','ng','gold','paper','chrome']
+  .forEach(k=>COL[k]=CSSV('--'+k));
+const SANS='"Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif';
+const MATH='"STIX Two Math","Cambria Math",Georgia,"Times New Roman",serif';
+const MONO='ui-monospace,"SF Mono","Roboto Mono","DejaVu Sans Mono",monospace';
+const _cx={};
+function cx(id){
+  if(_cx[id])return _cx[id];
+  const c=document.getElementById(id); if(!c)return null;
+  const sc=+(c.dataset.scale||1);
+  const r=Math.min(window.devicePixelRatio||1,2)*sc, w=c.width, h=c.height;
+  c.style.width=Math.round(w*sc)+'px'; c.style.height=Math.round(h*sc)+'px';
+  c.width=Math.round(w*r); c.height=Math.round(h*r);
+  const g=c.getContext('2d'); g.scale(r,r); g.W=w; g.H=h;
+  return _cx[id]=g;
+}
+const clr=g=>g.clearRect(0,0,g.W,g.H);
+function T(g,s,x,y,col,sz,al,fam,it){
+  g.save(); g.fillStyle=col||COL.dim;
+  g.font=(it?'italic ':'')+(sz||12)+'px '+(fam==='m'?MATH:fam==='o'?MONO:SANS);
+  g.textAlign=al||'left'; g.textBaseline='middle'; g.fillText(String(s),x,y); g.restore();
+}
+const TM=(g,s,x,y,c,sz,al)=>T(g,s,x,y,c,sz,al,'m',true);
+function LN(g,p,col,w,dash){
+  if(!p||p.length<2)return;
+  g.save(); g.strokeStyle=col; g.lineWidth=w||1.6; g.lineJoin='round'; g.lineCap='round';
+  if(dash)g.setLineDash(dash);
+  g.beginPath(); g.moveTo(p[0][0],p[0][1]);
+  for(let i=1;i<p.length;i++)g.lineTo(p[i][0],p[i][1]);
+  g.stroke(); g.restore();
+}
+const DOT=(g,x,y,c,r)=>{g.save();g.fillStyle=c;g.beginPath();g.arc(x,y,r||3.4,0,7);g.fill();g.restore();};
+function AR(g,x1,y1,x2,y2,col,w,dash){
+  g.save(); g.strokeStyle=col; g.fillStyle=col; g.lineWidth=w||1.7; g.lineCap='round';
+  if(dash)g.setLineDash(dash);
+  g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); g.setLineDash([]);
+  const a=Math.atan2(y2-y1,x2-x1), s=8;
+  g.beginPath(); g.moveTo(x2,y2);
+  g.lineTo(x2-s*Math.cos(a-.40),y2-s*Math.sin(a-.40));
+  g.lineTo(x2-s*Math.cos(a+.40),y2-s*Math.sin(a+.40));
+  g.closePath(); g.fill(); g.restore();
+}
+function GR(g,x,y,w,h,nx,ny){
+  g.save(); g.strokeStyle=COL.hair; g.lineWidth=1;
+  for(let i=0;i<=nx;i++){const a=Math.round(x+w*i/nx)+.5;g.beginPath();g.moveTo(a,y);g.lineTo(a,y+h);g.stroke();}
+  for(let j=0;j<=ny;j++){const a=Math.round(y+h*j/ny)+.5;g.beginPath();g.moveTo(x,a);g.lineTo(x+w,a);g.stroke();}
+  g.strokeStyle=COL.rule; g.strokeRect(x+.5,y+.5,w,h); g.restore();
+}
+function tint(hex,a){
+  const h=hex.replace('#',''), n=h.length===3?h.split('').map(c=>c+c).join(''):h;
+  return `rgba(${parseInt(n.slice(0,2),16)},${parseInt(n.slice(2,4),16)},${parseInt(n.slice(4,6),16)},${a})`;
+}
+function RR(g,x,y,w,h,r){
+  if(g.roundRect){g.beginPath();g.roundRect(x,y,w,h,r);return;}
+  g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);
+  g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();
+}
+/* 正方行列の幾何グリフ */
+function SQ(g,x,y,s,o){
+  o=o||{};
+  const fill=(pts,c)=>{g.save();g.fillStyle=c;g.beginPath();g.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length;i++)g.lineTo(pts[i][0],pts[i][1]);g.closePath();g.fill();g.restore();};
+  if(o.L)fill([[x,y],[x,y+s],[x+s,y+s]],o.L);
+  if(o.U)fill([[x,y],[x+s,y],[x+s,y+s]],o.U);
+  if(o.n){g.save();g.strokeStyle=tint(COL.faint,.28);g.lineWidth=1;
+    for(let k=1;k<o.n;k++){const t=Math.round(s*k/o.n)+.5;
+      g.beginPath();g.moveTo(x,y+t);g.lineTo(x+s,y+t);g.stroke();
+      g.beginPath();g.moveTo(x+t,y);g.lineTo(x+t,y+s);g.stroke();}
+    g.restore();}
+  if(o.D){g.save();g.fillStyle=o.D;const c=s/(o.n||6);
+    for(let k=0;k<(o.n||6);k++)g.fillRect(x+k*c,y+k*c,c,c);g.restore();}
+  if(o.diag!==false){g.save();g.strokeStyle=o.diagCol||tint(COL.ink,.55);g.lineWidth=1.5;
+    g.beginPath();g.moveTo(x,y);g.lineTo(x+s,y+s);g.stroke();g.restore();}
+  g.save();g.strokeStyle=o.edge||COL.ink;g.lineWidth=o.lw||1.6;
+  g.strokeRect(x+.5,y+.5,s,s);g.restore();
+}
+const A_=a=>a===undefined?1:a;
+
+/* =========================================================
+   図：階段
+   ========================================================= */
+const LAD=[['Ax = b','直流回路 / DC潮流','消去・LU'],['Ax = b','大規模系統','反復法'],
+ ['f(x) = 0','AC潮流','ニュートン'],['dx/dt = f','過渡安定度','数値積分'],
+ ['DAE','系統動特性','逐次代入'],['min f, h = 0','経済負荷配分','ラグランジュ'],
+ ['min f, g ≤ 0','出力制約つき','KKT'],['非凸','AC-OPF','緩和・SQP'],['整数','起動停止','分枝限定']];
+function ramp(t){
+  const S=[[0,[21,128,61]],[.35,[161,98,7]],[.65,[194,65,12]],[.85,[190,18,60]],[1,[136,19,55]]];
+  for(let i=1;i<S.length;i++)if(t<=S[i][0]){
+    const a=S[i-1],b=S[i],u=(t-a[0])/(b[0]-a[0]);
+    return `rgb(${a[1].map((v,k)=>Math.round(v+(b[1][k]-v)*u)).join(',')})`;}
+  return 'rgb(136,19,55)';
+}
+function fLadder(k){
+  const g=cx('fLadder'); if(!g)return; clr(g);
+  const x0=64,y0=34,W=g.W-104,H=g.H-96,n=LAD.length,bw=W/n;
+  T(g,'難しさ',x0-12,y0+10,COL.faint,11.5,'right');
+  T(g,'易',x0-12,y0+H-8,COL.faint,11.5,'right');
+  LN(g,[[x0-2,y0],[x0-2,y0+H]],COL.rule,1.2);
+  LN(g,[[x0-2,y0+H],[x0+W,y0+H]],COL.rule,1.2);
+  for(let i=0;i<Math.min(k,n);i++){
+    const c=ramp(i/(n-1)),h=H*(0.12+0.88*(i+1)/n),x=x0+bw*i,y=y0+H-h;
+    g.save();g.globalAlpha=.13;g.fillStyle=c;g.fillRect(x+3,y,bw-6,h);g.restore();
+    LN(g,[[x+3,y],[x+bw-3,y]],c,2.2);
+    g.save();g.globalAlpha=.3;LN(g,[[x+3,y],[x+3,y0+H]],c,1.2);g.restore();
+    TM(g,LAD[i][0],x+bw/2,y-15,c,15,'center');
+    T(g,LAD[i][1],x+bw/2,y+20,COL.body,11.5,'center');
+    T(g,LAD[i][2],x+bw/2,y+38,COL.faint,11,'center');
+  }
+  T(g,'閉形式 → 有限回で厳密 → 収束保証 → 大域最適 → 多項式時間 　一段ごとに保証が一つ失われる',
+    x0,y0+H+34,COL.dim,12.5,'left');
+}
+
+/* =========================================================
+   図：フィルイン（なぜ反復法へ）
+   ========================================================= */
+function fFill(k){
+  const g=cx('fFill'); if(!g)return; clr(g);
+  const n=10,cell=20,s=n*cell,Y=40;
+  const seed=(i,j)=>i===j||Math.abs(i-j)===1||Math.abs(i-j)===5||Math.abs(i-j)===7;
+  const xs=[110,430,750];
+  const stage=[0,3,7];
+  ['疎な A（実系統の姿）','消去の途中','消去の終わり'].forEach((ttl,q)=>{
+    if(q>=k)return;
+    const x=xs[q], f=stage[q];
+    g.save();g.strokeStyle=COL.hair;g.lineWidth=1;
+    for(let a=0;a<=n;a++){g.beginPath();g.moveTo(x+.5,Y+a*cell+.5);g.lineTo(x+s+.5,Y+a*cell+.5);g.stroke();
+      g.beginPath();g.moveTo(x+a*cell+.5,Y+.5);g.lineTo(x+a*cell+.5,Y+s+.5);g.stroke();}
+    g.restore();
+    for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+      const orig=seed(i,j);
+      const filled=!orig && i>j===false && j<f && i>j===false ? false : false;
+      const fin = !orig && Math.min(i,j)<f && i!==j && !(i>j&&j<f&&false);
+      if(orig){g.save();g.fillStyle=tint(COL.l,.55);g.fillRect(x+j*cell+1,Y+i*cell+1,cell-2,cell-2);g.restore();}
+      else if(fin&&i>=j-0&&Math.min(i,j)<f){
+        g.save();g.fillStyle=tint(COL.ng,.28);g.fillRect(x+j*cell+1,Y+i*cell+1,cell-2,cell-2);g.restore();}
+    }
+    g.save();g.strokeStyle=COL.ink;g.lineWidth=1.6;g.strokeRect(x+.5,Y+.5,s,s);g.restore();
+    T(g,ttl,x+s/2,Y-16,COL.ink,13,'center');
+    const nz=q===0?'非零 46 個':q===1?'非零が増える':'ほぼ埋まる';
+    T(g,nz,x+s/2,Y+s+18,q===0?COL.l:COL.ng,12,'center');
+    if(q<2&&k>q+1)AR(g,x+s+18,Y+s/2,xs[q+1]-18,Y+s/2,COL.d,1.8);
+  });
+  if(k>=2)T(g,'消去',(xs[0]+s+xs[1])/2,Y+s/2-14,COL.d,12,'center');
+  if(k>=3)T(g,'消去',(xs[1]+s+xs[2])/2,Y+s/2-14,COL.d,12,'center');
+  if(k>=4)T(g,'青＝もともとの非零　赤＝消去で新しく生まれた非零（フィルイン）。'+
+    '疎行列が密になるほど、直接法の演算量とメモリが跳ね上がる。',
+    g.W/2,g.H-22,COL.body,13,'center');
+}
+
+/* =========================================================
+   図：消去の幾何と LU
+   ========================================================= */
+const TL=()=>tint(COL.l,.24), TU=()=>tint(COL.u,.22), TD=()=>tint(COL.d,.40), TG=()=>tint(COL.faint,.16);
+function fElim(k){
+  const g=cx('fElim'); if(!g)return; clr(g);
+  const s=112,Y=44,x1=104,x2=372,x3=640;
+  SQ(g,x1,Y,s,{L:TG(),U:TG(),D:TD(),n:5});
+  T(g,'A（密）',x1+s/2,Y-18,COL.ink,13.5,'center');
+  if(k>=2){
+    AR(g,x1+s+22,Y+s/2,x2-22,Y+s/2,COL.d,1.9);
+    T(g,'前進消去',(x1+s+x2)/2,Y+s/2-18,COL.d,13,'center');
+    T(g,'左下の三角を 0 にする',(x1+s+x2)/2,Y+s/2+18,COL.dim,11.5,'center');
+    SQ(g,x2,Y,s,{U:TU(),D:TD(),n:5});
+    T(g,'上三角 U',x2+s/2,Y-18,COL.u,13.5,'center');
+    TM(g,'0',x2+s*0.25,Y+s*0.72,COL.ok,20,'center');
+  }
+  if(k>=3){
+    AR(g,x2+s+22,Y+s/2,x3-22,Y+s/2,COL.ok,1.9);
+    T(g,'後退代入',(x2+s+x3)/2,Y+s/2-18,COL.ok,13,'center');
+    T(g,'下の行から順に確定',(x2+s+x3)/2,Y+s/2+18,COL.dim,11.5,'center');
+    for(let q=0;q<5;q++){
+      g.save();g.fillStyle=tint(COL.ok,.18);g.fillRect(x3,Y+q*s/5,s/5,s/5);
+      g.strokeStyle=COL.ink;g.lineWidth=1.2;g.strokeRect(x3+.5,Y+q*s/5+.5,s/5,s/5);g.restore();}
+    T(g,'解 x',x3+s/10,Y-18,COL.ok,13.5,'center');
+  }
+  if(k>=4){
+    const s2=86,Y2=214,a=104,b=262,c=420;
+    SQ(g,a,Y2,s2,{L:TG(),U:TG(),D:TD(),n:5});
+    TM(g,'A',a+s2/2,Y2-15,COL.ink,16,'center');
+    TM(g,'=',a+s2+26,Y2+s2/2,COL.dim,20,'center');
+    SQ(g,b,Y2,s2,{L:TL(),D:tint(COL.faint,.3),n:5});
+    TM(g,'L',b+s2/2,Y2-15,COL.l,16,'center');
+    T(g,'下三角（対角 1）',b+s2/2,Y2+s2+16,COL.l,11.5,'center');
+    TM(g,'×',b+s2+26,Y2+s2/2,COL.dim,20,'center');
+    SQ(g,c,Y2,s2,{U:TU(),D:TD(),n:5});
+    TM(g,'U',c+s2/2,Y2-15,COL.u,16,'center');
+    T(g,'上三角',c+s2/2,Y2+s2+16,COL.u,11.5,'center');
+    T(g,'消去で使った乗数 m を、0 にした場所へ書き込むだけ。',556,Y2+22,COL.ink,13.5,'left');
+    T(g,'正方形が2枚の三角形に分かれる ＝ LU 分解。',556,Y2+48,COL.body,13,'left');
+    T(g,'三角形になれば代入の順序が一意に決まる ＝ 解ける。',556,Y2+74,COL.ok,13,'left');
+  }
+}
+
+/* =========================================================
+   図：A = D + L + U（数式と連動）
+   ========================================================= */
+function fSplit(focus){
+  const g=cx('fSplit'); if(!g)return; clr(g);
+  const S=200, ax=130, ay=44;
+  const on=k=>!focus||focus===k||focus==='A';
+  const al=k=>on(k)?1:0.16;
+  g.save(); g.globalAlpha=al('L'); SQ(g,ax,ay,S,{L:TL(),diag:false,edge:'rgba(0,0,0,0)'}); g.restore();
+  g.save(); g.globalAlpha=al('U'); SQ(g,ax,ay,S,{U:TU(),diag:false,edge:'rgba(0,0,0,0)'}); g.restore();
+  g.save(); g.globalAlpha=al('D'); SQ(g,ax,ay,S,{D:TD(),diag:false,n:8,edge:'rgba(0,0,0,0)'}); g.restore();
+  SQ(g,ax,ay,S,{n:8,diagCol:tint(COL.ink,.6),lw:1.8});
+  g.save(); g.globalAlpha=al('L');
+  TM(g,'L',ax+S*0.24,ay+S*0.66,COL.l,30,'center');
+  T(g,'下三角  i > j',ax+S*0.24,ay+S*0.80,COL.l,12.5,'center'); g.restore();
+  g.save(); g.globalAlpha=al('U');
+  TM(g,'U',ax+S*0.76,ay+S*0.30,COL.u,30,'center');
+  T(g,'上三角  i < j',ax+S*0.76,ay+S*0.16,COL.u,12.5,'center'); g.restore();
+  g.save(); g.globalAlpha=al('D');
+  AR(g,ax+S+64,ay+S*0.24,ax+S*0.62,ay+S*0.54,COL.d,1.6);
+  TM(g,'D',ax+S+70,ay+S*0.18,COL.d,22,'left');
+  T(g,'対角  i = j　斜線そのもの',ax+S+96,ay+S*0.19,COL.d,12.5,'left'); g.restore();
+  const s2=76, by=ay+S+52, bx=[130,268,406,544];
+  const items=[['A',null,{L:TL(),U:TU(),D:TD()}],['D','D',{D:TD()}],['L','L',{L:TL()}],['U','U',{U:TU()}]];
+  items.forEach(([nm,key,o],q)=>{
+    g.save(); g.globalAlpha=key?al(key):1;
+    SQ(g,bx[q],by,s2,Object.assign({n:6},o));
+    TM(g,nm,bx[q]+s2/2,by+s2+18,nm==='D'?COL.d:nm==='L'?COL.l:nm==='U'?COL.u:COL.ink,17,'center');
+    g.restore();
+    if(q<3)TM(g,q===0?'=':'+',bx[q]+s2+30,by+s2/2,COL.dim,20,'center');
+  });
+  T(g,'斜線を1本引くだけで、行列は3つの領域に分かれる。',700,by+10,COL.ink,14,'left');
+  T(g,'この3枚の切り分け方だけで、反復法はすべて設計できる。',700,by+38,COL.body,13,'left');
+  T(g,'i, j は行番号・列番号',700,by+66,COL.faint,12,'left');
+}
+
+/* =========================================================
+   図：M / N への振り分け
+   ========================================================= */
+function sorRho(w){
+  const A=IT.A,n=3,D=mat.zeros(n,n),L=mat.zeros(n,n),U=mat.zeros(n,n);
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    if(i===j)D[i][j]=A[i][j]; else if(i>j)L[i][j]=A[i][j]; else U[i][j]=A[i][j];}
+  return rho(mat.mul(mat.inv(D.map((r,i)=>r.map((v,j)=>D[i][j]+w*L[i][j]))),
+                     D.map((r,i)=>r.map((v,j)=>(1-w)*D[i][j]-w*U[i][j]))));
+}
+function fMN(method,focus){
+  const g=cx('fMN'); if(!g)return; clr(g);
+  const w=+((document.getElementById('itw')||{}).value||1.15);
+  const inL={J:0,GS:1,SOR:1}[method];
+  const S=150, mx=150, nx=470, y=52;
+  const alM=!focus||focus==='M'?1:.2, alN=!focus||focus==='N'?1:.2;
+  g.save(); g.globalAlpha=alM;
+  g.fillStyle=tint(COL.ok,.05); g.fillRect(mx-40,y-34,S+80,S+92); g.restore();
+  g.save(); g.globalAlpha=alM;
+  SQ(g,mx,y,S,{L:inL?TL():null,D:TD(),n:6});
+  TM(g,'M',mx+S/2,y-16,COL.ok,22,'center');
+  T(g,'左辺 — いま解く側',mx+S/2,y+S+20,COL.ok,12.5,'center');
+  T(g,{J:'斜線だけ',GS:'斜線＋下三角',SOR:'斜線を ω で伸縮＋下三角'}[method],
+    mx+S/2,y+S+42,COL.dim,12,'center');
+  g.restore();
+  TM(g,'=',mx+S+50,y+S/2,COL.dim,24,'center');
+  g.save(); g.globalAlpha=alN;
+  g.fillStyle=tint(COL.faint,.07); g.fillRect(nx-40,y-34,S+80,S+92); g.restore();
+  g.save(); g.globalAlpha=alN;
+  SQ(g,nx,y,S,{L:inL?null:TL(),U:TU(),D:method==='SOR'?tint(COL.d,.18):null,n:6});
+  TM(g,'N',nx+S/2,y-16,COL.faint,22,'center');
+  T(g,'右辺 — 前回値を使う側',nx+S/2,y+S+20,COL.faint,12.5,'center');
+  T(g,{J:'下三角と上三角',GS:'上三角だけ',SOR:'上三角＋残りの対角'}[method],
+    nx+S/2,y+S+42,COL.dim,12,'center');
+  g.restore();
+  const tx=700;
+  T(g,'M に取り込む面積が広いほど',tx,y+16,COL.ink,13.5,'left');
+  T(g,'1手は重くなり、収束は速くなる。',tx,y+42,COL.ink,13.5,'left');
+  const rows=[['ヤコビ','斜線のみ','ρ = 0.672',COL.gold,'J'],
+              ['ガウス・ザイデル','＋下三角','ρ = 0.459',COL.l,'GS'],
+              ['SOR (ω='+w.toFixed(2)+')','＋伸縮','ρ = '+sorRho(w).toFixed(3),COL.u,'SOR']];
+  rows.forEach(([a,b,c,col,key],q)=>{
+    const yy=y+84+q*32, act=key===method;
+    if(act){g.save();g.fillStyle=tint(col,.09);RR(g,tx-8,yy-14,330,28,4);g.fill();g.restore();}
+    T(g,a,tx,yy,act?col:COL.dim,13,'left');
+    T(g,b,tx+150,yy,act?COL.body:COL.faint,12,'left');
+    T(g,c,tx+228,yy,act?col:COL.faint,12.5,'left',undefined,'o');
+  });
+  T(g,'左辺に入れられるのは「斜線」と「三角」だけ。',tx,y+S+20,COL.body,12.5,'left');
+  T(g,'密な正方形を入れたら、それは直接法です。',tx,y+S+44,COL.ng,12.5,'left');
+}
+
+/* =========================================================
+   図：三角なら代入の順序が決まる
+   ========================================================= */
+function fTri(k){
+  const g=cx('fTri'); if(!g)return; clr(g);
+  const cs=96, Y=48;
+  const items=[
+    ['D',TD(),COL.d,'割り算だけ','各行が独立。順序は要らない'],
+    ['L',TL(),COL.l,'前進代入','1行目から下へ'],
+    ['U',TU(),COL.u,'後退代入','最終行から上へ'],
+    ['密',TG(),COL.ng,'順序が決まらない','どの行も他に依存する']];
+  const gap=(g.W-40)/4;
+  items.forEach(([nm,fill,col,t1,t2],q)=>{
+    if(q>=k)return;
+    const x=30+gap*q+(gap-cs)/2;
+    const o={n:4};
+    if(nm==='D')o.D=fill; else if(nm==='L'){o.L=fill;o.D=TD();}
+    else if(nm==='U'){o.U=fill;o.D=TD();} else {o.L=fill;o.U=fill;o.D=TD();}
+    SQ(g,x,Y,cs,o);
+    const c=cs/4;
+    if(nm==='D')for(let a=0;a<4;a++)AR(g,x+a*c+6,Y+a*c+c/2,x+a*c+c-6,Y+a*c+c/2,col,1.4);
+    else if(nm==='L'){for(let a=0;a<3;a++)AR(g,x+c*0.5,Y+a*c+c*0.7,x+c*0.5,Y+(a+1)*c+c*0.3,col,1.6);}
+    else if(nm==='U'){for(let a=3;a>0;a--)AR(g,x+cs-c*0.5,Y+a*c+c*0.3,x+cs-c*0.5,Y+(a-1)*c+c*0.7,col,1.6);}
+    else{g.save();g.strokeStyle=COL.ng;g.lineWidth=3;g.lineCap='round';
+      g.beginPath();g.moveTo(x+22,Y+22);g.lineTo(x+cs-22,Y+cs-22);
+      g.moveTo(x+cs-22,Y+22);g.lineTo(x+22,Y+cs-22);g.stroke();g.restore();}
+    TM(g,nm,x+cs/2,Y-16,col,17,'center');
+    T(g,t1,x+cs/2,Y+cs+20,col,13,'center');
+    T(g,t2,x+cs/2,Y+cs+40,COL.faint,11.5,'center');
+  });
+}
+
+/* =========================================================
+   図：反復の軌跡（x₁–x₂ 平面）
+   ========================================================= */
+function fTraj(steps,i,method){
+  const g=cx('fTraj'); if(!g)return; clr(g);
+  const all=steps[steps.length-1].hist||[], cur=steps[i].hist||[steps[0].hist[0]];
+  const xe=steps.xe||[0,0,0], R=steps.rho;
+  const sel=h=>method==='J'?h.filter(p=>p.ci<0||p.end):h;
+  const A=sel(all), C=sel(cur);
+  let a1=xe[0],b1=xe[0],a2=xe[1],b2=xe[1];
+  A.forEach(p=>{a1=Math.min(a1,p.x[0]);b1=Math.max(b1,p.x[0]);a2=Math.min(a2,p.x[1]);b2=Math.max(b2,p.x[1]);});
+  const m1=Math.max(.04,(b1-a1)*.2), m2=Math.max(.04,(b2-a2)*.2);
+  a1-=m1;b1+=m1;a2-=m2;b2+=m2;
+  const x0=56,y0=32,W=g.W-84,H=g.H-72;
+  GR(g,x0,y0,W,H,6,6);
+  const px=v=>x0+W*(v-a1)/(b1-a1), py=v=>y0+H*(b2-v)/(b2-a2);
+  for(let k=0;k<=3;k++){
+    T(g,(a1+(b1-a1)*k/3).toFixed(2),x0+W*k/3,y0+H+15,COL.faint,11,'center',undefined,'o');
+    T(g,(a2+(b2-a2)*k/3).toFixed(2),x0-8,py(a2+(b2-a2)*k/3),COL.faint,11,'right',undefined,'o');}
+  TM(g,'x₁',x0+W/2,y0+H+34,COL.dim,15,'center');
+  g.save();g.translate(x0-40,y0+H/2);g.rotate(-Math.PI/2);TM(g,'x₂',0,0,COL.dim,15,'center');g.restore();
+  if(isFinite(R)&&R<1&&A.length){
+    const r0=Math.hypot(A[0].x[0]-xe[0],A[0].x[1]-xe[1]);
+    for(let k=1;k<=4;k++){
+      const rr=r0*Math.pow(R,k), rx=W*rr/(b1-a1), ry=H*rr/(b2-a2);
+      g.save();g.strokeStyle=tint(COL.faint,.45);g.lineWidth=1;g.setLineDash([3,4]);
+      g.beginPath();g.ellipse(px(xe[0]),py(xe[1]),rx,ry,0,0,7);g.stroke();g.restore();}
+    T(g,'破線＝誤差が ρ 倍ずつ縮む目安',x0+W-8,y0+H-12,COL.faint,11,'right');
+  }
+  for(let k=1;k<C.length;k++){
+    const a=C[k-1],b=C[k];
+    if(Math.abs(a.x[0]-b.x[0])<1e-12&&Math.abs(a.x[1]-b.x[1])<1e-12)continue;
+    const last=(k===C.length-1);
+    if(last)AR(g,px(a.x[0]),py(a.x[1]),px(b.x[0]),py(b.x[1]),COL.ok,2.6);
+    else LN(g,[[px(a.x[0]),py(a.x[1])],[px(b.x[0]),py(b.x[1])]],tint(COL.ok,.5),1.8);
+  }
+  C.forEach((p,k)=>DOT(g,px(p.x[0]),py(p.x[1]),k===C.length-1?COL.d:tint(COL.ok,.55),k===C.length-1?6:3));
+  const ex=px(xe[0]),ey=py(xe[1]);
+  LN(g,[[ex-10,ey],[ex+10,ey]],COL.ng,1.8); LN(g,[[ex,ey-10],[ex,ey+10]],COL.ng,1.8);
+  g.save();g.strokeStyle=COL.ng;g.lineWidth=1.8;g.beginPath();g.arc(ex,ey,7,0,7);g.stroke();g.restore();
+  TM(g,'x*',ex+13,ey-11,COL.ng,15,'left');
+  T(g, method==='J'?'掃引ごとに全成分が同時に動く ⇒ 斜めに跳ぶ':'1成分ずつ動く ⇒ 軌跡が座標軸に平行',
+    x0+8,y0+14,method==='J'?COL.u:COL.l,12.5,'left');
+}
+
+/* =========================================================
+   図：誤差の対数（反復・NR共用）
+   ========================================================= */
+function logChart(id,series,KM,YT,YB,xlab,marks){
+  const g=cx(id); if(!g)return; clr(g);
+  const x0=52,y0=18,W=g.W-76,H=g.H-56;
+  GR(g,x0,y0,W,H,KM>12?Math.round(KM/3):KM,(YT-YB)/2);
+  const px=k=>x0+W*k/KM, py=e=>{const L=Math.log10(Math.max(e,1e-16));
+    return y0+H*(YT-Math.min(YT,Math.max(YB,L)))/(YT-YB);};
+  for(let v=YT;v>=YB;v-=2)T(g,'10'+String(v).replace('-','⁻').replace(/\d/g,d=>'⁰¹²³⁴⁵⁶⁷⁸⁹'[d]),
+    x0-8,py(Math.pow(10,v)),COL.faint,11,'right',undefined,'o');
+  for(let k=0;k<=KM;k+=Math.max(1,Math.round(KM/6)))T(g,k,px(k),y0+H+15,COL.faint,11,'center',undefined,'o');
+  T(g,xlab,x0+W/2,y0+H+34,COL.dim,12,'center');
+  series.forEach(([pts,col,w,dash])=>{
+    const P=pts.map((e,k)=>isFinite(e)?[px(k),py(e)]:null).filter(Boolean);
+    LN(g,P,col,w,dash);
+    if(w>1.5)P.forEach(p=>DOT(g,p[0],p[1],col,3));
+    if(w>1.5&&P.length)DOT(g,P[P.length-1][0],P[P.length-1][1],COL.d,5.5);
+  });
+  (marks||[]).forEach(([t,col,y])=>T(g,t,x0+W-8,y0+14+(y||0),col,12,'right'));
+  return {px,py,g,x0,y0,W,H};
+}
+
+/* ---------- 線形代数 ---------- */
+const mat={
+  zeros:(n,m)=>Array.from({length:n},()=>new Array(m).fill(0)),
+  eye:n=>{const A=mat.zeros(n,n);for(let i=0;i<n;i++)A[i][i]=1;return A;},
+  mul:(A,B)=>{const n=A.length,m=B[0].length,p=B.length,R=mat.zeros(n,m);
+    for(let i=0;i<n;i++)for(let k=0;k<p;k++){const a=A[i][k];if(a)for(let j=0;j<m;j++)R[i][j]+=a*B[k][j];}return R;},
+  mv:(A,x)=>A.map(r=>r.reduce((s,v,j)=>s+v*x[j],0)),
+  inv:A=>{const n=A.length,M=A.map((r,i)=>[...r,...mat.eye(n)[i]]);
+    for(let c=0;c<n;c++){let p=c;
+      for(let r=c+1;r<n;r++)if(Math.abs(M[r][c])>Math.abs(M[p][c]))p=r;
+      if(Math.abs(M[p][c])<1e-14)return null;
+      [M[c],M[p]]=[M[p],M[c]];
+      const d=M[c][c];for(let j=0;j<2*n;j++)M[c][j]/=d;
+      for(let r=0;r<n;r++)if(r!==c){const f=M[r][c];if(f)for(let j=0;j<2*n;j++)M[r][j]-=f*M[c][j];}}
+    return M.map(r=>r.slice(n));},
+  solve:(A,b)=>{const I=mat.inv(A);return I?mat.mv(I,b):null;},
+  normInf:A=>Math.max(...A.map(r=>r.reduce((s,v)=>s+Math.abs(v),0)))
+};
+function rho(T){                       // log‖T^k‖ の傾き法（numpy と 8 桁一致）
+  const n=T.length; let M=mat.eye(n),s=0,s1=0;
+  const k1=120,k2=300;
+  for(let k=1;k<=k2;k++){
+    M=mat.mul(M,T); const nm=mat.normInf(M);
+    if(nm===0)return 0; if(!isFinite(nm))return Infinity;
+    s+=Math.log(nm); M=M.map(r=>r.map(v=>v/nm));
+    if(k===k1)s1=s;
+  }
+  return Math.exp((s-s1)/(k2-k1));
+}
+
+
+/* ---------- 数値の書式 ---------- */
+const F=(v,n=6)=>{const s=(Math.abs(v)<5e-13?0:v).toFixed(n);return s[0]==='-'?'\u2212'+s.slice(1):s;};
+const P=(v,n=6)=>v<0?`(−${Math.abs(v).toFixed(n)})`:v.toFixed(n);        // 括弧つき
+const Pi=v=>v<0?`(−${Math.abs(v)})`:String(v);                            // 整数用
+const SG=(v,n=6)=>(v>=0?'+':'−')+Math.abs(v).toFixed(n);
+
+
+
+/* ---------- 行列操作ビュー ---------- */
+function MX(rows,o){
+  o=o||{}; const dp=o.dp==null?4:o.dp;
+  let t='<span class="mx"><table>';
+  rows.forEach((r,i)=>{ t+='<tr>';
+    r.forEach((v,j)=>{
+      const c=o.cls?o.cls(i,j,v):'';
+      const sep=(o.sep!=null&&j===o.sep)?' sep':'';
+      t+=`<td class="${c}${sep}">${typeof v==='number'?F(v,dp):v}</td>`;});
+    t+='</tr>';});
+  t+='</table></span>';
+  const L=o.rlab?`<span class="rlab">${o.rlab.map(s=>`<span>${s||''}</span>`).join('')}</span>`:'';
+  const R=o.rnote?`<span class="rnote">${o.rnote.map(s=>`<span>${s||''}</span>`).join('')}</span>`:'';
+  return `<span class="mtab">${L}${t}${R}</span>`;
+}
+const MOP=(...p)=>`<div class="mop">${p.join('')}</div>`;
+const ARW='<span class="arw">→</span>';
+const TAG=s=>`<span class="mtag">${s}</span>`;
+const CALC=(label,lines)=>`<div class="calc"><div class="lbl">${label}</div>${lines.map(l=>`<div>${l}</div>`).join('')}</div>`;
+const RL=['r₁','r₂','r₃'];
+/* 筆算（縦に並べて引き算を見せる） */
+function LH(items,o){
+  o=o||{}; const dp=o.dp==null?3:o.dp;
+  let t='<table class="lh">';
+  items.forEach(it=>{
+    t+=`<tr class="${it.cls||''}"><td class="lh-op">${it.op||''}</td><td class="lh-lab">${it.lab||''}</td>`;
+    it.cells.forEach((v,j)=>{
+      const sep=(o.sep!=null&&j===o.sep)?' sep':'';
+      const hl=it.hl&&it.hl.indexOf(j)>=0?' hi':'';
+      t+=`<td class="${sep}${hl}">${typeof v==='number'?F(v,dp):v}</td>`;});
+    t+=`<td class="lh-note">${it.note||''}</td></tr>`;});
+  return t+'</table>';
+}
+
+/* ---------- 行列の HTML ---------- */
+function mxHTML(rows,opt){
+  opt=opt||{};
+  let h='<span class="mx"><table>';
+  rows.forEach((r,i)=>{
+    h+='<tr>';
+    r.forEach((v,j)=>{
+      const c=opt.cls?opt.cls(i,j,v):'';
+      const sep=(opt.sep!=null&&j===opt.sep)?' sep':'';
+      h+=`<td class="${c}${sep}">${typeof v==='number'?F(v,opt.dp==null?4:opt.dp):v}</td>`;
+    });
+    h+='</tr>';
+  });
+  return h+'</table></span>';
+}
+const lab=s=>`<span class="mxlab">${s}</span>`;
+
+
+const GE={A:[[2,1,-1],[-3,-1,2],[-2,1,2]], b:[8,-11,-3]};
+function geSteps(){
+  const M=GE.A.map((r,i)=>[...r,GE.b[i]]);
+  const S=[];
+  const snap=(hl,hl2,zero)=>mxHTML(M.map(r=>r.slice()),{
+    dp:4, sep:3,
+    cls:(i,j)=>{
+      if(hl&&hl.some(([a,b])=>a===i&&b===j))return 'hl';
+      if(hl2&&hl2.some(([a,b])=>a===i&&b===j))return 'hl2';
+      if(zero&&zero.some(([a,b])=>a===i&&b===j))return 'hl';
+      if(j<3&&i>j&&Math.abs(M[i][j])<1e-12)return 'z';
+      return '';}});
+  S.push({phase:'準備',
+    work:MOP(MX(M.map(r=>r.slice()),{dp:3,sep:3,rlab:RL,
+      rnote:['','','']}),TAG('[ A | b ] 拡大係数行列'))
+      +CALC('これから 0 にする成分',['a<sub>21</sub>, a<sub>31</sub>, a<sub>32</sub> の3つ（下三角）']),
+    sym:'A x = b を拡大係数行列 [ A | b ] に書く',
+    num:'2x₁ + x₂ − x₃ = 8 ／ −3x₁ − x₂ + 2x₃ = −11 ／ −2x₁ + x₂ + 2x₃ = −3',
+    res:'これから左下の3つの成分をゼロにします（前進消去）',
+    note:'手数は最初から決まっています。前進消去 n(n−1)/2 = 3手、後退代入 3手、合計6手。'});
+  for(let k=0;k<2;k++)for(let i=k+1;i<3;i++){
+    const m=M[i][k]/M[k][k], before=M[i].slice(), pk=M[k].slice();
+    const B4=M.map(r=>r.slice());
+    const sub=pk.map(v=>m*v);
+    const after=before.map((v,j)=>v-sub[j]); after[k]=0;
+    const rnote=[0,1,2].map(q=>q===k?'ピボット行':q===i?'これを消す':'');
+    const clsB=(a,b)=>a===k?'hl2':(a===i?(b===k?'hl3':'row'):'');
+
+    /* ① 乗数を決める */
+    S.push({phase:`前進消去 ${(k*2+i)}／3 ・① 乗数`,
+      work:MOP(MX(B4,{dp:3,sep:3,rlab:RL,rnote,cls:clsB}))
+        +CALC('この2行だけを見る',[
+          `ピボット a<sub>${k+1}${k+1}</sub> = ${F(pk[k],3)}　消したい a<sub>${i+1}${k+1}</sub> = ${F(before[k],3)}`,
+          `m = a<sub>${i+1}${k+1}</sub> / a<sub>${k+1}${k+1}</sub> = ${P(before[k],3)} / ${F(pk[k],3)} = <b>${F(m,4)}</b>`]),
+      sym:`m<sub>${i+1}${k+1}</sub> = a<sub>${i+1}${k+1}</sub> / a<sub>${k+1}${k+1}</sub>`,
+      num:`m = ${P(before[k],4)} / ${F(pk[k],4)} = ${F(m,4)}`,
+      res:`m<sub>${i+1}${k+1}</sub> = <span class="cO">${F(m,4)}</span>　この倍率でピボット行を引く`,
+      note:`行${i+1}から「行${k+1}の ${F(m,4)} 倍」を引けば、a<sub>${i+1}${k+1}</sub> がちょうど 0 になります。`});
+
+    /* ② 引く行を作る */
+    S.push({phase:`前進消去 ${(k*2+i)}／3 ・② 引く行を作る`,
+      work:LH([
+        {lab:`r<sub>${k+1}</sub>`,cells:pk,cls:'pv'},
+        {op:'×',lab:F(m,4),cells:['','','',''],cls:'mul'},
+        {lab:`m·r<sub>${k+1}</sub>`,cells:sub,cls:'rule res',note:'← 引く行'}],{sep:3,dp:3})
+        +CALC('ピボット行を m 倍する',
+          [0,1,2,3].map(j=>`${j===3?'b':'a'}<sub>${k+1}${j===3?'':j+1}</sub> : ${F(m,4)} × ${P(pk[j],3)} = <b>${F(sub[j],3)}</b>`)),
+      sym:`m<sub>${i+1}${k+1}</sub> · r<sub>${k+1}</sub>`,
+      num:`${F(m,4)} × [ ${pk.map(v=>F(v,3)).join(', ')} ] = [ ${sub.map(v=>F(v,3)).join(', ')} ]`,
+      res:`引く行 = [ ${sub.map(v=>F(v,3)).join(', ')} ]`,
+      note:'まだ行列は変えていません。引く相手を用意しただけです。'});
+
+    /* ③ 引いて置き換える */
+    for(let j=0;j<4;j++)M[i][j]-=m*M[k][j];
+    M[i][k]=0;
+    const A4=M.map(r=>r.slice());
+    S.push({phase:`前進消去 ${(k*2+i)}／3 ・③ 引く`,
+      work:LH([
+        {lab:`r<sub>${i+1}</sub>`,cells:before,hl:[k]},
+        {op:'−',lab:`m·r<sub>${k+1}</sub>`,cells:sub,hl:[k]},
+        {lab:`r<sub>${i+1}</sub> 新`,cells:after,cls:'rule res',hl:[k],note:'← 置き換え'}],{sep:3,dp:3})
+        +MOP(ARW,MX(A4,{dp:3,sep:3,rlab:RL,cls:(a,b)=>a===i?(b===k?'hl':'row'):(a===k?'hl2':'')}))
+        +CALC('成分ごとの引き算',
+          [0,1,2,3].map(j=>`${F(before[j],3)} − ${P(sub[j],3)} = <b${j===k?' class="z0"':''}>${F(after[j],3)}</b>`+
+            (j===k?'　← 0 になった':''))),
+      sym:`r<sub>${i+1}</sub> ← r<sub>${i+1}</sub> − m<sub>${i+1}${k+1}</sub> · r<sub>${k+1}</sub>`,
+      num:`[ ${before.map(v=>F(v,3)).join(', ')} ] − [ ${sub.map(v=>F(v,3)).join(', ')} ]`,
+      res:`r<sub>${i+1}</sub> = [ ${after.map(v=>F(v,3)).join(', ')} ]　a<sub>${i+1}${k+1}</sub> = 0`,
+      note:`第${k+1}列の第${i+1}行が消えました。残りは ${3-(k*2+i)} 手です。`});
+  }
+  const x=[0,0,0];
+  for(let i=2;i>=0;i--){
+    let s=M[i][3], terms=[];
+    for(let j=i+1;j<3;j++){s-=M[i][j]*x[j];terms.push(`${P(M[i][j],4)}×${P(x[j],4)}`);}
+    x[i]=s/M[i][i];
+    const cl2=[`b<sub>${i+1}</sub> = ${F(M[i][3],4)}`]
+      .concat(terms.length?[`引く分： ${terms.map((t,q)=>t).join(' + ')} = ${F(M[i][3]-s,4)}`]:[])
+      .concat([`残り ${F(s,4)} を a<sub>${i+1}${i+1}</sub> = ${F(M[i][i],4)} で割る`,
+               `x<sub>${i+1}</sub> = <b>${F(x[i],6)}</b>`]);
+    S.push({phase:'後退代入',
+      work:MOP(MX(M.map(r=>r.slice()),{dp:3,sep:3,rlab:RL,
+          rnote:[0,1,2].map(q=>q===i?`この行を使う`:''),
+          cls:(a,b)=>a===i?(b===i?'hl2':'row'):(a<i&&b<3&&b>a?'':(b<3&&a>b?'z':''))}),
+        ARW,
+        MX([[x[0]],[x[1]],[x[2]]],{dp:6,rlab:['x₁','x₂','x₃'],
+          cls:r=>r===i?'hl':(r>i?'':'z')}))
+        +CALC(`x<sub>${i+1}</sub> を求める`,cl2),
+      sym:`x<sub>${i+1}</sub> = ( b<sub>${i+1}</sub> ${terms.length?'− Σ a<sub>'+(i+1)+'j</sub> x<sub>j</sub>':''} ) / a<sub>${i+1}${i+1}</sub>`,
+      num:`x<sub>${i+1}</sub> = ( ${F(M[i][3],4)}${terms.length?' − '+terms.join(' − '):''} ) / ${F(M[i][i],4)}`,
+      res:`x<sub>${i+1}</sub> = <span class="cO">${F(x[i],6)}</span>`,
+      note:i===2?'上三角なので最下行は未知数が1つだけ。ここから上に戻ります。':''});
+  }
+  const chk=mat.mv(GE.A,x);
+  S.push({phase:'検算',
+    work:MOP(MX(GE.A,{dp:0,rlab:RL}),MX([[x[0]],[x[1]],[x[2]]],{dp:4,rlab:['x₁','x₂','x₃'],cls:()=>'hl'}),
+      ARW,MX(chk.map(v=>[v]),{dp:4,cls:()=>'hl'}),TAG('= b'),MX(GE.b.map(v=>[v]),{dp:0})),
+    sym:'A x = b になっているか確かめる',
+    num:chk.map((v,i)=>`${F(v,4)} vs ${F(GE.b[i],4)}`).join('&nbsp;&nbsp;／&nbsp;&nbsp;'),
+    res:`x = ( ${x.map(v=>F(v,4)).join(', ')} )&nbsp;&nbsp;<span class="cO">6手で厳密解に到達</span>`,
+    note:'反復法と違って、ここには「打ち切り誤差」がありません。残るのは丸め誤差だけです。'});
+  return S;
+}
+
+const IT={A:[[8,-3,-2],[-3,9,-4],[-2,-4,10]], b:[1,2,-1], sweeps:5};
+let itMethod='J';
+function itSteps(){
+  const A=IT.A,b=IT.b,n=3,w=+document.getElementById('itw').value;
+  const xe=mat.solve(A,b);
+  const D=mat.zeros(n,n),L=mat.zeros(n,n),U=mat.zeros(n,n);
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    if(i===j)D[i][j]=A[i][j]; else if(i>j)L[i][j]=A[i][j]; else U[i][j]=A[i][j];}
+  let T;
+  if(itMethod==='J')T=mat.mul(mat.inv(D),D.map((r,i)=>r.map((v,j)=>-(L[i][j]+U[i][j]))));
+  else if(itMethod==='GS')T=mat.mul(mat.inv(D.map((r,i)=>r.map((v,j)=>D[i][j]+L[i][j]))),U.map(r=>r.map(v=>-v)));
+  else T=mat.mul(mat.inv(D.map((r,i)=>r.map((v,j)=>D[i][j]+w*L[i][j]))),
+                 D.map((r,i)=>r.map((v,j)=>(1-w)*D[i][j]-w*U[i][j])));
+  const R=rho(T);
+  const err=x=>Math.max(...x.map((v,i)=>Math.abs(v-xe[i])));
+
+  const S=[]; let x=[0,0,0], hist=[{x:[0,0,0],e:err([0,0,0]),ci:-1,sw:-1,end:true}];
+  const Ab=A.map((r,i)=>[...r,b[i]]);
+  const mtx=row=>MX(Ab,{dp:0,sep:2,rlab:RL,
+      rnote:[0,1,2].map(q=>q===row?`この行で x<sub>${row+1}</sub> を決める`:''),
+      cls:(i,j)=>{
+        if(j===3)return i===row?'hl2':'';
+        let c=i===j?'D':i>j?'L':'U';
+        if(i===row)c+=(j===row?' hl2':' row');
+        return c;}});
+  const xvec=(xs,hi,fresh)=>MX(xs.map(v=>[v]),{dp:6,rlab:['x₁','x₂','x₃'],
+      rnote:[0,1,2].map(q=>q===hi?'← いま更新':(fresh&&fresh[q]?'今回値':'前回値')),
+      cls:r=>r===hi?'hl':(fresh&&fresh[r]?'':'old')});
+  const xpair=(xo,xn,hi,fresh)=>
+      MX(xo.map(v=>[v]),{dp:6,rlab:['x₁','x₂','x₃'],cls:()=>'old'})
+    + TAG('x⁽ᵏ⁾　右辺はこちらだけを見る') + ARW
+    + MX([0,1,2].map(r=>[fresh[r]?F(xn[r],6):'—']),
+        {rnote:[0,1,2].map(q=>q===hi?'← いま決まった':(fresh[q]?'決定済み':'まだ')),
+         cls:r=>r===hi?'hl':(fresh[r]?'':'z')})
+    + TAG('x⁽ᵏ⁺¹⁾　組み立て中');
+  S.push({phase:'準備',
+    work:MOP(mtx(-1),ARW,xvec(x,-1,[0,0,0]))
+      +CALC('分割',['対角 D＝斜線、下三角 L、上三角 U に切り、左辺 M に入れる部分を決める']),
+    sym:`<span class="cD">D</span> は対角、<span class="cL">L</span> は下三角、<span class="cU">U</span> は上三角`,
+    num:{J:'M = <span class="cD">D</span>,&nbsp; N = −(<span class="cL">L</span>+<span class="cU">U</span>)',
+         GS:'M = <span class="cD">D</span>+<span class="cL">L</span>,&nbsp; N = −<span class="cU">U</span>',
+         SOR:`M = <span class="cD">D</span>/ω+<span class="cL">L</span>,&nbsp; N = (1/ω−1)<span class="cD">D</span>−<span class="cU">U</span>&nbsp;&nbsp;(ω=${w})`}[itMethod],
+    res:`ρ(T) = <span class="${R<1?'cO':'cN'}">${F(R,6)}</span>&nbsp;→&nbsp;${R<1?'収束します':'発散します'}　厳密解 x* = ( ${xe.map(v=>F(v,6)).join(', ')} )`,
+    note:'初期値は x⁽⁰⁾ = 0。ここから1成分ずつ更新していきます。'});
+
+  for(let s=0;s<IT.sweeps;s++){
+    const xo=x.slice(), fresh=[0,0,0];
+    const xn=x.slice();                       // ヤコビ：組み立て中の新ベクトル
+    for(let i=0;i<n;i++){
+      const src = itMethod==='J' ? xo : x;
+      const isJ = itMethod==='J';
+      const used=[0,1,2].filter(j=>j!==i);
+      const sum=used.reduce((t,j)=>t+A[i][j]*src[j],0);
+      const raw=(b[i]-sum)/A[i][i];
+      const prev=x[i];
+      const nv = itMethod==='SOR' ? prev + w*(raw-prev) : raw;
+
+      /* ① 対角以外の項を計算する */
+      S.push({phase:`掃引 ${s+1}・x${i+1} ①`,
+        work:MOP(mtx(i))+'<div style="margin-top:8px">'+
+          (isJ?MOP(xpair(xo,xn,-1,fresh)):MOP(xvec(x,-1,fresh)))+'</div>'+LH(
+          used.map(j=>({lab:`a<sub>${i+1}${j+1}</sub> x<sub>${j+1}</sub>`,
+            cells:[Pi(A[i][j]),'×',F(src[j],6),'=',F(A[i][j]*src[j],6)],
+            note:isJ?'<span class="cM">x⁽ᵏ⁾ から</span>'
+                    :(fresh[j]?'<span class="cO">今回値</span>':'<span class="cM">前回値</span>')}))
+          .concat([{lab:'合計',cells:['','','','=',F(sum,6)],cls:'rule res'}]),{dp:6}),
+        sym:`${used.map(j=>`a<sub>${i+1}${j+1}</sub>x<sub>${j+1}</sub>`).join(' + ')} を先に計算する`,
+        num:used.map(j=>`${Pi(A[i][j])}×<span class="${isJ?'cM':(fresh[j]?'cO':'cM')}">${P(src[j],6)}</span>`).join(' + ')+` = ${F(sum,6)}`,
+        res:`対角以外の合計 = <span class="cO">${F(sum,6)}</span>`,
+        note: isJ
+          ? '<b>ヤコビ法では、右辺の x はすべて左の x⁽ᵏ⁾ から取ります。</b>この掃引ですでに決まった値があっても使いません。だから3成分の計算は互いに独立で、並列に走らせられます。'
+          : (i===0?'ガウス・ザイデルは1本のベクトルをその場で書き換えます。掃引の1成分目なので、参照する x はまだ前回値です。'
+                 :'<b>この掃引で更新済みの<span class="cO">今回値</span>をそのまま使います。</b>ここがヤコビとの唯一の違いです。'),
+        hist:hist.slice()});
+
+      /* ② 割って確定する */
+      const cl=[`b<sub>${i+1}</sub> − 合計 = ${Pi(b[i])} − ${P(sum,6)} = <b>${F(b[i]-sum,6)}</b>`,
+        `÷ a<sub>${i+1}${i+1}</sub> = ${F(b[i]-sum,6)} / ${A[i][i]} = <b>${F(raw,6)}</b>`]
+        .concat(itMethod==='SOR'?[`緩和 : ${F(prev,6)} + ${w} × ( ${F(raw,6)} − ${F(prev,6)} ) = <b>${F(nv,6)}</b>`]:[])
+        .concat(isJ?['<span class="cM">x⁽ᵏ⁾ はまだ書き換えない。掃引の終わりにまとめて入れ替える。</span>']:[]);
+      fresh[i]=1;
+      if(isJ){ xn[i]=nv; }
+      else { x=x.slice(); x[i]=nv; hist.push({x:x.slice(),e:err(x),ci:i,sw:s,end:i===n-1}); }
+      S.push({phase:`掃引 ${s+1}・x${i+1} ②`,
+        work:(isJ?MOP(xpair(xo,xn,i,fresh))
+                 :MOP(xvec(x,i,fresh),TAG(`誤差 ${hist[hist.length-1].e.toExponential(3)}`)))
+             +CALC('割って確定する',cl),
+        sym: itMethod==='SOR'
+          ? `x̃<sub>${i+1}</sub> = ( b<sub>${i+1}</sub> − 合計 ) / a<sub>${i+1}${i+1}</sub>　→　x<sub>${i+1}</sub> ← x<sub>${i+1}</sub> + ω( x̃<sub>${i+1}</sub> − x<sub>${i+1}</sub> )`
+          : (isJ?`x<sub>${i+1}</sub><sup>(k+1)</sup> = ( b<sub>${i+1}</sub> − 合計 ) / a<sub>${i+1}${i+1}</sub>`
+                :`x<sub>${i+1}</sub> ← ( b<sub>${i+1}</sub> − 合計 ) / a<sub>${i+1}${i+1}</sub>`),
+        num:`( ${Pi(b[i])} − ${P(sum,6)} ) / ${A[i][i]} = ${F(raw,6)}`+
+          (itMethod==='SOR'?`　→　${F(prev,6)} + ${w}×(${F(raw,6)} − ${F(prev,6)}) = ${F(nv,6)}`:''),
+        res:`x<sub>${i+1}</sub>${isJ?'<sup>(k+1)</sup>':''} = <span class="cO">${F(nv,6)}</span>　（前回 ${F(prev,6)}、変化 ${SG(nv-prev,6)}）`,
+        note:isJ?`右の列に ${i+1} 個目が入りました。左の x⁽ᵏ⁾ は動いていません。`
+                :`成分 ${i+1} だけが動きました。他の2つはこの手では変わりません。`,
+        hist:hist.slice()});
+    }
+    /* ヤコビ：掃引の終わりに一括で入れ替える */
+    if(itMethod==='J'){
+      x=xn.slice();
+      hist.push({x:x.slice(),e:err(x),ci:2,sw:s,end:true});
+      S.push({phase:`掃引 ${s+1}・入れ替え`,
+        work:MOP(MX(xo.map(v=>[v]),{dp:6,rlab:['x₁','x₂','x₃'],cls:()=>'old'}),
+              TAG('x⁽ᵏ⁾'),ARW,
+              MX(x.map(v=>[v]),{dp:6,rlab:['x₁','x₂','x₃'],cls:()=>'hl'}),
+              TAG('x⁽ᵏ⁺¹⁾'),TAG(`誤差 ${hist[hist.length-1].e.toExponential(3)}`))
+          +CALC('3成分をまとめて入れ替える',[
+            `x⁽ᵏ⁺¹⁾ = ( ${x.map(v=>F(v,6)).join(' , ')} )`,
+            '<span class="cM">3つの計算は互いに独立だったので、順番を変えても結果は同じ。並列計算機に向く理由です。</span>']),
+        sym:'x<sup>(k+1)</sup> ← 組み立てた新しいベクトル',
+        num:`( ${xo.map(v=>F(v,4)).join(' , ')} ) → ( ${x.map(v=>F(v,4)).join(' , ')} )`,
+        res:`掃引 ${s+1} 完了　誤差 <span class="cO">${hist[hist.length-1].e.toExponential(3)}</span>`,
+        note:'<b>ここで初めて x が動きます。</b>ガウス・ザイデルは成分ごとに動いていたので、同じ掃引数でも誤差に差が出ます。',
+        hist:hist.slice()});
+    }
+  }
+  S.forEach(st=>{if(!st.hist)st.hist=[hist[0]];});
+  S.rho=R; S.xe=xe; S.hist=hist;
+  return S;
+}
+
+const PF={r:0.02,x:0.10,V1:1.0,Q:-0.40,Pnose:3.752};
+function yb(){const d=PF.r*PF.r+PF.x*PF.x;return{g:PF.r/d,b:-PF.x/d};}
+function pq(d2,v2){
+  const {g,b}=yb(), G=[[g,-g],[-g,g]], B=[[b,-b],[-b,b]], V=[PF.V1,v2], th=[0,d2];
+  let Pp=0,Qq=0;
+  for(let k=0;k<2;k++){const dt=th[1]-th[k];
+    Pp+=V[1]*V[k]*(G[1][k]*Math.cos(dt)+B[1][k]*Math.sin(dt));
+    Qq+=V[1]*V[k]*(G[1][k]*Math.sin(dt)-B[1][k]*Math.cos(dt));}
+  return [Pp,Qq];
+}
+function jac(d,v){
+  const {g,b}=yb(), g22=g,b22=b,g21=-g,b21=-b;
+  return [[-v*PF.V1*(g21*Math.sin(d)-b21*Math.cos(d)), 2*v*g22+PF.V1*(g21*Math.cos(d)+b21*Math.sin(d))],
+          [ v*PF.V1*(g21*Math.cos(d)+b21*Math.sin(d)),-2*v*b22+PF.V1*(g21*Math.sin(d)-b21*Math.cos(d))]];
+}
+function nrSteps(){
+  const Psp=-(+document.getElementById('nrpl').value);
+  const S=[]; let d=0,v=1, hist=[];
+  const xv=(dd,vv,hi)=>mxHTML([[`δ₂ = ${F(dd*180/Math.PI,5)}°`],[`V₂ = ${F(vv,7)}`]],
+      {cls:r=>hi?'hl':''});
+  const [P0,Q0]=pq(0,1);
+  hist.push(Math.max(Math.abs(Psp-P0),Math.abs(PF.Q-Q0)));
+  S.push({phase:'準備',
+    work:lab('x⁽⁰⁾ =')+xv(0,1,0)+lab('指定値')+
+      mxHTML([[`P₂ = ${F(Psp,3)}`],[`Q₂ = ${F(PF.Q,3)}`]],{}),
+    sym:'未知数 x = ( δ₂ , V₂ )、方程式 f(x) = [ P₂<sup>指定</sup> − P₂(x) , Q₂<sup>指定</sup> − Q₂(x) ]',
+    num:'初期値はフラットスタート δ₂ = 0°、V₂ = 1.0 pu',
+    res:'1反復を5つの手に分けます：① 残差 → ② ヤコビアン → ③ 逆行列 → ④ Δx → ⑤ 更新',
+    note:'③ が Ax=b そのもの。ニュートン法は、非線形方程式を「線形方程式を何度も解く」問題に翻訳する手続きです。',
+    hist:hist.slice(), d:0, v:1});
+  for(let it=0;it<6;it++){
+    const [Pc,Qc]=pq(d,v), f=[Psp-Pc,PF.Q-Qc], J=jac(d,v);
+    const det=J[0][0]*J[1][1]-J[0][1]*J[1][0];
+    const dx=mat.solve(J,f);
+    const mis=Math.max(Math.abs(f[0]),Math.abs(f[1]));
+    if(!isFinite(mis)||Math.abs(v)>5||v<0.02){
+      S.push({phase:'発散',work:'',sym:'',num:'',
+        res:'<span class="cN">反復が発散しました</span>',
+        note:'負荷率が 100% を超えています。上枝と下枝が合流して<b>解そのものが消滅</b>しているため、どんな反復法でも到達できません。',
+        hist:hist.slice(),d,v,dead:1});
+      break;
+    }
+    S.push({phase:`反復 ${it+1}・① 残差`,
+      work:MOP(MX([[`δ₂ = ${F(d*180/Math.PI,5)}°`],[`V₂ = ${F(v,7)}`]],{rlab:['','']}),ARW,
+        MX([[f[0]],[f[1]]],{dp:8,rlab:['ΔP','ΔQ'],cls:()=>'hl3'}))
+        +CALC('指定値と計算値の差',[
+          `ΔP = P₂<sup>指定</sup> − P₂(x) = ${F(Psp,4)} − ${P(Pc,8)} = <b>${F(f[0],8)}</b>`,
+          `ΔQ = Q₂<sup>指定</sup> − Q₂(x) = ${F(PF.Q,4)} − ${P(Qc,8)} = <b>${F(f[1],8)}</b>`]),
+      sym:'f(x) = [ P₂<sup>指定</sup> − P₂(δ₂,V₂) , Q₂<sup>指定</sup> − Q₂(δ₂,V₂) ]',
+      num:`P₂(x) = ${F(Pc,8)} ／ Q₂(x) = ${F(Qc,8)}<br>`+
+          `f = [ ${F(Psp,4)} − ${P(Pc,8)} , ${F(PF.Q,4)} − ${P(Qc,8)} ]`,
+      res:`f = ( ${F(f[0],8)} , ${F(f[1],8)} )　残差 ‖f‖<sub>∞</sub> = <span class="cO">${mis.toExponential(3)}</span>`,
+      note:it===0?'いまの推定値をAC潮流方程式に入れて、指定値とのズレを測ります。ここがゼロになれば解です。':'',
+      hist:hist.slice(),d,v});
+    S.push({phase:`反復 ${it+1}・② ヤコビアン`,
+      work:MOP(MX(J,{dp:5,rlab:['∂P/','∂Q/'],rnote:['∂δ₂　∂V₂',''],cls:(a,b)=>a===b?'hl2':'row'}),
+        TAG(`det J = ${F(det,5)}`))
+        +CALC('4つの偏微分',[
+          `H = ∂P₂/∂δ₂ = <b>${F(J[0][0],5)}</b>　（大：P は角度で動く）`,
+          `N = ∂P₂/∂V₂ = <b>${F(J[0][1],5)}</b>`,
+          `M = ∂Q₂/∂δ₂ = <b>${F(J[1][0],5)}</b>`,
+          `L = ∂Q₂/∂V₂ = <b>${F(J[1][1],5)}</b>　（大：Q は電圧で動く）`]),
+      sym:'J = [ ∂P₂/∂δ₂ &nbsp; ∂P₂/∂V₂ ; &nbsp; ∂Q₂/∂δ₂ &nbsp; ∂Q₂/∂V₂ ]',
+      num:`H = ${F(J[0][0],5)} ／ N = ${F(J[0][1],5)} ／ M = ${F(J[1][0],5)} ／ L = ${F(J[1][1],5)}`,
+      res:`det J = <span class="${Math.abs(det)<20?'cN':'cO'}">${F(det,5)}</span>`,
+      note:it===0?'いまの動作点での傾き。det J が 0 に近づくほど、次の Δx が暴れます。電圧安定限界では det J → 0。':'',
+      hist:hist.slice(),d,v});
+    const iJ=[[J[1][1]/det,-J[0][1]/det],[-J[1][0]/det,J[0][0]/det]];
+    S.push({phase:`反復 ${it+1}・③ 逆行列を作る`,
+      work:MOP(MX(J,{dp:4,rlab:['',''],cls:(a,b)=>a===b?'hl2':'row'}),ARW,
+        MX(iJ,{dp:6,cls:()=>'hl'}),TAG('J⁻¹'))
+        +CALC('2×2 の逆行列',[
+          `det J = H·L − N·M = ${P(J[0][0],4)} × ${P(J[1][1],4)} − ${P(J[0][1],4)} × ${P(J[1][0],4)} = <b>${F(det,5)}</b>`,
+          `J⁻¹ = (1/det) [ L  −N ; −M  H ] = (1/${F(det,4)}) [ ${P(J[1][1],4)}  ${P(-J[0][1],4)} ; ${P(-J[1][0],4)}  ${P(J[0][0],4)} ]`,
+          `det が小さいほど J⁻¹ が大きくなり、次の一歩が暴れる。`]),
+      sym:`J<sup>−1</sup> = <span style="font-size:.9em">(1/det J) [ L &nbsp;−N ; &nbsp;−M &nbsp;H ]</span>`,
+      num:`det J = ${F(det,5)}`,
+      res:`det J = <span class="${Math.abs(det)<20?'cN':'cO'}">${F(det,5)}</span>　${Math.abs(det)<20?'かなり小さい（限界が近い）':''}`,
+      note:'ここが LEVEL 01 の Ax = b。実系統では 2×2 ではなく数万次元になるので、逆行列は作らず疎行列LU分解で解きます。',
+      hist:hist.slice(),d,v});
+    S.push({phase:`反復 ${it+1}・④ Δx を得る`,
+      work:MOP(MX(iJ,{dp:6}),MX([[f[0]],[f[1]]],{dp:6,rlab:['ΔP','ΔQ']}),ARW,
+        MX([[dx[0]],[dx[1]]],{dp:8,rlab:['Δδ₂','ΔV₂'],cls:()=>'hl'}))
+        +CALC('掛けるだけ',[
+          `Δδ₂ = ${P(iJ[0][0],6)} × ${P(f[0],6)} + ${P(iJ[0][1],6)} × ${P(f[1],6)} = <b>${F(dx[0],8)}</b> rad = ${F(dx[0]*180/Math.PI,5)}°`,
+          `ΔV₂ = ${P(iJ[1][0],6)} × ${P(f[0],6)} + ${P(iJ[1][1],6)} × ${P(f[1],6)} = <b>${F(dx[1],8)}</b> pu`]),
+      sym:`Δx = J<sup>−1</sup> f(x)`,
+      num:`Δδ₂ = ${F(dx[0],8)} rad、 ΔV₂ = ${F(dx[1],8)} pu`,
+      res:`Δδ₂ = <span class="cO">${F(dx[0]*180/Math.PI,5)}°</span>　ΔV₂ = <span class="cO">${F(dx[1],8)} pu</span>`,
+      note:'これが「次にどれだけ動くか」。まだ x は更新していません。',
+      hist:hist.slice(),d,v});
+    const nd=d+dx[0], nv=v+dx[1];
+    const [Pn,Qn]=pq(nd,nv);
+    const nmis=Math.max(Math.abs(Psp-Pn),Math.abs(PF.Q-Qn));
+    hist.push(nmis);
+    S.push({phase:`反復 ${it+1}・⑤ 更新`,
+      work:MOP(MX([[F(d*180/Math.PI,5)+'°'],[F(v,7)]],{rlab:['δ₂','V₂']}),TAG('+'),
+        MX([[dx[0]*180/Math.PI],[dx[1]]],{dp:5,cls:()=>'hl2'}),ARW,
+        MX([[F(nd*180/Math.PI,5)+'°'],[F(nv,7)]],{rlab:['δ₂','V₂'],cls:()=>'hl'}))
+        +CALC('足すだけ',[
+          `δ₂ = ${F(d*180/Math.PI,5)}° ${SG(dx[0]*180/Math.PI,5)}° = <b>${F(nd*180/Math.PI,5)}°</b>`,
+          `V₂ = ${F(v,7)} ${SG(dx[1],7)} = <b>${F(nv,7)}</b> pu`,
+          `残差 ${mis.toExponential(3)} → <b>${nmis.toExponential(3)}</b>`]),
+      sym:'x⁽ᵏ⁺¹⁾ = x⁽ᵏ⁾ + Δx',
+      num:`δ₂ = ${F(d*180/Math.PI,5)}° ${SG(dx[0]*180/Math.PI,5)}°　／　V₂ = ${F(v,7)} ${SG(dx[1],7)}`,
+      res:`δ₂ = <span class="cO">${F(nd*180/Math.PI,5)}°</span>　V₂ = <span class="cO">${F(nv,7)} pu</span>　新しい残差 ${nmis.toExponential(3)}`,
+      note:`残差が ${mis.toExponential(1)} → ${nmis.toExponential(1)}。`+
+           (it>0?'桁数がおよそ倍になっているのが2次収束です。':'2次収束は次の反復からはっきり出ます。'),
+      hist:hist.slice(),d:nd,v:nv});
+    d=nd; v=nv;
+    if(nmis<1e-12){
+      S.push({phase:'収束',
+        work:lab('解')+xv(d,v,1),
+        sym:'‖f(x)‖ < 許容値 → 停止',
+        num:`反復 ${it+1} 回で収束`,
+        res:`V₂ = <span class="cO">${F(v,8)} pu</span>　δ₂ = <span class="cO">${F(d*180/Math.PI,6)}°</span>`,
+        note:'反復回数は負荷条件をかなり変えてもほとんど増えません。これが2次収束の実用上の意味です。',
+        hist:hist.slice(),d,v});
+      break;
+    }
+  }
+  S.Psp=Psp;
+  return S;
+}
+
+const SW={H:3.5,f0:60,Pm:0.8,Pf:0.4,Ppost:1.3,dt:0.05,N:30};
+const MM=()=>2*SW.H/(2*Math.PI*SW.f0);
+function odeSteps(){
+  const tc=+document.getElementById('odetc').value, M=MM();
+  const Pmax=t=>t<tc-1e-9?SW.Pf:SW.Ppost;
+  const f=(t,d,w)=>[w,(SW.Pm-Pmax(t)*Math.sin(d))/M];
+  const d0=Math.asin(SW.Pm/1.8);
+  const S=[];
+  let r=[d0,0], e=[d0,0], t=0;
+  const tr=[[0,d0]], tre=[[0,d0]];
+  const deg=x=>F(x*180/Math.PI,4);
+  S.push({phase:'準備',
+    work:lab('状態 x =')+mxHTML([[`δ = ${deg(d0)}°`],[`ω = 0.000000 rad/s`]],{})+
+         lab(`Δt = ${SW.dt} s`)+lab(`M = ${F(M,6)}`),
+    sym:'dδ/dt = ω,&nbsp; dω/dt = ( P<sub>m</sub> − P<sub>max</sub>(t) sin δ ) / M',
+    num:`初期平衡点 δ₀ = arcsin( P<sub>m</sub> / P<sub>max</sub><sup>故障前</sup> ) = arcsin( 0.8 / 1.8 ) = ${deg(d0)}°`,
+    res:`t = 0 で故障発生。P<sub>max</sub> が 1.8 → <span class="cN">0.4</span> に落ち、t = ${tc} s で <span class="cO">1.3</span> に復帰します。`,
+    note:'同じ Δt で RK4 と前進オイラーを並走させます。1手＝1タイムステップ。',
+    tr:[[0,d0]],tre:[[0,d0]],t:0});
+  for(let n=0;n<SW.N;n++){
+    const k1=f(t,r[0],r[1]);
+    const k2=f(t+SW.dt/2,r[0]+SW.dt/2*k1[0],r[1]+SW.dt/2*k1[1]);
+    const k3=f(t+SW.dt/2,r[0]+SW.dt/2*k2[0],r[1]+SW.dt/2*k2[1]);
+    const k4=f(t+SW.dt,r[0]+SW.dt*k3[0],r[1]+SW.dt*k3[1]);
+    const nr=[r[0]+SW.dt/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]),
+              r[1]+SW.dt/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1])];
+    const ke=f(t,e[0],e[1]);
+    const ne=[e[0]+SW.dt*ke[0], e[1]+SW.dt*ke[1]];
+    const sw = (t<tc-1e-9)&&(t+SW.dt>=tc-1e-9);
+    const kt=[['k₁','始点 t',k1],['k₂','中点（k₁で仮進み）',k2],['k₃','中点（k₂で仮進み）',k3],['k₄','終点（k₃で仮進み）',k4]];
+    const tbl='<table class="tb" style="margin:0;font-size:12px"><tr><th>傾き</th><th>測る位置</th>'+
+      '<th class="n">dδ/dt</th><th class="n">dω/dt</th></tr>'+
+      kt.map(([a,b,k])=>`<tr><td class="m">${a}</td><td class="dimtx">${b}</td>`+
+        `<td class="n">${F(k[0],5)}</td><td class="n">${F(k[1],4)}</td></tr>`).join('')+'</table>';
+    S.push({phase:`t = ${F(t,2)} → ${F(t+SW.dt,2)} s`,
+      work:tbl,
+      sym:'k₁ = f(t, x)、k₂ = f(t+Δt/2, x+Δt/2·k₁)、k₃ = f(t+Δt/2, x+Δt/2·k₂)、k₄ = f(t+Δt, x+Δt·k₃)<br>'+
+          'x ← x + (Δt/6)( k₁ + 2k₂ + 2k₃ + k₄ )',
+      num:`δ ← ${F(r[0],6)} + (${SW.dt}/6)( ${F(k1[0],4)} + 2×${F(k2[0],4)} + 2×${F(k3[0],4)} + ${F(k4[0],4)} ) = ${F(nr[0],6)} rad<br>`+
+          `<span class="cM">オイラー：δ ← ${F(e[0],6)} + ${SW.dt} × ${F(ke[0],4)} = ${F(ne[0],6)} rad</span>`,
+      res:`<span class="cO">RK4：δ = ${deg(nr[0])}°</span>　`+
+          `<span class="cN">オイラー：δ = ${deg(ne[0])}°</span>　オイラーのずれ ${SG((ne[0]-nr[0])*180/Math.PI,3)}°`,
+      note: sw?`<b>この手で故障が除去されます。</b>P<sub>max</sub> が 0.4 → 1.3 に不連続に変わるため、Δt の切れ目を t<sub>c</sub> に合わせないと誤差が入ります。`
+              :(n===0?'k₂ と k₃ は「中点まで仮に進んでみて測った傾き」。1手の中で4回微分を計算するので、コストはオイラーの4倍です。':''),
+      tr:[...tr,[t+SW.dt,nr[0]]], tre:[...tre,[t+SW.dt,ne[0]]], t:t+SW.dt,
+      t0:t, d0:r[0], e0:e[0], k1,k2,k3,k4, dNew:nr[0], eNew:ne[0]});
+    tr.push([t+SW.dt,nr[0]]); tre.push([t+SW.dt,ne[0]]);
+    r=nr; e=ne; t+=SW.dt;
+    if(r[0]>Math.PI*1.5)break;
+  }
+  S.tc=tc;
+  return S;
+}
+
+const ED={c:[0.001562,0.00194,0.00482], b:[7.92,7.85,7.97],
+          Pmin:[150,100,50], Pmax:[600,400,200], name:['G1','G2','G3']};
+const edEq=D=>{
+  const s1=ED.c.reduce((s,c)=>s+1/(2*c),0), s2=ED.b.reduce((s,b,i)=>s+b/(2*ED.c[i]),0);
+  const lam=(D+s2)/s1;
+  return {lam,P:ED.b.map((b,i)=>(lam-b)/(2*ED.c[i]))};
+};
+const totalCost=Pv=>Pv.reduce((s,p,i)=>s+ED.b[i]*p+ED.c[i]*p*p,0);
+
+function lamSteps(){
+  const D=+document.getElementById('dem2').value;
+  document.getElementById('dem2v').textContent=D;
+  let lo=7.80, hi=12.0;
+  const S=[];
+  const clip=lam=>ED.b.map((b,k)=>{
+    const raw=(lam-b)/(2*ED.c[k]);
+    return {raw, P:Math.max(ED.Pmin[k],Math.min(ED.Pmax[k],raw)),
+            at: raw>ED.Pmax[k]?'max': raw<ED.Pmin[k]?'min':null};});
+  const tbl=r=>'<table class="tb" style="margin:0;font-size:12px">'+
+    '<tr><th>機</th><th class="n">(λ−b)/2c</th><th class="n">クリップ後 P</th><th>状態</th></tr>'+
+    r.map((x,i)=>`<tr><td>${ED.name[i]}</td><td class="n">${F(x.raw,2)}</td>`+
+      `<td class="n" style="color:${x.at?COL.ng:COL.ok}">${F(x.P,2)}</td>`+
+      `<td>${x.at?`<span class="tag on">${x.at==='max'?'上限 '+ED.Pmax[i]:'下限 '+ED.Pmin[i]}で固定</span>`
+                 :'<span class="tag free">内点（μ=0）</span>'}</td></tr>`).join('')+'</table>';
+  S.push({phase:'準備',
+    work:tbl(clip((lo+hi)/2)),
+    sym:'停留性 dF<sub>i</sub>/dP<sub>i</sub> = λ を P<sub>i</sub> について解き、上下限でクリップする',
+    num:`P<sub>i</sub> = clip( (λ − b<sub>i</sub>) / 2c<sub>i</sub> , P<sub>i</sub><sup>min</sup> , P<sub>i</sub><sup>max</sup> )`,
+    res:`λ の探索区間 [ ${F(lo,3)} , ${F(hi,3)} ] から始めます。需要 D = ${D} MW`,
+    note:'クリップこそが KKT の相補性条件そのものです。内点なら μ=0、境界に張り付いたら μ>0。どちらになるかは λ が決まるまで分かりません。',
+    lam:(lo+hi)/2, r:clip((lo+hi)/2), D});
+  let lam=0,r=[];
+  for(let k=0;k<16;k++){
+    lam=(lo+hi)/2; r=clip(lam);
+    const sum=r.reduce((s,x)=>s+x.P,0);
+    const low=sum<D;
+    S.push({phase:`二分探索 ${k+1}手目`,
+      work:tbl(r),
+      sym:'λ ← ( λ<sub>lo</sub> + λ<sub>hi</sub> ) / 2　→　各機の P を計算　→　ΣP と D を比べる',
+      num:`λ = ( ${F(lo,6)} + ${F(hi,6)} ) / 2 = <span class="cD">${F(lam,6)}</span><br>`+
+          r.map((x,i)=>`P<sub>${i+1}</sub> = clip( (${F(lam,4)} − ${ED.b[i]}) / ${F(2*ED.c[i],5)} ) = ${F(x.P,2)}`).join('　／　'),
+      res:`ΣP = ${F(sum,2)} MW &nbsp;<span class="${low?'cN':'cD'}">${low?'&lt;':'&gt;'}</span>&nbsp; D = ${D} MW`+
+          `&nbsp;→&nbsp;<span class="cO">${low?'発電が足りない ⇒ λ を上げる':'発電が過剰 ⇒ λ を下げる'}</span>`,
+      note:`区間を [ ${F(low?lam:lo,4)} , ${F(low?hi:lam,4)} ] に半分に狭めます。`+
+           (r.some(x=>x.at)?'　上下限に当たった機が出ました。その機は以降 λ の決定に参加しません。':''),
+      lam,r,D});
+    if(low)lo=lam; else hi=lam;
+  }
+  const mu=r.map((x,i)=>{
+    const ic=ED.b[i]+2*ED.c[i]*x.P;
+    return x.at==='max'?{v:lam-ic,t:'max'}:x.at==='min'?{v:ic-lam,t:'min'}:{v:0,t:null};});
+  S.push({phase:'仕上げ・μ の計算',
+    work:tbl(r)+'<table class="tb" style="margin:8px 0 0;font-size:12px">'+
+      '<tr><th>機</th><th class="n">dF/dP</th><th class="n">λ</th><th class="n">μ = λ − dF/dP</th><th>相補性 μg = 0</th></tr>'+
+      r.map((x,i)=>{const ic=ED.b[i]+2*ED.c[i]*x.P, a=mu[i].v>1e-6;
+        return `<tr${a?' class="hi"':''}><td>${ED.name[i]}</td><td class="n">${F(ic,4)}</td>`+
+          `<td class="n">${F(lam,4)}</td><td class="n" style="color:${a?COL.ng:COL.faint}">${F(mu[i].v,4)}</td>`+
+          `<td>${a?'<span class="tag on">g = 0 なので μ &gt; 0</span>':'<span class="tag free">g &lt; 0 なので μ = 0</span>'}</td></tr>`;}).join('')+'</table>',
+    sym:'停留性 dF<sub>i</sub>/dP<sub>i</sub> − λ + μ<sub>i</sub><sup>max</sup> − μ<sub>i</sub><sup>min</sup> = 0 から μ を逆算する',
+    num:mu.map((m,i)=>m.t?`μ<sub>${i+1}</sub> = λ − dF<sub>${i+1}</sub>/dP = ${F(lam,4)} − ${F(ED.b[i]+2*ED.c[i]*r[i].P,4)} = ${F(m.v,4)}`
+                        :`μ<sub>${i+1}</sub> = 0（内点）`).join('　／　'),
+    res:`λ = <span class="cO">${F(lam,4)} $/MWh</span>　有効制約 ${mu.filter(m=>m.v>1e-6).length} 個　総費用 ${F(totalCost(r.map(x=>x.P)),0)} $/h`,
+    note:'μ の意味は「その機の上限を 1 MW 緩めたら総費用がいくら下がるか」。制約の値段です。m 個の不等式があれば有効/非有効の組合せは 2ᵐ 通り。ここでは 3 機なので探索で済みますが、これが次の段で壁になります。',
+    lam,r,D,mu});
+  return S;
+}
+
+let cxMode='cvx';
+const fC =x=>0.16*(x-4.2)*(x-4.2)+0.5;
+const fN =x=>0.16*(x-4.2)*(x-4.2)+1.05*Math.sin(1.55*x)+1.2;
+const GD={alpha:0.6,N:30};
+function gdSteps(){
+  const F_=cxMode==='cvx'?fC:fN;
+  const df=x=>(F_(x+1e-6)-F_(x-1e-6))/2e-6;
+  const d2=x=>(F_(x+1e-3)-2*F_(x)+F_(x-1e-3))/1e-6;
+  let hmin=1e9,hmax=-1e9;
+  for(let k=0;k<=400;k++){const x=-1+12*k/400;hmin=Math.min(hmin,d2(x));hmax=Math.max(hmax,d2(x));}
+  let x=+document.getElementById('gdx0').value;
+  const S=[], tr=[x];
+  S.push({phase:'準備',
+    work:lab('f(x) =')+`<span class="mxlab">${cxMode==='cvx'?'0.16(x−4.2)² + 0.5':'0.16(x−4.2)² + 1.05 sin(1.55x) + 1.2'}</span>`,
+    sym:'x ← x − α f′(x)　（最急降下法、α = '+GD.alpha+'）',
+    num:`x₀ = ${F(x,4)}、f(x₀) = ${F(F_(x),5)}、f′(x₀) = ${F(df(x),5)}`,
+    res:`∇²f の最小値 = <span class="${hmin>=0?'cO':'cN'}">${F(hmin,3)}</span>&nbsp;→&nbsp;`+
+        (hmin>=0?'どこでも半正定値 ⇒ <span class="cO">凸関数</span>':'負になる区間がある ⇒ <span class="cN">非凸</span>'),
+    note:hmin>=0?'凸なら KKT 条件は十分条件になり、見つけた停留点が大域最適だと保証されます。'
+                :'非凸だと KKT は必要条件どまり。停留点が見つかっても、それが最良かどうかは分かりません。',
+    x,tr:[x],hmin});
+  for(let k=0;k<GD.N;k++){
+    const g=df(x), nx=x-GD.alpha*g;
+    tr.push(nx);
+    S.push({phase:`降下 ${k+1}手目`,
+      work:lab('x =')+mxHTML([[x]],{dp:5,cls:()=>'hl2'})+lab('f′(x) =')+
+           mxHTML([[g]],{dp:5,cls:()=>Math.abs(g)<1e-4?'hl':'hl3'})+
+           lab('f(x) =')+mxHTML([[F_(x)]],{dp:5}),
+      sym:'x ← x − α f′(x)',
+      num:`x ← ${F(x,5)} − ${GD.alpha} × ${P(g,5)} = ${F(nx,5)}`,
+      res:`x = <span class="cO">${F(nx,5)}</span>、f(x) = <span class="cO">${F(F_(nx),5)}</span>`+
+          (Math.abs(g)<1e-4?'　<span class="cO">勾配がほぼ 0 ⇒ 停留点</span>':''),
+      note:k===0?'勾配の符号と逆に進みます。歩幅 α が大きすぎると発散、小さすぎると進まない。'
+                :(Math.abs(g)<1e-4?(hmin>=0?'凸なのでこれが大域最適です。':'停留点に着きましたが、これが大域最適とは限りません。開始点を変えてみてください。'):''),
+      x:nx,tr:tr.slice(),hmin});
+    x=nx;
+    if(Math.abs(g)<1e-7)break;
+  }
+  return S;
+}
+
+const UC={F:[500,300,100], b:[8,10,15], Pmin:[100,50,20], Pmax:[400,250,100], name:['A','B','C']};
+function ucBound(D,fix){
+  const Pv=[0,0,0]; let cost=0,R=D;
+  [0,1,2].forEach(i=>{if(fix[i]===1){cost+=UC.F[i];Pv[i]=UC.Pmin[i];cost+=UC.b[i]*UC.Pmin[i];R-=UC.Pmin[i];}});
+  if(R<-1e-9)return null;
+  const seg=[];
+  [0,1,2].forEach(i=>{
+    if(fix[i]===1)seg.push({i,p:UC.b[i],h:UC.Pmax[i]-UC.Pmin[i]});
+    else if(fix[i]===null)seg.push({i,p:UC.b[i]+UC.F[i]/UC.Pmax[i],h:UC.Pmax[i]});});
+  seg.sort((a,b)=>a.p-b.p);
+  for(const s of seg){const q=Math.min(s.h,R);if(q>0){Pv[s.i]+=q;cost+=s.p*q;R-=q;}if(R<=1e-9)break;}
+  if(R>1e-6)return null;
+  const u=[0,1,2].map(i=>fix[i]===1?1:fix[i]===0?0:Pv[i]/UC.Pmax[i]);
+  return {cost,P:Pv,u,frac:u.some(v=>v>1e-9&&v<1-1e-9)};
+}
+function bbSteps(){
+  const D=+document.getElementById('dem3').value;
+  document.getElementById('dem3v').textContent=D;
+  const root=ucBound(D,[null,null,null]);
+  const nodes=[]; let inc=Infinity, incSol=null, incFix=null;
+  const S=[];
+  const fixStr=f=>f.map((v,i)=>`u<sub>${UC.name[i]}</sub>=${v===null?'自由':v}`).join('、');
+  const tbl=(r,f)=>r?('<table class="tb" style="margin:0;font-size:12px">'+
+    '<tr><th>機</th><th>u の扱い</th><th class="n">P [MW]</th><th class="n">u</th></tr>'+
+    [0,1,2].map(i=>{const fr=r.u[i]>1e-9&&r.u[i]<1-1e-9;
+      return `<tr><td>${UC.name[i]}</td><td class="dimtx">${f[i]===null?'自由 [0,1]':'固定 '+f[i]}</td>`+
+        `<td class="n">${F(r.P[i],1)}</td>`+
+        `<td class="n" style="color:${fr?COL.ng:COL.dim}">${F(r.u[i],2)}${fr?' ⚠':''}</td></tr>`;}).join('')+
+    '</table>'):'<p class="dimtx" style="margin:0">実行不能（容量が足りない、または下限の合計が需要を超える）</p>';
+  S.push({phase:'準備',
+    work:tbl(root,[null,null,null]),
+    sym:'まず u ∈ {0,1} を u ∈ [0,1] に緩めた LP を解く（LP緩和）',
+    num:root?`実効単価 b<sub>i</sub> + F<sub>i</sub>/P<sub>i</sub><sup>max</sup> = `+
+      [0,1,2].map(i=>`${UC.name[i]}: ${F(UC.b[i]+UC.F[i]/UC.Pmax[i],2)}`).join('　')+
+      ' の安い順に埋めるだけで解けます':'—',
+    res:root?`LP下界 = <span class="cO">${F(root.cost,2)} $/h</span>`+
+      (root.frac?'　<span class="cN">u が小数 ⇒ 物理的に無意味</span>':''):'—',
+    note:'LP緩和は元問題より制約が緩いので、必ず真の最適値以下。つまり<b>下界</b>になります。これが刈り取りの根拠です。',
+    nodes:[],inc:Infinity,root});
+  (function dfs(fix,depth,id,parent){
+    const r=ucBound(D,fix);
+    const node={id,parent,depth,fix:[...fix],bound:r?r.cost:null,state:'open'};
+    nodes.push(node);
+    let verdict,note;
+    if(!r){node.state='infeasible'; verdict='<span class="cN">実行不能 ⇒ この枝は捨てる</span>';
+      note='固定した u では需要を満たせません。';}
+    else if(r.cost>=inc-1e-9&&depth>0){node.state='pruned'; verdict=`<span class="cU">下界 ${F(r.cost,0)} ≥ 暫定最良 ${F(inc,0)} ⇒ 刈る</span>`;
+      note='この枝をどれだけ深く掘っても、いま持っている整数解より良くはなりません。中を見ずに捨てられます。';}
+    else if(depth===3){
+      if(r.cost<inc){inc=r.cost;incSol=r;incFix=[...fix];node.state='incumbent';
+        verdict=`<span class="cO">整数解 ${F(r.cost,0)} ⇒ 暫定最良を更新</span>`;
+        note='すべての u が 0/1 なので、これは実行可能な整数解です。上界が下がりました。';}
+      else{node.state='pruned';verdict='<span class="cU">整数解だが改善せず</span>';note='';}
+    }
+    else{node.state='branch'; verdict=`<span class="cD">下界 ${F(r.cost,0)} &lt; 暫定最良 ⇒ u<sub>${UC.name[depth]}</sub> で分枝</span>`;
+      note=`u<sub>${UC.name[depth]}</sub> = 1 の枝と 0 の枝に分けて、深い方から順に調べます。`;}
+    S.push({phase:depth===0?'根の節点':`深さ ${depth}`,
+      work:tbl(r,fix),
+      sym:`固定：${fixStr(fix)}`,
+      num:r?`この節点の LP 下界 = ${F(r.cost,2)} $/h　／　暫定最良（上界）= ${isFinite(inc)?F(inc,2):'まだ無し'}`:'LP は解なし',
+      res:verdict, note,
+      nodes:nodes.map(n=>({...n})), inc, incFix:incFix?[...incFix]:null, incSol, root});
+    if(node.state!=='branch')return;
+    [1,0].forEach(v=>{const f=[...fix];f[depth]=v;dfs(f,depth+1,nodes.length,id);});
+  })([null,null,null],0,0,-1);
+  const gap=(root&&isFinite(inc))?100*(inc-root.cost)/root.cost:NaN;
+  S.push({phase:'完了',
+    work:tbl(incSol,incFix||[1,1,1]),
+    sym:'探索終了。残った枝はすべて刈られたか実行不能',
+    num:`訪問した節点 ${nodes.length} 個（全列挙なら 15 個）`,
+    res:`最適値 = <span class="cO">${F(inc,2)} $/h</span>　u = ( ${incFix?incFix.join(', '):'—'} )　`+
+        `整数ギャップ = <span class="${gap>0.01?'cN':'cO'}">${F(gap,2)} %</span>`,
+    note:'実務では「ギャップが 0.1% を切ったら停止」のように打ち切ります。厳密解を諦めるのが標準になっている、唯一の階層です。',
+    nodes:nodes.map(n=>({...n})),inc,incFix,incSol,root,done:1});
+  S.root=root; S.D=D;
+  return S;
+}
+
+/* =========================================================
+   図：ニュートン法の幾何
+   ========================================================= */
+const N1D={f:d=>1.8*Math.sin(d)-0.8, df:d=>1.8*Math.cos(d)};
+function fNewton(iter,sub){
+  const g=cx('fNewton'); if(!g)return; clr(g);
+  const x0=76,y0=30,W=590,H=250;
+  const XL=-0.06,XH=1.32,YL=-1.05,YH=1.12;
+  const px=x=>x0+W*(x-XL)/(XH-XL), py=y=>y0+H*(YH-y)/(YH-YL);
+  GR(g,x0,y0,W,H,8,6);
+  LN(g,[[x0,py(0)],[x0+W,py(0)]],COL.ink,1.8);
+  const P=[];for(let k=0;k<=260;k++){const x=XL+(XH-XL)*k/260;P.push([px(x),py(N1D.f(x))]);}
+  LN(g,P,COL.l,2.6);
+  TM(g,'f (δ)',px(1.12),py(N1D.f(1.12))-20,COL.l,16,'left');
+  for(let v=-1;v<=1;v+=0.5)T(g,v.toFixed(1),x0-8,py(v),COL.faint,11,'right',undefined,'o');
+  for(let d=0;d<=1.2;d+=0.3)T(g,Math.round(d*180/Math.PI)+'°',px(d),y0+H+15,COL.faint,11,'center',undefined,'o');
+  T(g,'位相角 δ',x0+W/2,y0+H+34,COL.dim,12.5,'center');
+  const xs=[0]; for(let k=0;k<5;k++)xs.push(xs[k]-N1D.f(xs[k])/N1D.df(xs[k]));
+  const done=Math.max(0,Math.min(4,iter));
+  for(let j=0;j<=done;j++){
+    const xj=xs[j], act=(j===done&&sub);
+    if(j<done||act){
+      const y=N1D.f(xj), xn=xs[j+1];
+      LN(g,[[px(xj),py(y)],[px(xn),py(0)]],act?COL.d:tint(COL.d,.35),act?2.6:1.4,act?null:[5,4]);
+      LN(g,[[px(xj),py(0)],[px(xj),py(y)]],tint(COL.faint,.8),1.2,[3,3]);
+      if(act)T(g,'接線',px(xj)+14,(py(y)+py(0))/2+(j?-18:16),COL.d,12.5,'left');
+    }
+    DOT(g,px(xj),py(N1D.f(xj)),j===done?COL.ng:tint(COL.ng,.35),j===done?6:4);
+    DOT(g,px(xj),py(0),j===done?COL.ok:tint(COL.ok,.35),j===done?5.5:3.5);
+    TM(g,'δ'+j,px(xj),py(0)+18,j===done?COL.ok:COL.faint,14,'center');
+  }
+  const tx=x0+W+64;
+  T(g,'1手の中身',tx,y0+10,COL.ink,14,'left');
+  [['① いまの点で f を測る',COL.ng],['② その点の傾き f ′ で接線を引く',COL.d],
+   ['③ 接線が横軸を切る点を次の点にする',COL.ok]]
+   .forEach((l,i)=>T(g,l[0],tx,y0+42+i*26,l[1],13,'left'));
+  T(g,'未知数が2個以上なら',tx,y0+150,COL.dim,12,'left');
+  T(g,'f ′ → ヤコビアン J',tx,y0+174,COL.body,12.5,'left');
+  T(g,'割り算 → J Δx = f を解く',tx,y0+198,COL.body,12.5,'left');
+  T(g,'収束先 δ* = 26.3878°',tx,y0+232,COL.ok,13,'left');
+  T(g,'接線が寝る（f ′→0）と次の点が遠くへ飛ぶ',tx,y0+256,COL.ng,12.5,'left');
+}
+
+/* ---------- 図：ノーズカーブ ---------- */
+function fNose(mark){
+  const g=cx('fNose'); if(!g)return; clr(g);
+  const x0=72,y0=28,W=560,H=250;
+  const XH=4.4;
+  const px=p=>x0+W*p/XH, py=v=>y0+H*(1.15-v)/1.15;
+  GR(g,x0,y0,W,H,8,6);
+  for(let v=0;v<=1.0;v+=0.2)T(g,v.toFixed(1),x0-8,py(v),COL.faint,11,'right',undefined,'o');
+  for(let p=0;p<=4;p+=1)T(g,p,px(p),y0+H+15,COL.faint,11,'center',undefined,'o');
+  T(g,'送電電力 P₂ [pu]',x0+W/2,y0+H+34,COL.dim,12.5,'center');
+  g.save();g.translate(x0-44,y0+H/2);g.rotate(-Math.PI/2);
+  T(g,'母線電圧 |V₂| [pu]',0,0,COL.dim,12.5,'center');g.restore();
+  const up=[],dn=[];
+  let d=0;                                  // 高電圧側から V を下げる連続法で一筆に追う
+  for(let q=0;q<=460;q++){
+    const v=0.96-(0.96-0.22)*q/460;
+    let ok=false;
+    for(let it=0;it<60;it++){
+      const qq=pq(d,v)[1], h=1e-6, dq=(pq(d+h,v)[1]-pq(d-h,v)[1])/(2*h);
+      if(!isFinite(dq)||Math.abs(dq)<1e-12)break;
+      const stp=(PF.Q-qq)/dq; d+=stp;
+      if(Math.abs(stp)<1e-13){ok=true;break;}
+    }
+    if(!ok||d<-1.7||d>0.2)break;
+    const p=-pq(d,v)[0];
+    if(!isFinite(p)||p<0||p>XH)continue;
+    (v>0.6294?up:dn).push([px(p),py(v)]);
+  }
+  LN(g,up,COL.ok,2.6); LN(g,dn,tint(COL.ng,.75),2.2,[6,4]);
+  T(g,'上枝（運転点）',px(1.4),py(0.90)-16,COL.ok,12.5,'left');
+  T(g,'下枝（不安定）',px(1.4),py(0.36),COL.ng,12.5,'left');
+  const NP=[px(PF.Pnose),py(0.6294)];
+  DOT(g,NP[0],NP[1],COL.ng,7);
+  LN(g,[[NP[0],y0],[NP[0],y0+H]],COL.ng,1.2,[4,4]);
+  T(g,'P = 3.752 pu',NP[0]-10,y0+16,COL.ng,12.5,'right');
+  T(g,'ここで解が消える',NP[0]-10,y0+36,COL.ng,12,'right');
+  if(mark!=null&&mark>0){
+    const v=0.20+0, pm=Math.min(mark,XH);
+    LN(g,[[px(pm),y0],[px(pm),y0+H]],COL.d,1.6,[5,4]);
+    T(g,'いまの負荷',px(pm)+8,y0+H-16,COL.d,12,'left');
+  }
+  const tx=x0+W+56;
+  T(g,'解が「消える」とはどういうことか',tx,y0+14,COL.ink,14,'left');
+  ['上枝と下枝は、負荷を増やすと近づいてくる。',
+   '3.752 pu で2つが合流し、それより先には',
+   'f(x) = 0 を満たす x が存在しない。',
+   '',
+   'ニュートン法が収束しないのは',
+   'アルゴリズムの失敗ではなく、',
+   '方程式に解がないから。',
+   '',
+   '合流点では det J = 0。',
+   '接線が完全に寝るので、次の点が飛ぶ。'
+  ].forEach((s,i)=>{if(s)T(g,s,tx,y0+46+i*23,i>=8?COL.ng:COL.body,12.5,'left');});
+}
+
+/* =========================================================
+   図：RK4 の4つの傾き
+   ========================================================= */
+function fRK4(st,hi){
+  const g=cx('fRK4'); if(!g)return; clr(g);
+  const x0=76,y0=30,W=560,H=250;
+  if(!st||!st.k1){
+    T(g,'「次へ」を押すと、1手の中で測る4つの傾きが出ます',g.W/2,g.H/2,COL.faint,14,'center');
+    return;
+  }
+  const dt=SW.dt,t0=st.t0,d0=st.d0;
+  const cand=[d0,st.dNew,st.eNew,d0+dt*st.k1[0],d0+dt*st.k4[0]];
+  let lo=Math.min(...cand),hi2=Math.max(...cand);
+  const pad=Math.max(.02,(hi2-lo)*.5); lo-=pad; hi2+=pad;
+  const px=t=>x0+W*(t-t0)/(dt*1.22), py=d=>y0+H*(hi2-d)/(hi2-lo);
+  GR(g,x0,y0,W,H,6,6);
+  LN(g,[[px(t0+dt),y0],[px(t0+dt),y0+H]],COL.rule,1.2,[4,4]);
+  LN(g,[[px(t0+dt/2),y0],[px(t0+dt/2),y0+H]],COL.rule,1.2,[4,4]);
+  T(g,'t',px(t0),y0+H+15,COL.dim,12,'center');
+  T(g,'t + Δt/2',px(t0+dt/2),y0+H+15,COL.dim,12,'center');
+  T(g,'t + Δt',px(t0+dt),y0+H+15,COL.dim,12,'center');
+  T(g,'1タイムステップの拡大（縦軸 δ [rad]）',x0+W/2,y0+H+35,COL.faint,12,'center');
+  const seg=(t,d,s,len,col,w)=>LN(g,[[px(t),py(d)],[px(t+len),py(d+s*len)]],col,w,[5,4]);
+  const ks=[['k₁',COL.d,t0,d0,st.k1,dt],
+            ['k₂',COL.l,t0+dt/2,d0+dt/2*st.k1[0],st.k2,dt/2],
+            ['k₃',COL.u,t0+dt/2,d0+dt/2*st.k2[0],st.k3,dt/2],
+            ['k₄',COL.ng,t0+dt,d0+dt*st.k3[0],st.k4,-dt/2]];
+  ks.forEach(([nm,col,t,d,k,len],q)=>{
+    const on=!hi||hi===q+1, a=on?1:.16;
+    g.save(); g.globalAlpha=a;
+    seg(t,d,k[0],len,col,on?2.4:1.4);
+    DOT(g,px(t),py(d),col,on?6:4);
+    TM(g,nm,px(t)+10,py(d)-16,col,17,'left');
+    g.restore();
+  });
+  g.save(); g.globalAlpha=hi&&hi<5?.2:1;
+  AR(g,px(t0),py(d0),px(t0+dt),py(st.dNew),COL.ok,2.8);
+  DOT(g,px(t0+dt),py(st.dNew),COL.ok,7);
+  T(g,'RK4',px(t0+dt)+11,py(st.dNew),COL.ok,13,'left');
+  g.restore();
+  g.save(); g.globalAlpha=hi&&hi<5?.15:1;
+  LN(g,[[px(t0),py(d0)],[px(t0+dt),py(st.eNew)]],COL.ng,2,[6,4]);
+  DOT(g,px(t0+dt),py(st.eNew),COL.ng,6);
+  T(g,'オイラー',px(t0+dt)+11,py(st.eNew),COL.ng,13,'left');
+  g.restore();
+  DOT(g,px(t0),py(d0),COL.ink,6);
+  const tx=x0+W+58;
+  T(g,'重み付き平均で進む',tx,y0+14,COL.ink,14,'left');
+  [['k₁',1,COL.d],['k₂',2,COL.l],['k₃',2,COL.u],['k₄',1,COL.ng]].forEach((w,i)=>{
+    const y=y0+50+i*34, on=!hi||hi===i+1;
+    g.save(); g.globalAlpha=on?1:.25;
+    TM(g,w[0],tx,y,w[2],16,'left');
+    g.fillStyle=tint(w[2],.24); g.fillRect(tx+34,y-9,w[1]*40,18);
+    g.strokeStyle=w[2]; g.lineWidth=1.2; g.strokeRect(tx+34.5,y-8.5,w[1]*40,18);
+    T(g,'×'+w[1],tx+34+w[1]*40+9,y,COL.dim,12,'left');
+    g.restore();
+  });
+  T(g,'合計を 6 で割る',tx,y0+192,COL.body,12.5,'left');
+  T(g,'オイラーは k₁ だけ（1回）',tx,y0+218,COL.ng,12.5,'left');
+  T(g,'誤差 O(Δt²) → RK4 は O(Δt⁵)',tx,y0+242,COL.ok,12.5,'left');
+}
+
+/* ---------- 図：簡略化 ---------- */
+function fSimp(k){
+  const g=cx('fSimp'); if(!g)return; clr(g);
+  const rows=[
+    ['AC潮流  f(x) = 0','LEVEL 03  非線形','sin δ ≈ δ,  V ≈ 1,  R ≪ X','DC潮流  B′θ = P','LEVEL 01  線形','電圧・無効電力・損失'],
+    ['動揺方程式','LEVEL 04  微分方程式','平衡点まわりで1次近似','dx/dt = A x','LEVEL 01–02  線形','大擾乱時の挙動'],
+    ['過渡安定度の積分','LEVEL 04  数値積分','1機無限大母線・減衰0','等面積法  A₁ ≤ A₂','LEVEL 01  代数不等式','多機・制御系の相互作用']];
+  const bw=250,bh=52;
+  rows.forEach((r,i)=>{
+    if(i>=k)return;
+    const y=34+i*84;
+    g.save();g.fillStyle=tint(COL.ng,.05);g.fillRect(60,y,bw,bh);
+    g.strokeStyle=COL.ng;g.lineWidth=1.4;g.strokeRect(60.5,y+.5,bw,bh);g.restore();
+    TM(g,r[0],60+bw/2,y+20,COL.ink,15,'center');
+    T(g,r[1],60+bw/2,y+39,COL.ng,11.5,'center');
+    AR(g,60+bw+16,y+bh/2,60+bw+206,y+bh/2,COL.d,1.8);
+    T(g,r[2],60+bw+111,y+bh/2-14,COL.d,12,'center');
+    T(g,'仮定を置く',60+bw+111,y+bh/2+17,COL.faint,11,'center');
+    const x2=60+bw+222;
+    g.save();g.fillStyle=tint(COL.ok,.06);g.fillRect(x2,y,bw,bh);
+    g.strokeStyle=COL.ok;g.lineWidth=1.4;g.strokeRect(x2+.5,y+.5,bw,bh);g.restore();
+    TM(g,r[3],x2+bw/2,y+20,COL.ink,15,'center');
+    T(g,r[4],x2+bw/2,y+39,COL.ok,11.5,'center');
+    T(g,'失うもの：'+r[5],x2+bw+22,y+bh/2,COL.ng,12,'left');
+  });
+}
+
+/* =========================================================
+   図：ラグランジュ／KKT の幾何
+   ========================================================= */
+const LG={c1:0.03,c2:0.06,D:300,cap:80};
+function lgPlot(g,x0,y0,W,H,mode,k){
+  const XH=330,YH=330;
+  const px=p=>x0+W*p/XH, py=p=>y0+H*(1-p/YH);
+  GR(g,x0,y0,W,H,6,6);
+  for(let p=0;p<=300;p+=100){T(g,p,px(p),y0+H+15,COL.faint,11,'center',undefined,'o');
+    T(g,p,x0-8,py(p),COL.faint,11,'right',undefined,'o');}
+  TM(g,'P₁',x0+W/2,y0+H+36,COL.dim,15,'center');
+  g.save();g.translate(x0-42,y0+H/2);g.rotate(-Math.PI/2);TM(g,'P₂',0,0,COL.dim,15,'center');g.restore();
+  const Fv=(a,b)=>LG.c1*a*a+LG.c2*b*b;
+  if(k>=1)[600,1200,1800,2600,3600].forEach(L=>{
+    const P=[];
+    for(let q=0;q<=160;q++){const th=Math.PI/2*q/160;
+      const a=Math.sqrt(L/LG.c1)*Math.cos(th), b=Math.sqrt(L/LG.c2)*Math.sin(th);
+      if(a<=XH&&b<=YH)P.push([px(a),py(b)]);}
+    const on=Math.abs(L-1800)<1;
+    LN(g,P,on?COL.l:tint(COL.l,.3),on?2.4:1.3);
+  });
+  if(k>=1)T(g,'費用 F の等高線',px(18),py(300),COL.l,12.5,'left');
+  if(k>=2){
+    LN(g,[[px(0),py(300)],[px(300),py(0)]],COL.ok,2.6);
+    T(g,'P₁ + P₂ = 300',px(238),py(78)+4,COL.ok,12.5,'left');
+  }
+  if(mode==='cap'&&k>=2){
+    g.save();g.fillStyle=tint(COL.ng,.07);g.fillRect(x0,y0,W,py(LG.cap)-y0);g.restore();
+    LN(g,[[x0,py(LG.cap)],[x0+W,py(LG.cap)]],COL.ng,2.2);
+    T(g,'P₂ ≤ 80',x0+10,py(LG.cap)-14,COL.ng,12.5,'left');
+    T(g,'実行不能',x0+W-10,py(LG.cap)-30,COL.ng,12,'right');
+    DOT(g,px(200),py(100),COL.faint,5.5);
+    T(g,'上限がなければ ここ',px(200)+12,py(100)-14,COL.faint,11.5,'left');
+  }
+  if(k>=3){
+    const P1=mode==='cap'?LG.D-LG.cap:200, P2=mode==='cap'?LG.cap:100;
+    DOT(g,px(P1),py(P2),COL.ng,8);
+    T(g,`(${P1}, ${P2})`,px(P1)+13,py(P2)+18,COL.ng,13,'left');
+    if(k>=4){
+      AR(g,px(P1),py(P2),px(P1)+50,py(P2)-50,COL.l,2.4);
+      TM(g,'∇F',px(P1)+56,py(P2)-56,COL.l,17,'left');
+      AR(g,px(P1),py(P2),px(P1)+36,py(P2)-36,COL.ok,1.9,[4,3]);
+      TM(g,'∇g',px(P1)+16,py(P2)-58,COL.ok,16,'left');
+      if(mode==='cap'){
+        AR(g,px(P1),py(P2),px(P1),py(P2)-40,COL.ng,1.9,[4,3]);
+        TM(g,'∇h',px(P1)-12,py(P2)-50,COL.ng,16,'right');
+      }
+    }
+  }
+}
+function fLag(k){
+  const g=cx('fLag'); if(!g)return; clr(g);
+  lgPlot(g,96,28,300,260,'eq',k);
+  const tx=470;
+  T(g,'なぜ接点が最適なのか',tx,44,COL.ink,14,'left');
+  const L=['制約線に沿って動く間、等高線を横切れる＝まだ下げられる。',
+           '下げられなくなるのは、制約線が等高線に接した瞬間だけ。',
+           'そこでは2つの勾配が平行になる。'];
+  L.forEach((s,i)=>{if(k>=2+i)T(g,s,tx,78+i*24,COL.body,13,'left');});
+  if(k>=4){
+    TM(g,'∇F = λ ∇g',tx,168,COL.ink,22,'left');
+    T(g,'g = P₁ + P₂ − 300 なら ∇g = (1, 1) なので',tx,204,COL.dim,12.5,'left');
+    TM(g,'0.06 P₁ = λ   かつ   0.12 P₂ = λ',tx,234,COL.ok,17,'left');
+    T(g,'両機の限界費用が等しい ＝ 等λ法',tx,262,COL.ok,13,'left');
+  }
+  if(k>=5){
+    T(g,'解 (200, 100)、λ = 12 $/MWh、F = 1800 $/h',tx,296,COL.ink,13,'left');
+    T(g,'λ の意味：D を 1 MW 増やすと総費用が 12 $/h 増える ＝ 価格',tx,322,COL.d,13,'left');
+  }
+}
+function fKKTg(k){
+  const g=cx('fKKTg'); if(!g)return; clr(g);
+  lgPlot(g,96,28,300,260,'cap',k);
+  const tx=470;
+  T(g,'制約が「効く」と何が変わるか',tx,44,COL.ink,14,'left');
+  if(k>=3){
+    T(g,'さっきの最適点 (200,100) が実行不能領域に入る。',tx,78,COL.body,13,'left');
+    T(g,'最適点は境界に押し付けられ、勾配が2本で釣り合う。',tx,102,COL.body,13,'left');
+  }
+  if(k>=4)TM(g,'∇F = λ ∇g + μ ∇h',tx,150,COL.ink,22,'left');
+  if(k>=5){
+    [['P₁ = 220、P₂ = 80（上限に張り付き）',COL.ink],
+     ['λ = dF₁/dP₁ = 0.06 × 220 = 13.20',COL.ok],
+     ['dF₂/dP₂ = 0.12 × 80 = 9.60（λ より安いのに増やせない）',COL.ng],
+     ['μ = 13.20 − 9.60 = 3.60 ＝ 上限の値段',COL.ng],
+     ['総費用 1800 → 1836 $/h',COL.dim]].forEach((r,i)=>T(g,r[0],tx,186+i*25,r[1],13,'left'));
+  }
+  if(k>=6){
+    TM(g,'μ · g = 0',tx,322,COL.ink,20,'left');
+    T(g,'効いていないなら μ=0、μ>0 なら必ず境界上',tx+120,324,COL.dim,12.5,'left');
+  }
+}
+/* λ 線（等λ法ステッパー用） */
+const EDC=[COL.d,COL.l,COL.u];
+function fLamLine(st){
+  const g=cx('fLamLine'); if(!g)return; clr(g);
+  const x0=56,y0=20,W=g.W-84,H=g.H-58;
+  GR(g,x0,y0,W,H,6,6);
+  const PX=650,YL=7.6,YH=10.9;
+  const px=p=>x0+W*p/PX, py=v=>y0+H*(YH-v)/(YH-YL);
+  for(let v=8;v<=10.5;v+=0.5)T(g,v.toFixed(1),x0-8,py(v),COL.faint,11,'right',undefined,'o');
+  for(let p=0;p<=600;p+=200)T(g,p,px(p),y0+H+15,COL.faint,11,'center',undefined,'o');
+  T(g,'P [MW]　／　縦軸 dF/dP [$/MWh]',x0+W/2,y0+H+33,COL.dim,12,'center');
+  ED.c.forEach((c,i)=>{
+    const a=ED.Pmin[i],b=ED.Pmax[i];
+    LN(g,[[px(a),py(ED.b[i]+2*c*a)],[px(b),py(ED.b[i]+2*c*b)]],EDC[i],2.4);
+    [a,b].forEach(q=>LN(g,[[px(q),py(ED.b[i]+2*c*q)-8],[px(q),py(ED.b[i]+2*c*q)+8]],EDC[i],1.8));
+    T(g,ED.name[i],px(b)+8,py(ED.b[i]+2*c*b),EDC[i],12,'left');
+  });
+  const lam=st.lam, r=st.r;
+  const ly=py(Math.max(YL,Math.min(YH,lam)));
+  LN(g,[[x0,ly],[x0+W,ly]],COL.ok,2.2,[7,5]);
+  TM(g,'λ = '+lam.toFixed(4),x0+8,ly-13,COL.ok,15,'left');
+  r.forEach((x,i)=>{
+    const ic=ED.b[i]+2*ED.c[i]*x.P;
+    DOT(g,px(x.P),py(ic),x.at?COL.ng:EDC[i],5.5);
+    if(x.at){LN(g,[[px(x.P),py(ic)],[px(x.P),ly]],COL.ng,1.6);
+      TM(g,'μ',px(x.P)+8,(py(ic)+ly)/2,COL.ng,15,'left');}
+  });
+  const sum=r.reduce((s,x)=>s+x.P,0);
+  T(g,`ΣP = ${sum.toFixed(1)} / D = ${st.D}`,x0+W-8,y0+16,sum<st.D?COL.ng:COL.d,12.5,'right');
+}
+
+/* ---------- 図：凸性 ---------- */
+function fConv(k){
+  const g=cx('fConv'); if(!g)return; clr(g);
+  const H=160,Y=42,W=250;
+  let x0=48;
+  if(k>=1){
+    GR(g,x0,Y,W,H,6,4);
+    T(g,'凸関数',x0+W/2,Y-18,COL.ok,13.5,'center');
+    const fa=t=>0.9*(t-0.5)*(t-0.5)+0.12;
+    const p=[];for(let q=0;q<=120;q++){const t=q/120;p.push([x0+W*t,Y+H*(1-fa(t)/0.55)]);}
+    LN(g,p,COL.ok,2.6);
+    LN(g,[[x0+W*.13,Y+H*(1-fa(.13)/.55)],[x0+W*.86,Y+H*(1-fa(.86)/.55)]],COL.d,1.9,[5,4]);
+    DOT(g,x0+W*.5,Y+H*(1-fa(.5)/.55),COL.ng,6);
+    T(g,'弦がグラフの上',x0+W/2,Y+24,COL.d,12,'center');
+    T(g,'谷は1つ ⇒ 局所 = 大域',x0+W/2,Y+H+20,COL.ok,12.5,'center');
+  }
+  if(k>=2){
+    x0=356;
+    GR(g,x0,Y,W,H,6,4);
+    T(g,'非凸関数',x0+W/2,Y-18,COL.ng,13.5,'center');
+    const fb=t=>0.55*(t-.5)*(t-.5)+0.10*Math.sin(15*t)+0.14+0.05*Math.cos(9*t);
+    const p=[];for(let q=0;q<=220;q++){const t=q/220;p.push([x0+W*t,Y+H*(1-fb(t)/0.55)]);}
+    LN(g,p,COL.u,2.6);
+    LN(g,[[x0+W*.16,Y+H*(1-fb(.16)/.55)],[x0+W*.62,Y+H*(1-fb(.62)/.55)]],COL.d,1.9,[5,4]);
+    let best=9,bt=0;for(let q=0;q<=400;q++){const t=q/400;if(fb(t)<best){best=fb(t);bt=t;}}
+    [0.12,0.33,0.55,0.75,0.94].forEach(t=>{
+      let x=t;for(let s=0;s<400;s++){const d=(fb(x+1e-4)-fb(x-1e-4))/2e-4;x=Math.max(0,Math.min(1,x-0.004*d));}
+      DOT(g,x0+W*x,Y+H*(1-fb(x)/0.55),Math.abs(x-bt)<0.02?COL.ng:COL.faint,Math.abs(x-bt)<0.02?6:4);});
+    T(g,'弦が下回る区間がある',x0+W/2,Y+24,COL.d,12,'center');
+    T(g,'谷が複数 ⇒ 行き先は初期値しだい',x0+W/2,Y+H+20,COL.ng,12.5,'center');
+  }
+  if(k>=3){
+    x0=676;
+    T(g,'実行可能領域',x0+130,Y-18,COL.ink,13.5,'center');
+    g.save();g.fillStyle=tint(COL.ok,.12);g.strokeStyle=COL.ok;g.lineWidth=2;
+    g.beginPath();g.ellipse(x0+62,Y+62,54,48,0,0,7);g.fill();g.stroke();g.restore();
+    LN(g,[[x0+22,Y+48],[x0+104,Y+88]],COL.ink,1.8);
+    DOT(g,x0+22,Y+48,COL.ink,4);DOT(g,x0+104,Y+88,COL.ink,4);
+    T(g,'凸集合',x0+62,Y+130,COL.ok,12,'center');
+    g.save();g.fillStyle=tint(COL.ng,.1);g.strokeStyle=COL.ng;g.lineWidth=2;
+    g.beginPath();g.moveTo(x0+158,Y+16);g.lineTo(x0+258,Y+28);g.lineTo(x0+206,Y+66);
+    g.lineTo(x0+262,Y+106);g.lineTo(x0+154,Y+106);g.closePath();g.fill();g.stroke();g.restore();
+    LN(g,[[x0+176,Y+28],[x0+244,Y+100]],COL.ng,1.8,[4,3]);
+    DOT(g,x0+176,Y+28,COL.ink,4);DOT(g,x0+244,Y+100,COL.ink,4);
+    T(g,'非凸集合（線分が外へ出る）',x0+206,Y+130,COL.ng,12,'center');
+    T(g,'整数条件 u ∈ {0,1} は領域を点の集まりにする ⇒ 最も強い非凸',
+      x0+130,Y+H+20,COL.ng,12.5,'center');
+  }
+}
+
+/* ---------- 図：分枝限定の挟み込み ---------- */
+function fBound(st,root){
+  const g=cx('fBound'); if(!g)return; clr(g);
+  const x0=110,y0=32,W=330,H=210;
+  const lo=root?root.cost:0, hi=isFinite(st&&st.inc)?st.inc:null;
+  const span=Math.max(400,(hi?hi-lo:400)*2.4);
+  const base=lo-span*.2, top=lo+span*.8;
+  const py=v=>y0+H*(top-v)/(top-base);
+  GR(g,x0,y0,W,H,4,6);
+  for(let k=0;k<=5;k++){const v=base+(top-base)*k/5;
+    T(g,Math.round(v),x0-9,py(v),COL.faint,11,'right',undefined,'o');}
+  T(g,'総費用 [$/h]',x0+W/2,y0+H+24,COL.dim,12,'center');
+  if(hi!==null){
+    g.save();g.fillStyle=tint(COL.d,.12);g.fillRect(x0,py(hi),W,py(lo)-py(hi));g.restore();
+    T(g,'整数ギャップ',x0+W/2,(py(hi)+py(lo))/2-10,COL.d,13,'center');
+    T(g,`${Math.round(hi-lo)} $/h（${(100*(hi-lo)/lo).toFixed(2)}%）`,
+      x0+W/2,(py(hi)+py(lo))/2+12,COL.d,12,'center');
+    AR(g,x0+W-34,py(lo)-5,x0+W-34,py(hi)+5,COL.d,1.6);
+    AR(g,x0+W-34,py(hi)+5,x0+W-34,py(lo)-5,COL.d,1.6);
+  }
+  LN(g,[[x0,py(lo)],[x0+W,py(lo)]],COL.ok,2.6);
+  T(g,'下界 = LP緩和 '+Math.round(lo),x0+8,py(lo)+17,COL.ok,13,'left');
+  if(hi!==null){LN(g,[[x0,py(hi)],[x0+W,py(hi)]],COL.ng,2.6);
+    T(g,'上界 = 暫定最良 '+Math.round(hi),x0+8,py(hi)-15,COL.ng,13,'left');}
+  else T(g,'整数解はまだ無い（上界なし）',x0+8,py(lo)-16,COL.faint,12.5,'left');
+  const tx=x0+W+70;
+  T(g,'挟み込みの論理',tx,y0+10,COL.ink,14,'left');
+  [['LP緩和は制約を緩めた問題',COL.body],['⇒ 真の最適値以下 ＝ 下界',COL.ok],['',null],
+   ['見つけた整数解は実行可能',COL.body],['⇒ 真の最適値以上 ＝ 上界',COL.ng],['',null],
+   ['下界 ≤ 真の最適値 ≤ 上界',COL.ink],['',null],
+   ['ある枝の下界が上界以上なら、',COL.body],['その先を見ずに切り落とせる',COL.d]
+  ].forEach((r,i)=>{if(r[0])T(g,r[0],tx,y0+40+i*23,r[1],i===6?13.5:12.5,'left');});
+}
+function fBBTree(st){
+  const g=cx('fBBTree'); if(!g)return; clr(g);
+  const W=g.W,H=g.H,all=st.nodes||[],SLOT=[1,2,4,8];
+  const slot=n=>{let k=0;for(let d=0;d<n.depth;d++)k=k*2+(n.fix[d]===1?0:1);return k;};
+  const pos={};
+  all.forEach(n=>{pos[n.id]={x:W*(slot(n)+.5)/SLOT[n.depth],y:28+n.depth*(H-72)/3};});
+  all.forEach(n=>{
+    if(n.parent<0||!pos[n.parent])return;
+    const a=pos[n.parent],b=pos[n.id];
+    const dim=n.state==='pruned'||n.state==='infeasible';
+    LN(g,[[a.x,a.y+12],[b.x,b.y-12]],dim?COL.rule:COL.faint,1.3,dim?[3,3]:null);
+    TM(g,'u'+UC.name[n.depth-1]+'='+n.fix[n.depth-1],(a.x+b.x)/2+(b.x>a.x?9:-9),
+      (a.y+b.y)/2,COL.faint,12,b.x>a.x?'left':'right');});
+  all.forEach((n,k)=>{
+    const p=pos[n.id], last=(k===all.length-1&&!st.done);
+    let col=COL.dim;
+    if(n.state==='infeasible')col=COL.rule; else if(n.state==='pruned')col=COL.u;
+    else if(n.state==='incumbent')col=COL.ok; else if(n.depth===0)col=COL.d;
+    g.save();g.fillStyle='#fff';g.strokeStyle=last?COL.d:col;g.lineWidth=last?2.4:1.4;
+    RR(g,p.x-29,p.y-12,58,24,4);g.fill();g.stroke();g.restore();
+    T(g,n.bound===null?'不能':Math.round(n.bound),p.x,p.y,last?COL.d:col,11.5,'center',undefined,'o');});
+  T(g,'黄＝いま見ている　緑＝暫定最良　紫＝刈られた　灰＝実行不能',W/2,H-12,COL.faint,11.5,'center');
+}
+
+/* ---------- 図：地図 ---------- */
+function fMap(k){
+  const g=cx('fMap'); if(!g)return; clr(g);
+  const x0=120,y0=48,W=760,H=230;
+  g.save();g.fillStyle=tint(COL.ok,.07);g.fillRect(x0,y0,W*3/5,H);g.restore();
+  GR(g,x0,y0,W,H,5,2);
+  ['線形','非線形','微分方程式','非凸','離散（整数）'].forEach((s,i)=>
+    T(g,s,x0+W*(i+.5)/5,y0+H+20,COL.dim,12.5,'center'));
+  ['最適解を求める','解を求める'].forEach((s,i)=>{
+    g.save();g.translate(x0-24,y0+H*(i+.5)/2);g.rotate(-Math.PI/2);
+    T(g,s,0,0,COL.dim,12.5,'center');g.restore();});
+  T(g,'多項式時間で解けると分かっている範囲',x0+W*1.5/5,y0-16,COL.ok,12.5,'center');
+  const pts=[[.5,1.5,'DC潮流',COL.ok],[.5,1.15,'大規模潮流（反復法）',COL.ok],
+    [1.5,1.5,'AC潮流',COL.d],[2.5,1.5,'過渡安定度・DAE',COL.d],
+    [.5,.5,'経済負荷配分',COL.ok],[.95,.24,'DC最適潮流',COL.ok],
+    [1.5,.6,'上下限つき ED（KKT）',COL.ok],
+    [3.5,.5,'AC最適潮流',COL.ng],[4.5,.36,'起動停止計画',COL.ng]];
+  pts.forEach(([a,b,nm,col],i)=>{
+    if(i>=k*3)return;
+    const x=x0+W*a/5,y=y0+H*(2-b)/2;
+    DOT(g,x,y,col,6.5); T(g,nm,x,y-16,col,12.5,'center');});
+  if(k>=4){
+    AR(g,x0+W*4.3/5,y0+H*.74,x0+W*2.2/5,y0+H*.56,COL.u,2.2,[7,5]);
+    T(g,'緩和・線形化・分解',x0+W*3.2/5,y0+H*.52,COL.u,12.5,'center');
+    T(g,'研究の貢献は多くの場合、外側の問題を緑の領域に押し込むこと。',
+      x0,y0+H+50,COL.ink,13.5,'left');
+  }
+}
+
+/* =========================================================
+   図：年表（共通ルーチン）
+   ========================================================= */
+function timeline(id,ev,k,title,sub){
+  const g=cx(id); if(!g)return; clr(g);
+  const x0=54,W=g.W-108,Y=g.H/2-4;
+  LN(g,[[x0,Y],[x0+W,Y]],COL.rule,2);
+  T(g,title,g.W/2,26,COL.ink,15,'center');
+  if(sub)T(g,sub,g.W/2,48,COL.faint,12.5,'center');
+  ev.forEach((e,i)=>{
+    if(i>=k)return;
+    const x=x0+W*(i+.5)/ev.length, up=i%2===0, dy=up?-1:1;
+    const col=e[3]||COL.dim;
+    LN(g,[[x,Y],[x,Y+dy*26]],col,1.4);
+    DOT(g,x,Y,col,i===k-1?6:4.5);
+    T(g,e[0],x,Y+dy*(up?44:44),col,13,'center',undefined,'o');
+    const lines=e[1].split('|');
+    lines.forEach((s,q)=>T(g,s,x,Y+dy*(64+q*19),COL.ink,12.5,'center'));
+    if(e[2])T(g,e[2],x,Y+dy*(64+lines.length*19),COL.faint,11.5,'center');
+  });
+}
+const HIS1=[
+ ['前1800','バビロニア|2次方程式','粘土板・幾何的な平方完成'],
+ ['前200頃','九章算術「方程術」|連立1次の消去法','ガウス消去の約2000年前'],
+ ['825','al-Khwārizmī|『al-jabr』','移項と同類項整理＝代数の誕生'],
+ ['1545','Cardano|3次・4次の解の公式','『Ars Magna』'],
+ ['1671–90','Newton / Raphson|反復による近似解','解の公式を諦めた最初の一手'],
+ ['1809–26','Gauss|消去法と反復法','小惑星の軌道決定から'],
+ ['1824','Abel|5次に解の公式は無い'],
+ ['1832','Galois|群論で「なぜ」を説明'],
+ ['1874','Seidel|ガウス・ザイデル法'],
+ ['1901','Runge–Kutta|数値積分'],
+ ['1947','Dantzig|単体法'],
+ ['1951','Kuhn–Tucker|KKT条件','1939 Karush の再発見']];
+const HIS2=[
+ ['1929','交流計算盤|Network Analyzer','系統の縮小模型で潮流を「測る」'],
+ ['1956','Ward & Hale|デジタル潮流計算','Y行列＋ガウス・ザイデル'],
+ ['1961','Van Ness|ニュートン法潮流','2次収束、ただし当時は重い'],
+ ['1962','Carpentier|最適潮流 OPF の定式化'],
+ ['1967','Tinney & Walker|疎行列LU＋順序付け','電力系統が生んだ数値計算の発明'],
+ ['1969','Dommel|EMTP・台形則','電磁過渡解析の標準に'],
+ ['1974','Stott & Alsaç|高速分離解法 FDLF','2次収束を捨てて1反復を軽く'],
+ ['1984','Karmarkar|内点法'],
+ ['1990年代','内点法によるOPF|大規模非線形計画が実用に'],
+ ['2000年代','MILP による起動停止|商用ソルバの性能向上'],
+ ['2012','Lavaei & Low|AC-OPF の SDP緩和','非凸を凸で包む'],
+ ['現在','大規模・不確実性|確率計画・分散最適化']];
+const fTimeline =k=>timeline('fTimeline',HIS1,k,'方程式と解法の歴史','「解の公式を求める」から「反復して近づける」へ、そして「一番良いものを選ぶ」へ');
+const fTimeline2=k=>timeline('fTimeline2',HIS2,k,'電力系統計算の歴史','模型で測る時代から、非凸最適化の時代まで');
+
+/* ---------- 図：解の公式は5次で終わった ---------- */
+function fDegree(k){
+  const g=cx('fDegree'); if(!g)return; clr(g);
+  const items=[
+    ['1次','ax + b = 0','x = −b/a',COL.ok],
+    ['2次','ax² + bx + c = 0','x = (−b ± √(b²−4ac)) / 2a',COL.ok],
+    ['3次','Cardano の公式','入れ子の立方根で書ける',COL.gold],
+    ['4次','Ferrari の公式','3次に帰着できる',COL.gold],
+    ['5次以上','—','四則と根号では書けない（Abel 1824）',COL.ng]];
+  const bw=(g.W-120)/5;
+  items.forEach(([d,f1,f2,col],i)=>{
+    if(i>=k)return;
+    const x=60+bw*i, h=[70,110,155,200,250][i];
+    g.save();g.fillStyle=tint(col,.10);g.fillRect(x+8,g.H-100-h,bw-16,h);
+    g.strokeStyle=col;g.lineWidth=1.6;g.strokeRect(x+8.5,g.H-100-h+.5,bw-16,h);g.restore();
+    T(g,d,x+bw/2,g.H-100-h-18,col,16,'center');
+    TM(g,f1,x+bw/2,g.H-100-h+26,COL.ink,15,'center');
+    const ws=f2.split('（');
+    T(g,ws[0],x+bw/2,g.H-100-h+54,COL.body,12,'center');
+    if(ws[1])T(g,'（'+ws[1],x+bw/2,g.H-100-h+73,col,12,'center');
+    T(g,'',x,0,COL.ink,10,'left');
+  });
+  if(k>=5){
+    T(g,'ガロア（1832）は「なぜ書けないのか」を群論で説明した。',60,g.H-64,COL.ink,14,'left');
+    T(g,'解ける／解けないの境界が、初めて数学の言葉で定式化された瞬間。ここから「近似して解く」が正当な戦略になる。',
+      60,g.H-38,COL.body,13.5,'left');
+  }
+}
+
+/* ---------- 図：順序付けとフィルイン ---------- */
+function fOrder(k){
+  const g=cx('fOrder'); if(!g)return; clr(g);
+  const n=7,cell=26,s=n*cell,Y=54;
+  const cen=o=>o.indexOf(0);
+  const draw=(x,order,ttl,fillCells,cnt,col)=>{
+    const pos={}; order.forEach((old,nw)=>pos[old]=nw);
+    for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+      const oi=order[i],oj=order[j];
+      const orig=(oi===oj)||(oi===0||oj===0);
+      let f=null;
+      if(orig)f=tint(COL.l,.5);
+      else if(fillCells&&Math.min(i,j)>pos[0])f=null;
+      else if(fillCells&&i!==j&&Math.min(i,j)>=pos[0])f=tint(COL.ng,.32);
+      if(fillCells&&!orig&&i>pos[0]&&j>pos[0])f=tint(COL.ng,.32);
+      if(f){g.save();g.fillStyle=f;g.fillRect(x+j*cell+1,Y+i*cell+1,cell-2,cell-2);g.restore();}
+    }
+    g.save();g.strokeStyle=COL.hair;g.lineWidth=1;
+    for(let a=0;a<=n;a++){g.beginPath();g.moveTo(x+.5,Y+a*cell+.5);g.lineTo(x+s+.5,Y+a*cell+.5);g.stroke();
+      g.beginPath();g.moveTo(x+a*cell+.5,Y+.5);g.lineTo(x+a*cell+.5,Y+s+.5);g.stroke();}
+    g.strokeStyle=COL.ink;g.lineWidth=1.6;g.strokeRect(x+.5,Y+.5,s,s);g.restore();
+    T(g,ttl,x+s/2,Y-18,col,14,'center');
+    T(g,cnt,x+s/2,Y+s+22,col,14,'center');
+  };
+  if(k>=1)draw(70,[0,1,2,3,4,5,6],'中心の母線を最初に消去',true,'フィルイン 30 個',COL.ng);
+  if(k>=2)draw(340,[1,2,3,4,5,6,0],'中心の母線を最後に消去',false,'フィルイン 0 個',COL.ok);
+  if(k>=1){
+    T(g,'星形7母線（元の非零 19 個）',205,Y+s+50,COL.faint,12.5,'center');
+    T(g,'行列の中身は同じ。番号の付け方を変えただけ。',205,Y+s+72,COL.body,13,'center');
+  }
+  if(k>=3){
+    const bx=640,bw=430;
+    T(g,'IEEE 14母線系統（元の非零 54 個）',bx,Y-18,COL.ink,14,'left');
+    const rows=[['悪い順序',82,COL.ng],['自然順序（母線番号順）',44,COL.gold],['次数順 — Tinney scheme 1',8,COL.ok]];
+    rows.forEach(([nm,v,col],i)=>{
+      const y=Y+30+i*54;
+      T(g,nm,bx,y-14,COL.body,13,'left');
+      g.save();g.fillStyle=tint(col,.22);g.fillRect(bx,y,bw*v/90,22);
+      g.strokeStyle=col;g.lineWidth=1.4;g.strokeRect(bx+.5,y+.5,bw*v/90,22);g.restore();
+      T(g,v+' 個',bx+bw*v/90+10,y+11,col,14,'left');
+    });
+    T(g,'消去する順番を変えるだけで、フィルインが 10 分の 1 になる。',bx,Y+s+22,COL.ink,14,'left');
+    T(g,'数万母線ではこれが計算時間とメモリを決める。順序付けこそが直接法の本体。',bx,Y+s+46,COL.body,13,'left');
+  }
+}
+
+/* ---------- 図：SOR の最適 ω ---------- */
+function fSOR(k){
+  const g=cx('fSOR'); if(!g)return; clr(g);
+  const x0=90,y0=34,W=560,H=250;
+  GR(g,x0,y0,W,H,6,5);
+  const XL=0.4,XH=2.0,YH=1.05;
+  const px=w=>x0+W*(w-XL)/(XH-XL), py=r=>y0+H*(1-r/YH);
+  for(let r=0;r<=1;r+=0.2)T(g,r.toFixed(1),x0-9,py(r),COL.faint,11,'right',undefined,'o');
+  for(let w=0.4;w<=2.01;w+=0.4)T(g,w.toFixed(1),px(w),y0+H+16,COL.faint,11,'center',undefined,'o');
+  TM(g,'ω',x0+W/2,y0+H+38,COL.dim,16,'center');
+  g.save();g.translate(x0-46,y0+H/2);g.rotate(-Math.PI/2);TM(g,'ρ',0,0,COL.dim,16,'center');g.restore();
+  LN(g,[[x0,py(1)],[x0+W,py(1)]],COL.ng,1.4,[5,4]);
+  T(g,'ρ = 1（この上は発散）',x0+W-8,py(1)-13,COL.ng,12,'right');
+  if(k>=1){
+    const P=[];let best=[9,0];
+    for(let q=0;q<=160;q++){const w=XL+(XH-XL)*q/160, r=sorRho(w);
+      if(r<best[0])best=[r,w];
+      if(isFinite(r))P.push([px(w),py(Math.min(r,YH))]);}
+    LN(g,P,COL.u,2.8);
+    if(k>=2){
+      DOT(g,px(best[1]),py(best[0]),COL.ok,7);
+      LN(g,[[px(best[1]),py(best[0])],[px(best[1]),y0+H]],COL.ok,1.4,[4,3]);
+      T(g,'最適 ω = '+best[1].toFixed(3),px(best[1]),py(best[0])-18,COL.ok,13.5,'center');
+      T(g,'ρ = '+best[0].toFixed(4),px(best[1]),py(best[0])-38,COL.ok,13,'center');
+    }
+    if(k>=1){
+      DOT(g,px(1),py(sorRho(1)),COL.l,6);
+      T(g,'ω=1 は GS（ρ=0.459）',px(1)-10,py(sorRho(1))-16,COL.l,12.5,'right');
+    }
+  }
+  const tx=x0+W+64;
+  T(g,'ω は「行き過ぎ量」',tx,y0+16,COL.ink,14,'left');
+  if(k>=2)[['ω < 1  控えめ（低緩和）',COL.dim],['ω = 1  ガウス・ザイデル',COL.l],
+   ['ω > 1  行き過ぎ（過緩和）',COL.u],['',null],
+   ['Young の公式（1950）',COL.ink],['ω* ≈ 2 / (1 + √(1 − ρJ²))',COL.ok],
+   ['ρJ = 0.672 → ω* = 1.149',COL.ok],['実測の最適 1.150 とほぼ一致',COL.body],['',null],
+   ['谷が鋭い。外すと GS より悪くなる。',COL.ng],['ρJ を事前に知る必要があるのが弱点。',COL.ng]]
+   .forEach((r,i)=>{if(r[0])T(g,r[0],tx,y0+46+i*24,r[1],i===5?14:12.5,'left');});
+}
+
+/* ---------- 図：前処理による固有値のクラスタリング ---------- */
+function fPrecond(k){
+  const g=cx('fPrecond'); if(!g)return; clr(g);
+  const x0=90,W=g.W-200;
+  const ev=[1.96,3.74,9.19,24.09,79.42,240.07,799.62];
+  const ep=[0.906,0.982,0.990,1.000,1.006,1.019,1.098];
+  const lx=v=>x0+W*(Math.log10(v)-Math.log10(0.7))/(Math.log10(1200)-Math.log10(0.7));
+  const row=(y,vals,col,ttl,kap)=>{
+    LN(g,[[x0,y],[x0+W,y]],COL.rule,1.6);
+    [1,10,100,1000].forEach(t=>{LN(g,[[lx(t),y-5],[lx(t),y+5]],COL.rule,1.2);
+      T(g,t,lx(t),y+20,COL.faint,11,'center',undefined,'o');});
+    vals.forEach(v=>DOT(g,lx(v),y,col,6));
+    T(g,ttl,x0,y-30,col,14,'left');
+    T(g,kap,x0+W+16,y,col,13.5,'left');
+  };
+  if(k>=1)row(96,ev,COL.ng,'元の行列 A の固有値（対数軸）','κ = 407');
+  if(k>=2)row(216,ep,COL.ok,'対角前処理 M⁻¹A の固有値','κ = 1.21');
+  if(k>=2){
+    AR(g,x0+W/2,132,x0+W/2,186,COL.d,2);
+    T(g,'前処理  M⁻¹A x = M⁻¹b',x0+W/2+14,158,COL.d,13.5,'left');
+  }
+  if(k>=3){
+    T(g,'固有値が 1 のまわりに集まるほど、クリロフ法の反復回数は減る。',x0,g.H-64,COL.ink,14,'left');
+    T(g,'共役勾配法の反復回数は概ね √κ に比例：√407 ≈ 20 回 → √1.21 ≈ 1.1 回。',x0,g.H-38,COL.body,13.5,'left');
+    T(g,'現代の大規模計算は「反復法そのもの」より「どんな前処理を作るか」の勝負になっている。',x0,g.H-14,COL.ok,13.5,'left');
+  }
+}
+
+/* ---------- 図：ヤコビアンのブロック構造 ---------- */
+function fJacStruct(k){
+  const g=cx('fJacStruct'); if(!g)return; clr(g);
+  const S=210,x=110,y=54;
+  const blocks=[['H','∂P/∂θ',0,0,COL.d,'大'],['N','∂P/∂V',1,0,COL.faint,'小'],
+                ['M','∂Q/∂θ',0,1,COL.faint,'小'],['L','∂Q/∂V',1,1,COL.d,'大']];
+  blocks.forEach(([nm,fm,cx_,cy,col,mag],i)=>{
+    if(i>=k)return;
+    const bx=x+cx_*S/2, by=y+cy*S/2;
+    const weak=(nm==='N'||nm==='M');
+    g.save();g.fillStyle=tint(weak?COL.faint:COL.d, weak?.10:.20);
+    g.fillRect(bx,by,S/2,S/2);
+    g.strokeStyle=weak?COL.faint:COL.d;g.lineWidth=1.6;
+    g.strokeRect(bx+.5,by+.5,S/2,S/2);g.restore();
+    TM(g,nm,bx+S/4,by+S/4-12,weak?COL.faint:COL.d,26,'center');
+    TM(g,fm,bx+S/4,by+S/4+18,COL.body,15,'center');
+    T(g,mag,bx+S/4,by+S/4+40,weak?COL.faint:COL.d,12,'center');
+  });
+  g.save();g.strokeStyle=COL.ink;g.lineWidth=2;g.strokeRect(x+.5,y+.5,S,S);g.restore();
+  TM(g,'J',x-26,y+S/2,COL.ink,24,'center');
+  const tx=x+S+70;
+  T(g,'送電線は X ≫ R なので',tx,y+14,COL.ink,14,'left');
+  if(k>=4)[['有効電力 P は 位相角 θ と強く結びつく',COL.d],
+   ['無効電力 Q は 電圧 V と強く結びつく',COL.d],
+   ['交差項 N と M は小さい ＝ 弱結合',COL.faint],['',null],
+   ['高速分離解法（FDLF, 1974）',COL.ink],
+   ['① N = M = 0 と置いて2つに分ける',COL.ok],
+   ['② H, L を定数行列で近似して一度だけ分解',COL.ok],
+   ['',null],
+   ['2次収束は失われ、反復回数は増える。',COL.ng],
+   ['それでも1反復が桁違いに軽く、総時間は短い。',COL.ng],
+   ['「良い性質を捨てて速さを買う」典型例。',COL.u]]
+   .forEach((r,i)=>{if(r[0])T(g,r[0],tx,y+48+i*24,r[1],i===4?14:13,'left');});
+}
+
+/* ---------- 図：連続法（predictor–corrector） ---------- */
+function fCPF(k){
+  const g=cx('fCPF'); if(!g)return; clr(g);
+  const x0=86,y0=32,W=520,H=250;
+  const XH=4.4;
+  const px=p=>x0+W*p/XH, py=v=>y0+H*(1.15-v)/1.15;
+  GR(g,x0,y0,W,H,8,6);
+  for(let v=0;v<=1.0;v+=0.2)T(g,v.toFixed(1),x0-9,py(v),COL.faint,11,'right',undefined,'o');
+  for(let p=0;p<=4;p++)T(g,p,px(p),y0+H+16,COL.faint,11,'center',undefined,'o');
+  T(g,'P₂ [pu]',x0+W/2,y0+H+38,COL.dim,12.5,'center');
+  g.save();g.translate(x0-48,y0+H/2);g.rotate(-Math.PI/2);T(g,'|V₂| [pu]',0,0,COL.dim,12.5,'center');g.restore();
+  const up=[],dn=[];let d=0;
+  for(let q=0;q<=420;q++){
+    const v=0.96-(0.96-0.25)*q/420;
+    let ok=false;
+    for(let it=0;it<60;it++){
+      const qq=pq(d,v)[1],h=1e-6,dq=(pq(d+h,v)[1]-pq(d-h,v)[1])/(2*h);
+      if(!isFinite(dq))break; const stp=(PF.Q-qq)/dq; d+=stp;
+      if(Math.abs(stp)<1e-13){ok=true;break;}}
+    if(!ok)break;
+    const p=-pq(d,v)[0];
+    if(p>0&&p<XH)(v>0.6294?up:dn).push([px(p),py(v)]);
+  }
+  LN(g,up,COL.ok,2.4); LN(g,dn,tint(COL.ng,.6),2,[6,4]);
+  const NP=[px(PF.Pnose),py(0.6294)];
+  DOT(g,NP[0],NP[1],COL.ng,6);
+  T(g,'鼻先 P = 3.752',NP[0]-12,NP[1]-16,COL.ng,12.5,'right');
+  if(k>=1){
+    const pts=[[2.2,0.856],[3.0,0.809],[3.5,0.746],[3.74,0.672],[3.70,0.575],[3.40,0.487]];
+    pts.forEach((p,i)=>{
+      if(i>=k-1)return;
+      const a=[px(p[0]),py(p[1])];
+      DOT(g,a[0],a[1],COL.d,5.5);
+      if(i<pts.length-1&&i<k-2){
+        const b=[px(pts[i+1][0]),py(pts[i+1][1])];
+        const mx=(a[0]+b[0])/2+16, my=(a[1]+b[1])/2-16;
+        AR(g,a[0],a[1],mx,my,COL.u,1.8,[4,3]);
+        AR(g,mx,my,b[0],b[1],COL.l,1.8);
+      }
+    });
+    T(g,'紫＝予測子（接線方向に一歩）',x0+10,y0+16,COL.u,12.5,'left');
+    T(g,'青＝修正子（曲線に戻す）',x0+10,y0+36,COL.l,12.5,'left');
+  }
+  const tx=x0+W+58;
+  T(g,'鼻先を回るには',tx,y0+16,COL.ink,14,'left');
+  [['通常の潮流計算は P を固定して解く。',COL.body],
+   ['鼻先では解が2つ重なるので det J → 0、',COL.body],
+   ['ニュートン法は必ず破綻する。',COL.ng],['',null],
+   ['連続法（CPF）は P を未知数に格上げし、',COL.ink],
+   ['曲線に沿う弧長などを新しい助変数にする。',COL.ink],
+   ['予測子で接線方向に一歩進み、',COL.u],
+   ['修正子で曲線上に引き戻す。',COL.l],['',null],
+   ['こうすると鼻先で行列が特異にならず、',COL.ok],
+   ['下枝まで一筆で追える。電圧安定度解析の標準。',COL.ok]]
+   .forEach((r,i)=>{if(r[0])T(g,r[0],tx,y0+46+i*23,r[1],12.5,'left');});
+}
+
+/* ---------- 図：絶対安定領域 ---------- */
+function fStab(k){
+  const g=cx('fStab'); if(!g)return; clr(g);
+  const cx0=g.W*0.34, cy0=g.H/2, sc=52;
+  const px=x=>cx0+x*sc, py=y=>cy0-y*sc;
+  g.save();g.strokeStyle=COL.hair;g.lineWidth=1;
+  for(let x=-5;x<=2;x++){g.beginPath();g.moveTo(px(x),py(-2.6));g.lineTo(px(x),py(2.6));g.stroke();}
+  for(let y=-2;y<=2;y++){g.beginPath();g.moveTo(px(-5.4),py(y));g.lineTo(px(2.2),py(y));g.stroke();}
+  g.restore();
+  LN(g,[[px(-5.4),py(0)],[px(2.2),py(0)]],COL.dim,1.4);
+  LN(g,[[px(0),py(2.6)],[px(0),py(-2.6)]],COL.dim,1.4);
+  T(g,'Re(λΔt)',px(2.2)+4,py(0)-12,COL.dim,12,'right');
+  T(g,'Im',px(0)+8,py(2.6)+10,COL.dim,12,'left');
+  if(k>=3){
+    g.save();g.fillStyle=tint(COL.ok,.10);g.fillRect(px(-5.4),py(2.6),px(0)-px(-5.4),py(-2.6)-py(2.6));g.restore();
+    T(g,'台形則・後退オイラー：左半平面すべて（A-安定）',px(-5.2),py(2.25),COL.ok,13,'left');
+  }
+  if(k>=2){
+    const P=[];
+    for(let q=0;q<=400;q++){
+      const th=2*Math.PI*q/400;
+      let lo=0,hi=4;
+      for(let it=0;it<40;it++){const m=(lo+hi)/2;
+        const z={re:m*Math.cos(th),im:m*Math.sin(th)};
+        let R={re:1,im:0},zp={re:1,im:0};
+        for(let n=1;n<=4;n++){zp={re:zp.re*z.re-zp.im*z.im,im:zp.re*z.im+zp.im*z.re};
+          const f=[1,1,2,6,24][n];
+          R={re:R.re+zp.re/f,im:R.im+zp.im/f};}
+        (Math.hypot(R.re,R.im)<1)?lo=m:hi=m;}
+      P.push([px(lo*Math.cos(th)),py(lo*Math.sin(th))]);
+    }
+    g.save();g.fillStyle=tint(COL.u,.13);g.beginPath();
+    P.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.fill();g.restore();
+    LN(g,[...P,P[0]],COL.u,2.2);
+    T(g,'RK4',px(-1.9),py(1.5),COL.u,14,'center');
+  }
+  if(k>=1){
+    g.save();g.fillStyle=tint(COL.ng,.14);g.beginPath();g.arc(px(-1),py(0),sc,0,7);g.fill();
+    g.strokeStyle=COL.ng;g.lineWidth=2.2;g.stroke();g.restore();
+    T(g,'前進オイラー',px(-1),py(0),COL.ng,13,'center');
+  }
+  const tx=g.W*0.62;
+  T(g,'Δt を決めるのは精度ではなく安定性',tx,44,COL.ink,14,'left');
+  [['固有値 λ の系に刻み Δt を掛けた z = λΔt が',COL.body],
+   ['この領域の中に入っていないと、解が発散する。',COL.body],['',null],
+   ['前進オイラー：実軸上 −2 < z < 0',COL.ng],
+   ['RK4：実軸上 −2.785 < z < 0（4倍の計算で少し広い）',COL.u],
+   ['後退オイラー・台形則：左半平面すべて',COL.ok],['',null],
+   ['動揺方程式の ω_n = 7.92 rad/s なら',COL.ink],
+   ['前進オイラーは Δt < 0.253 s、RK4 は Δt < 0.352 s。',COL.ink],
+   ['この程度なら陽解法で足りる。',COL.body],['',null],
+   ['問題は、速い現象と遅い現象が同居したとき。',COL.ng]]
+   .forEach((r,i)=>{if(r[0])T(g,r[0],tx,76+i*23,r[1],12.5,'left');});
+}
+
+/* ---------- 図：剛性 ---------- */
+function fStiff(k){
+  const g=cx('fStiff'); if(!g)return; clr(g);
+  const x0=86,y0=36,W=520,H=250;
+  GR(g,x0,y0,W,H,6,5);
+  const TX=1.2;
+  const px=t=>x0+W*t/TX, py=v=>y0+H*(1.1-v)/1.25;
+  for(let t=0;t<=1.2;t+=0.2)T(g,t.toFixed(1),px(t),y0+H+16,COL.faint,11,'center',undefined,'o');
+  T(g,'時間 [s]',x0+W/2,y0+H+38,COL.dim,12.5,'center');
+  const slow=t=>Math.exp(-t/0.5), fast=t=>Math.exp(-t/0.002);
+  if(k>=1){const P=[];for(let q=0;q<=400;q++){const t=TX*q/400;P.push([px(t),py(slow(t))]);}
+    LN(g,P,COL.ok,2.6); T(g,'遅い現象（動揺）  τ = 0.5 s',px(0.42),py(slow(0.42))-18,COL.ok,13,'left');}
+  if(k>=2){const P=[];for(let q=0;q<=600;q++){const t=TX*q/600;P.push([px(t),py(fast(t)*0.85+0.05)]);}
+    LN(g,P,COL.ng,2.6); T(g,'速い現象（電磁過渡）  τ = 0.002 s',px(0.06),py(0.72),COL.ng,13,'left');}
+  if(k>=3){
+    LN(g,[[px(0.02),y0],[px(0.02),y0+H]],COL.d,1.6,[4,3]);
+    T(g,'陽解法はここまで刻まされる',px(0.03),y0+H-16,COL.d,12.5,'left');
+  }
+  const tx=x0+W+58;
+  T(g,'剛性（stiffness）',tx,y0+14,COL.ink,14,'left');
+  [['時定数の比 τ_slow / τ_fast = 250。',COL.body],
+   ['速い成分はすぐ消えて答えに関係しないのに、',COL.body],
+   ['陽解法は安定性のために Δt をそれに合わせる。',COL.ng],['',null],
+   ['0.5 秒を追うのに Δt = 0.004 s なら 125 ステップ。',COL.ng],
+   ['比が 10⁵ になれば手に負えない。',COL.ng],['',null],
+   ['陰解法（後退オイラー・台形則）は A-安定なので、',COL.ok],
+   ['Δt を「見たい現象」の側で選べる。',COL.ok],
+   ['代わりに毎ステップ非線形方程式を解く＝LEVEL 03。',COL.u],['',null],
+   ['EMT解析は Δt = 50 μs、位相安定度解析は Δt = 10 ms。',COL.ink],
+   ['同じ系統でも、見たい現象で解法が変わる。',COL.ink]]
+   .forEach((r,i)=>{if(r[0])T(g,r[0],tx,y0+44+i*22,r[1],12.5,'left');});
+}
+
+/* ---------- 図：有効制約法 vs 内点法 ---------- */
+function fIPM(k){
+  const g=cx('fIPM'); if(!g)return; clr(g);
+  const x0=110,y0=34,W=330,H=250;
+  const poly=[[.08,.10],[.72,.06],[.95,.44],[.62,.92],[.16,.72]];
+  const px=t=>x0+W*t, py=t=>y0+H*(1-t);
+  g.save();g.fillStyle=tint(COL.l,.10);g.beginPath();
+  poly.forEach((p,i)=>i?g.lineTo(px(p[0]),py(p[1])):g.moveTo(px(p[0]),py(p[1])));
+  g.closePath();g.fill();g.strokeStyle=COL.l;g.lineWidth=2;g.stroke();g.restore();
+  T(g,'実行可能領域',px(.42),py(.46),COL.l,13,'center');
+  const opt=[px(.95),py(.44)];
+  DOT(g,opt[0],opt[1],COL.ng,7); T(g,'最適解',opt[0]+12,opt[1]-14,COL.ng,13,'left');
+  if(k>=1){
+    const path=[[.08,.10],[.72,.06],[.95,.44]];
+    for(let i=1;i<path.length;i++)
+      AR(g,px(path[i-1][0]),py(path[i-1][1]),px(path[i][0]),py(path[i][1]),COL.d,2.4);
+    path.forEach(p=>DOT(g,px(p[0]),py(p[1]),COL.d,5));
+    T(g,'有効制約法：頂点から頂点へ',x0,y0+H+26,COL.d,13,'left');
+  }
+  if(k>=2){
+    const path=[[.42,.40],[.60,.42],[.76,.43],[.88,.435],[.94,.44]];
+    LN(g,path.map(p=>[px(p[0]),py(p[1])]),COL.ok,2.4);
+    path.forEach(p=>DOT(g,px(p[0]),py(p[1]),COL.ok,4.5));
+    T(g,'内点法：内側を通って境界に漸近',x0,y0+H+50,COL.ok,13,'left');
+  }
+  const tx=x0+W+70;
+  T(g,'どの制約が効くかを、どう当てるか',tx,y0+12,COL.ink,14,'left');
+  [['有効制約法・単体法',COL.d],
+   ['　境界の上を歩き、頂点で有効集合を入れ替える。',COL.body],
+   ['　小規模なら速い。制約数が増えると組合せが爆発。',COL.body],['',null],
+   ['内点法（Karmarkar 1984）',COL.ok],
+   ['　不等式を対数バリアで目的関数に押し込む：',COL.body],
+   ['　min f(x) − μ Σ log( −g(x) )',COL.ink],
+   ['　μ を 0 に近づけると解が境界へ寄る。',COL.body],
+   ['　有効／非有効を場合分けせずに済む。',COL.ok],
+   ['　反復回数が問題規模にほぼ依存しない。',COL.ok],['',null],
+   ['大規模 OPF が実用になったのは内点法のおかげ。',COL.u]]
+   .forEach((r,i)=>{if(r[0])T(g,r[0],tx,y0+42+i*23,r[1],i===0||i===4?13.5:12.5,'left');});
+}
+
+/* ---------- 図：凸緩和 ---------- */
+function fRelax(k){
+  const g=cx('fRelax'); if(!g)return; clr(g);
+  const x0=110,y0=36,W=330,H=250;
+  const px=t=>x0+W*t, py=t=>y0+H*(1-t);
+  const wig=t=>0.30+0.20*Math.sin(7.5*t)+0.34*t;
+  if(k>=1){
+    const P=[];for(let q=0;q<=200;q++){const t=q/200;P.push([px(t),py(wig(t))]);}
+    g.save();g.fillStyle=tint(COL.ng,.10);g.beginPath();g.moveTo(px(0),py(0));
+    P.forEach(p=>g.lineTo(p[0],p[1]));g.lineTo(px(1),py(0));g.closePath();g.fill();g.restore();
+    LN(g,P,COL.ng,2.4);
+    T(g,'元の非凸な実行可能領域',px(.5),py(.12),COL.ng,13,'center');
+  }
+  if(k>=2){
+    const H2=[[0,wig(0)]];
+    for(let q=1;q<=200;q++){const t=q/200,v=wig(t);
+      while(H2.length>=2){
+        const a=H2[H2.length-2],b=H2[H2.length-1];
+        if((b[1]-a[1])*(t-a[0])<=(v-a[1])*(b[0]-a[0]))H2.pop(); else break;}
+      H2.push([t,v]);}
+    LN(g,H2.map(p=>[px(p[0]),py(p[1])]),COL.ok,2.6,[7,5]);
+    T(g,'凸緩和（包み込んだ領域）',px(.5),py(.92),COL.ok,13,'center');
+  }
+  if(k>=3){
+    DOT(g,px(.72),py(wig(.72)),COL.ng,7);
+    T(g,'真の最適',px(.72)+12,py(wig(.72))-14,COL.ng,12.5,'left');
+    DOT(g,px(.72),py(0.86),COL.ok,7);
+    T(g,'緩和解＝下界',px(.72)+12,py(0.86)-14,COL.ok,12.5,'left');
+    LN(g,[[px(.72),py(wig(.72))],[px(.72),py(0.86)]],COL.d,1.6,[4,3]);
+    T(g,'ギャップ',px(.72)-10,(py(wig(.72))+py(0.86))/2,COL.d,12,'right');
+  }
+  const tx=x0+W+70;
+  T(g,'非凸を凸で包む',tx,y0+12,COL.ink,14,'left');
+  [['緩和した問題は必ず元より広い ⇒ 最適値は下界。',COL.body],
+   ['凸なので大域最適が保証され、多項式時間で解ける。',COL.ok],['',null],
+   ['SOCP緩和：2次錐に落とす。速い。',COL.ink],
+   ['SDP緩和：半正定値行列に持ち上げる。強いが重い。',COL.ink],['',null],
+   ['緩和が「厳密（tight）」になれば、',COL.u],
+   ['緩和解がそのまま元問題の最適解になる。',COL.u],
+   ['放射状配電系統では条件付きで厳密性が示されている',COL.body],
+   ['（Lavaei & Low 2012 ほか）。',COL.body],['',null],
+   ['厳密でないときはギャップが残り、',COL.ng],
+   ['どれだけ良い解か分からない。',COL.ng]]
+   .forEach((r,i)=>{if(r[0])T(g,r[0],tx,y0+42+i*22,r[1],12.5,'left');});
+}
+
+/* ---------- 図：切除平面 ---------- */
+function fCut(k){
+  const g=cx('fCut'); if(!g)return; clr(g);
+  const x0=110,y0=36,W=310,H=250;
+  const px=t=>x0+W*t/6, py=t=>y0+H*(1-t/5);
+  GR(g,x0,y0,W,H,6,5);
+  const poly=[[0,0],[5.4,0],[4.2,3.6],[1.2,4.4],[0,3]];
+  g.save();g.fillStyle=tint(COL.l,.10);g.beginPath();
+  poly.forEach((p,i)=>i?g.lineTo(px(p[0]),py(p[1])):g.moveTo(px(p[0]),py(p[1])));
+  g.closePath();g.fill();g.strokeStyle=COL.l;g.lineWidth=2;g.stroke();g.restore();
+  T(g,'LP緩和の領域',px(1.4),py(1.3),COL.l,13,'left');
+  for(let a=0;a<=5;a++)for(let b=0;b<=4;b++){
+    let inside=true;
+    for(let i=0;i<poly.length;i++){
+      const p=poly[i],q=poly[(i+1)%poly.length];
+      if((q[0]-p[0])*(b-p[1])-(q[1]-p[1])*(a-p[0])<-1e-9)inside=false;}
+    if(inside)DOT(g,px(a),py(b),COL.dim,3.6);
+  }
+  T(g,'点＝整数解',px(0.3),py(4.7),COL.dim,12,'left');
+  if(k>=1){
+    DOT(g,px(4.2),py(3.6),COL.ng,7);
+    T(g,'LP最適（小数）',px(4.2)+12,py(3.6)-16,COL.ng,12.5,'left');
+  }
+  if(k>=2){
+    LN(g,[[px(2.0),py(5)],[px(6),py(1.4)]],COL.d,2.4);
+    g.save();g.fillStyle=tint(COL.d,.13);g.beginPath();
+    g.moveTo(px(4.2),py(3.6));g.lineTo(px(3.0),py(4.1));g.lineTo(px(5.4),py(1.7));g.closePath();
+    g.fill();g.restore();
+    T(g,'切除平面（カット）',px(5.6),py(1.1),COL.d,13,'right');
+  }
+  if(k>=3){
+    DOT(g,px(4),py(3),COL.ok,7);
+    T(g,'新しいLP最適 = 整数',px(4)+12,py(3)+18,COL.ok,12.5,'left');
+  }
+  const tx=x0+W+76;
+  T(g,'刈るだけでなく、削る',tx,y0+12,COL.ink,14,'left');
+  [['カットは「すべての整数解を残したまま、',COL.body],
+   ['小数の最適点だけを切り落とす」不等式。',COL.body],['',null],
+   ['領域が狭まる ⇒ LP緩和の下界が上がる',COL.ok],
+   ['⇒ 分枝限定で刈れる枝が増える。',COL.ok],['',null],
+   ['Gomory カット（1958）、被覆カット、',COL.ink],
+   ['起動停止なら最小運転時間の強い不等式など。',COL.ink],['',null],
+   ['分枝限定 ＋ 切除平面 ＝ 分枝カット（branch-and-cut）。',COL.u],
+   ['現代の商用MIPソルバの中核。',COL.u],['',null],
+   ['同じ問題でも「定式化の書き方」で速度が桁で変わる。',COL.ng]]
+   .forEach((r,i)=>{if(r[0])T(g,r[0],tx,y0+42+i*22,r[1],12.5,'left');});
+}
+
+/* =========================================================
+   数式マークアップ
+   ========================================================= */
+const vv=s=>`<span class="v">${s}</span>`;
+const oo=s=>`<span class="o">${s}</span>`;
+const fnn=s=>`<span class="fn">${s}</span>`;
+const tk=(k,c,s)=>`<span class="t" data-k="${k}"${c?` style="color:var(--${c})"`:''}>${s}</span>`;
+const frr=(a,b)=>`<span class="fr"><b>${a}</b><i>${b}</i></span>`;
+const SGM='<span class="sg">Σ</span>';
+
+/* =========================================================
+   スライド定義
+   ========================================================= */
+const SL=[];
+const S=o=>{SL.push(o);return o;};
+
+/* ---- 00 ---- */
+S({lv:'00',tp:'導入',n:10,
+  title:'方程式は、どこから「解けない」のか',
+  msg:'電力系統は、線形代数方程式から混合整数計画まで、難易度の全階層が一つの系統に同居する題材です。',
+  canvas:['fLadder',980,360],
+  cap2:'<b>難しさの正体は、式の見た目ではなく「どの性質が失われたか」。</b>閉形式解 → 有限回で厳密 → 収束保証 → 大域最適の保証 → 多項式時間。一段降りるたびに保証が一つ消え、解法は「計算する」から「探す」に変わります。',
+  render:i=>fLadder(i),
+  extra:`<div class="cards c3">
+   <div class="card"><h4>進め方</h4><p>各段はまず<b>概念図</b>で全体像を掴み、次に<b>「次へ」で1手ずつ</b>アルゴリズムを追います。数式の項と図の色は必ず対応しています。</p></div>
+   <div class="card"><h4>解き方の三系統</h4><ul><li>アルゴリズムで解く</li><li>簡略化して解く</li><li>構造（凸性・双対性）を利用して解く</li></ul></div>
+   <div class="card"><h4>操作</h4><ul><li><span class="m">←</span> <span class="m">→</span> スライド送り</li><li><span class="m">Space</span> 次のステップ</li><li><span class="m">P</span> 発表モード</li></ul></div></div>`});
+
+/* ---- 01 線形 ---- */
+S({lv:'01',tp:'線形代数方程式',n:4,
+  title:'Ax = b は、有限回で終わる唯一の階層',
+  msg:'解が存在して一意なら、消去は決まった手数で必ず終わる。この性質が、この先ずっと失われていきます。',
+  eq:`${tk('A','l',vv('A'))}${tk('x','ok',vv('x'))} ${oo('=')} ${tk('b','d',vv('b'))}`,
+  cap:'A は係数行列、x は未知数、b は既知の右辺',
+  say:['','<b class="cL">A</b> — 系統の構造。節点アドミタンス行列やサセプタンス行列。回路のつながり方そのものです。',
+       '<b class="cO">x</b> — 求めたいもの。節点電圧や位相角。',
+       '<b class="cD">b</b> — 与えられるもの。注入電流や有効電力。'],
+  keys:[null,'A','x','b'],
+  extra:`<div class="cards c2">
+   <div class="card"><h4>電力系統での姿</h4>
+     <p><span class="mq xs">${vv('G')}${vv('v')} ${oo('=')} ${vv('i')}</span> — 直流回路の節点方程式</p>
+     <p><span class="mq xs">${vv('B')}′${vv('θ')} ${oo('=')} ${vv('P')}</span> — DC潮流</p>
+     <p class="dimtx" style="font-size:13px">どちらも疎で対称、対角優位。</p></div>
+   <div class="card"><h4>この階層の特権</h4>
+     <ul><li>手数が最初から数えられる（前進消去 n(n−1)/2、後退代入 n）</li>
+     <li>止まるのはピボットが 0 のときだけ</li>
+     <li>打ち切り誤差がない。残るのは丸め誤差だけ</li></ul></div></div>`});
+
+S({lv:'01',tp:'線形代数方程式',n:5,
+  title:'消去とは、正方形を三角形に整形する操作',
+  msg:'左下の三角を 0 にすれば上三角。三角形になれば代入の順序が一意に決まる ＝ 解ける。',
+  eq:`${tk('A','ink',vv('A'))} ${oo('=')} ${tk('L','l',vv('L'))} ${tk('U','u',vv('U'))}`,
+  cap:'正方形 ＝ 下三角 × 上三角（LU分解）',
+  canvas:['fElim',940,330],
+  cap2:'消去で使った乗数を、0 にした場所へそのまま書き込む。すると <b class="cL">L</b> と <b class="cU">U</b> の2枚の三角形に分かれます。右辺 b が変わっても、前進代入と後退代入だけで解き直せる。',
+  say:['','正方形の中身は全部埋まっている。どの行も他の行に依存していて、代入の順序が決まらない。',
+       '前進消去で左下の三角を 0 にする。3×3 なら 3手。',
+       '上三角になれば、最下行は未知数が1つだけ。そこから上へ戻る（後退代入）。',
+       '<b>消去とは、正方形を2枚の三角形に分けきる操作そのもの。</b>'],
+  keys:[null,'A','A','U','L'],
+  render:i=>fElim(i)});
+
+S({lv:'01',tp:'線形代数方程式',type:'algo',stepper:'ge',
+  title:'1手ずつ：ガウス消去',
+  msg:'記号の式 → 数値を代入した式 → 結果。板書と同じ順で追えます。',
+  build:()=>geSteps(),
+  side:['<canvas id="fGEside" width="500" height="250"></canvas>',
+        '<p class="cap2" style="margin-top:8px">赤＝これから消す　黄＝いま消している　緑＝消し終わった</p>'].join(''),
+  draw:(st,i)=>drawGEside(i)});
+
+/* ---- 02 反復 ---- */
+S({lv:'02',tp:'行列分割と反復法',n:4,
+  title:'大規模になると、直接法は正方形を埋め尽くす',
+  msg:'消去のたびに、0 だった場所が非零になる（フィルイン）。疎行列の利点が消え、演算量とメモリが跳ね上がります。',
+  canvas:['fFill',980,300],
+  cap2:'だから「厳密解を有限手数で」を諦め、<b>近似解を改善し続ける</b>反復法に乗り換える。そのとき最初にやるのが、行列を三角と対角に切り分ける操作です。',
+  render:i=>fFill(i)});
+
+S({lv:'02',tp:'行列分割と反復法',n:5,
+  title:'斜線を1本引くだけで、行列は3つに分かれる',
+  msg:'この3枚の切り分け方だけで、反復法はすべて設計できます。',
+  eq:`${tk('A','ink',vv('A'))} ${oo('=')} ${tk('D','d',vv('D'))} ${oo('+')} ${tk('L','l',vv('L'))} ${oo('+')} ${tk('U','u',vv('U'))}`,
+  cap:'対角 D ・ 下三角 L ・ 上三角 U',
+  canvas:['fSplit',980,400],
+  say:['','<b>A</b> — 元の正方行列。斜線（主対角）を1本引きます。',
+       '<b class="cD">D</b> — 斜線そのもの。i = j の成分。',
+       '<b class="cL">L</b> — 斜線の左下の三角。i &gt; j の成分。',
+       '<b class="cU">U</b> — 斜線の右上の三角。i &lt; j の成分。'],
+  keys:[null,'A','D','L','U'],
+  render:i=>fSplit(['A','A','D','L','U'][i]||null)});
+
+S({lv:'02',tp:'行列分割と反復法',n:3,
+  title:'どこまでを左辺に入れるか — それが手法の名前になる',
+  msg:'左辺に取り込んだ部分は「新しい x」に掛かり、残りは前回値のまま。取り込む面積が広いほど1手は重く、収束は速くなります。',
+  eq:`${tk('M','ok',vv('M'))}${vv('x')}<sup>(k+1)</sup> ${oo('=')} ${tk('N','faint',vv('N'))}${vv('x')}<sup>(k)</sup> ${oo('+')} ${vv('b')}`,
+  cap:'A = M − N と組み替える。収束条件は ρ( M⁻¹N ) < 1',
+  canvas:['fMN',980,330],
+  ctl:`<div class="ctl"><span class="seg" id="segM">
+      <button data-m="J" class="on">ヤコビ</button><button data-m="GS">ガウス・ザイデル</button><button data-m="SOR">SOR</button>
+    </span><span id="rowW" style="display:none;align-items:center;gap:12px"><label style="min-width:auto">緩和係数 ω</label>
+      <input type="range" id="itw" min="0.5" max="1.8" step="0.05" value="1.15" style="width:200px"><span class="val" id="itwv">1.15</span></span></div>`,
+  say:['','<b class="cO">M</b> は左辺。いま解く側なので、<b>必ず解ける形</b>でなければならない。',
+       '<b>N</b> は右辺。前回の x をそのまま掛けるだけなので、どんな形でもよい。'],
+  keys:[null,'M','N'],
+  render:i=>fMN(itMethod,['','M','N'][i]||null)});
+
+S({lv:'02',tp:'行列分割と反復法',n:5,
+  title:'左辺に入れられるのは「斜線」と「三角」だけ',
+  msg:'代入の順序が一意に決まる形でなければ、左辺は解けません。',
+  canvas:['fTri',980,250],
+  cap2:'密な正方形を M に入れたら、それはもう反復法ではなく直接法です。<b>LEVEL 01 で見た「三角形なら解ける」という性質が、そのまま反復法の設計原理になっている。</b>',
+  say:['','<b class="cD">D</b>（斜線）— 各行が独立。割り算するだけで、順序は要らない。→ ヤコビ',
+       '<b class="cL">L</b>（下三角）— 1行目から下へ。前進代入。→ ガウス・ザイデル',
+       '<b class="cU">U</b>（上三角）— 最終行から上へ。後退代入。',
+       '<b class="cN">密</b> — どの行も他に依存する。順序が決まらないので、そのままでは解けない。'],
+  render:i=>fTri(i)});
+
+S({lv:'02',tp:'行列分割と反復法',type:'algo',stepper:'itst',
+  title:'1手ずつ：1成分だけを更新する',
+  msg:'右辺に出てくる x が前回値（灰色）か今回値（緑）か。ヤコビとガウス・ザイデルの違いは、そこだけです。',
+  ctl:`<div class="ctl"><span class="seg" id="segM2">
+      <button data-m="J" class="on">ヤコビ</button><button data-m="GS">ガウス・ザイデル</button><button data-m="SOR">SOR</button>
+    </span><span id="rowW2" style="display:none;align-items:center;gap:12px"><label style="min-width:auto">緩和係数 ω</label>
+      <input type="range" id="itw2" min="0.5" max="1.8" step="0.05" value="1.15" style="width:200px"><span class="val" id="itwv2">1.15</span></span></div>`,
+  build:()=>itSteps(),
+  side:'<canvas id="fTraj" width="500" height="330"></canvas><p class="cap2" style="margin-top:8px">赤い十字が厳密解。<b>ガウス・ザイデルは座標軸に平行な階段</b>を刻み、<b>ヤコビは斜めに跳ぶ</b>。</p>',
+  draw:(st,i)=>fTraj(st,i,itMethod)});
+
+S({lv:'02',tp:'行列分割と反復法',n:3,
+  title:'収束するかどうかは、行列の性質だけで決まる',
+  msg:'初期値をどこに取っても関係ありません。反復行列 T = M⁻¹N のスペクトル半径が 1 未満かどうか、それだけです。',
+  eq:`${vv('ρ')}${oo('(')}${vv('M')}<sup>−1</sup>${vv('N')}${oo(')')} ${oo('&lt;')} 1`,
+  cap:'ρ はスペクトル半径（固有値の絶対値の最大）',
+  canvas:['fRhoChart',700,280],
+  cap2:'縦軸は誤差の対数。<b>直線の傾きが log ρ</b> で、そのまま収束速度です。ガウス・ザイデルの傾きがヤコビの約2倍急なのは、この行列で <span class="m">ρ<sub>GS</sub> ≈ ρ<sub>J</sub>²</span> が成り立つためです。',
+  say:['','誤差ベクトルは1掃引ごとに T を掛けられる。k 掃引後の誤差は ‖T<sup>k</sup>e₀‖ で、これが 0 に向かう条件が ρ(T) &lt; 1。',
+       '対角優位が崩れると ρ が 1 を越え、どんな初期値からでも発散します。'],
+  render:i=>drawRhoChart()});
+
+/* ---- 03 非線形 ---- */
+S({lv:'03',tp:'非線形代数方程式',n:4,
+  title:'未知数が掛け合わされた瞬間、閉形式解が消える',
+  msg:'AC潮流方程式には、電圧の積と角度差の三角関数が同居しています。ここで Ax = b の世界から抜け出します。',
+  eq:`${vv('P')}<sub>i</sub> ${oo('=')} ${SGM}<sub>k</sub> ${tk('vv','ng',vv('V')+'<sub>i</sub>'+vv('V')+'<sub>k</sub>')} ${oo('(')}${vv('G')}<sub>ik</sub> ${tk('tri','d',fnn('cos')+' '+vv('θ')+'<sub>ik</sub>')} ${oo('+')} ${vv('B')}<sub>ik</sub> ${tk('tri','d',fnn('sin')+' '+vv('θ')+'<sub>ik</sub>')}${oo(')')}`,
+  cap:'有効電力の潮流方程式（無効電力も同型）',
+  say:['','<b class="cN">V<sub>i</sub>V<sub>k</sub></b> — 未知数どうしの積。2次の非線形性。',
+       '<b class="cD">cos θ、sin θ</b> — 角度差の三角関数。超越関数。',
+       'この2つがある限り、x について解いた形は書けません。<b>反復するしかない。</b>'],
+  keys:[null,'vv','tri',null],
+  extra:`<div class="cards c2">
+   <div class="card"><h4>2母線の最小例</h4>
+     <p>母線1はスラック（<span class="m">V=1.0∠0°</span>）、母線2は PQ 母線。未知数は <span class="m">δ₂</span> と <span class="m">|V₂|</span> の2個。線路は <span class="m">z = 0.02 + j0.10</span>。</p></div>
+   <div class="card"><h4>失われる保証</h4>
+     <ul><li>解が一意とは限らない（上枝と下枝）</li><li>解が存在するとも限らない</li><li>どこから始めても届くとは限らない</li></ul></div></div>`});
+
+S({lv:'03',tp:'非線形代数方程式',n:5,
+  title:'ニュートン法 ＝ 接線で横軸を切る',
+  msg:'いまの点で接線を引き、それが横軸を切る場所を次の点にする。それだけの手続きです。',
+  eq:`${vv('δ')}<sup>(k+1)</sup> ${oo('=')} ${vv('δ')}<sup>(k)</sup> ${oo('−')} ${frr(tk('f','ng',vv('f')+oo('(')+vv('δ')+'<sup>(k)</sup>'+oo(')')),tk('df','d',vv('f')+' ′'+oo('(')+vv('δ')+'<sup>(k)</sup>'+oo(')')))}`,
+  cap:'1次元版。f(δ) = 1.8 sin δ − 0.8 = 0（送電線1本で 0.8 pu を送るときの位相角）',
+  canvas:['fNewton',980,320],
+  say:['','<b class="cN">f(δ)</b> — いまの点で方程式の残差を測る。ここがゼロになれば解。',
+       '<b class="cD">f ′(δ)</b> — その点の傾き。これで接線を引く。',
+       '接線が横軸を切る点が次の δ。3手で 26.3878° に収束します。',
+       '未知数が2個以上なら、f ′ が<b>ヤコビアン J</b> に、割り算が <b>JΔx = f を解くこと</b>に変わるだけです。'],
+  keys:[null,'f','df',null,null],
+  render:i=>fNewton(Math.max(0,i-2),i===2||i===1)});
+
+S({lv:'03',tp:'非線形代数方程式',type:'algo',stepper:'nrst',
+  title:'1手ずつ：残差 → ヤコビアン → Δx → 更新',
+  msg:'③ が Ax = b そのもの。ニュートン法は、非線形方程式を「線形方程式を何度も解く」問題に翻訳する手続きです。',
+  ctl:`<div class="ctl"><label>負荷 P₂ [pu]</label>
+    <input type="range" id="nrpl" min="0.2" max="4.2" step="0.05" value="0.80"><span class="val" id="nrplv">0.80</span></div>`,
+  build:()=>nrSteps(),
+  side:'<canvas id="fNRres" width="500" height="270"></canvas><p class="cap2" style="margin-top:8px">残差の対数。1反復ごとに桁数がおよそ倍になるのが<b>2次収束</b>です。</p>',
+  draw:(st,i)=>drawNRres(st,i)});
+
+S({lv:'03',tp:'非線形代数方程式',n:3,
+  title:'収束しなくなる点がある。解が消えるからです',
+  msg:'反復法の失敗ではありません。方程式そのものに解がなくなっています。',
+  canvas:['fNose',980,340],
+  say:['','負荷を増やすと、上枝（運転点）と下枝（不安定解）が近づいてくる。',
+       'P = 3.752 pu で2つが合流し、それより先には f(x)=0 を満たす x が存在しない。合流点では <span class="m">det J = 0</span>、つまり接線が完全に寝ています。'],
+  render:i=>fNose(null)});
+
+/* ---- 04 微分方程式 ---- */
+S({lv:'04',tp:'微分方程式',n:4,
+  title:'未知数が「値」から「関数」になる',
+  msg:'1点を求める問題から、時間の全区間にわたる軌道を求める問題へ。難易度の質的なジャンプです。',
+  eq:`${tk('M','l',vv('M'))} ${frr('d'+vv('ω'),'d'+vv('t'))} ${oo('=')} ${tk('pm','ok',vv('P')+'<sub>m</sub>')} ${oo('−')} ${tk('pe','ng',vv('P')+'<sub>max</sub>'+oo('(')+vv('t')+oo(')')+' '+fnn('sin')+' '+vv('δ'))} ,&nbsp;&nbsp; ${frr('d'+vv('δ'),'d'+vv('t'))} ${oo('=')} ${vv('ω')}`,
+  cap:'1機無限大母線の動揺方程式。M = 2H/ωs = 0.018568',
+  say:['','<b class="cL">M</b> — 慣性。回転体の重さ。大きいほど加速しにくい。',
+       '<b class="cO">P<sub>m</sub></b> — 機械入力。タービンから入ってくる一定の力。',
+       '<b class="cN">P<sub>max</sub>(t) sin δ</b> — 電気出力。故障中は 0.4 に落ち、除去後 1.3 に戻る。<b>この不連続が過渡安定度そのもの。</b>'],
+  keys:[null,'M','pm','pe'],
+  extra:`<div class="cards c2">
+   <div class="card"><h4>解析解はない</h4><p>sin δ があるので閉形式では解けません。時間を刻んで数値積分するしかない。ここで<b>離散化誤差</b>という新しい誤差が入ります。</p></div>
+   <div class="card"><h4>実系統は DAE</h4>
+     <p><span class="mq xs">d${vv('x')}/d${vv('t')} ${oo('=')} ${vv('f')}(${vv('x')},${vv('y')})</span> — 発電機・励磁・調速機</p>
+     <p><span class="mq xs">0 ${oo('=')} ${vv('g')}(${vv('x')},${vv('y')})</span> — ネットワーク潮流方程式</p>
+     <p class="dimtx" style="font-size:13px">各時刻で LEVEL 03 を解き直すことになります。</p></div></div>`});
+
+S({lv:'04',tp:'微分方程式',n:6,
+  title:'1手の中で、傾きを何回測るか',
+  msg:'前進オイラーは始点の傾きだけ。RK4 は4回測って重み付き平均を取ります。',
+  eq:`${vv('x')}<sup>(k+1)</sup> ${oo('=')} ${vv('x')}<sup>(k)</sup> ${oo('+')} ${frr('Δ'+vv('t'),'6')} ${oo('(')} ${tk('k1','d',vv('k')+'<sub>1</sub>')} ${oo('+')} 2${tk('k2','l',vv('k')+'<sub>2</sub>')} ${oo('+')} 2${tk('k3','u',vv('k')+'<sub>3</sub>')} ${oo('+')} ${tk('k4','ng',vv('k')+'<sub>4</sub>')} ${oo(')')}`,
+  cap:'重み 1 : 2 : 2 : 1。中点で測った2つを重く見る',
+  canvas:['fRK4',980,320],
+  say:['','<b class="cD">k₁</b> — 始点 t での傾き。オイラーはこれだけで Δt 分進みます。',
+       '<b class="cL">k₂</b> — k₁ で中点まで仮に進み、そこで測り直した傾き。',
+       '<b class="cU">k₃</b> — 今度は k₂ で中点まで進み、また測る。',
+       '<b class="cN">k₄</b> — k₃ で終点まで進んで測る。',
+       '4つを 1:2:2:1 で平均して進む。計算量は4倍、誤差は Δt⁴ に落ちます。'],
+  keys:[null,'k1','k2','k3','k4',null],
+  render:i=>fRK4(RK4DEMO(),i>=1&&i<=4?i:0)});
+
+S({lv:'04',tp:'微分方程式',type:'algo',stepper:'odest',
+  title:'1手ずつ：RK4 と前進オイラーを並走させる',
+  msg:'同じ Δt = 0.05 s。8手も進むとオイラーは 17° 以上ずれます。',
+  ctl:`<div class="ctl"><label>遮断時間 t<sub>c</sub> [s]</label>
+    <input type="range" id="odetc" min="0.05" max="0.45" step="0.05" value="0.15"><span class="val" id="odetcv">0.15</span></div>`,
+  build:()=>odeSteps(),
+  side:'<canvas id="fOdeTr" width="500" height="290"></canvas><p class="cap2" style="margin-top:8px">緑が RK4、赤破線が前進オイラー。紫の線を超えると脱調します。</p>',
+  draw:(st,i)=>drawOdeTr(st,i)});
+
+/* ---- 05 簡略化 ---- */
+S({lv:'05',tp:'簡略化して解く',n:4,
+  title:'解けないなら、解ける形に落とす',
+  msg:'アルゴリズムを工夫する道と並んで、方程式そのものを作り替える道があります。捨てた仮定が、そのまま結論の適用範囲になります。',
+  canvas:['fSimp',980,290],
+  cap2:'これは手抜きではなく、<b>何を捨てれば何が言えるか</b>を設計する行為です。仮定を言えない簡略化は、ただの間違いになります。',
+  say:['','AC潮流に sin δ ≈ δ、V ≈ 1、R ≪ X を置くと <b>LEVEL 03 が LEVEL 01 に落ちる</b>。代わりに電圧・無効電力・損失が見えなくなる。',
+       '動揺方程式を平衡点で1次近似すると、固有値解析（小信号安定度）になる。大擾乱時の挙動は捨てる。',
+       '時間積分を1機無限大母線・減衰0で積分してしまうと、等面積法という<b>代数不等式</b>になる。'],
+  render:i=>fSimp(i)});
+
+/* ---- 06 ラグランジュ ---- */
+S({lv:'06',tp:'最適化・等式制約',n:6,
+  title:'「解く」から「一番良いものを選ぶ」へ',
+  msg:'方程式が未知数より少ないとき、残った自由度を目的関数が埋めます。等式制約はラグランジュ乗数で消せます。',
+  eq:`${vv('ℒ')} ${oo('=')} ${SGM} ${tk('F','l',vv('F')+'<sub>i</sub>'+oo('(')+vv('P')+'<sub>i</sub>'+oo(')'))} ${oo('−')} ${tk('lam','d',vv('λ'))} ${oo('(')} ${SGM}${tk('g','ok',vv('P')+'<sub>i</sub> '+oo('−')+' '+vv('D'))} ${oo(')')}`,
+  cap:'∂ℒ/∂Pᵢ = 0 から dFᵢ/dPᵢ = λ（全機で等しい）＝ 等λ法',
+  canvas:['fLag',980,360],
+  say:['','<b class="cL">F(P)</b> — 目的関数。総発電費用の等高線（楕円）。',
+       '<b class="cO">ΣP − D = 0</b> — 等式制約。需給バランスの直線。',
+       '最適点は、等高線と制約線が<b>接する点</b>。',
+       'そこでは2つの勾配が平行になる。これが <span class="mq xs">∇F = λ∇g</span>。',
+       '<b class="cD">λ</b> は「制約を 1 MW 緩めたときの費用の減り」＝ 価格そのもの。<b>制約を消すための道具が、答えの一番重要な部分を運んでくる。</b>'],
+  keys:[null,'F','g',null,'lam','lam'],
+  render:i=>fLag(i)});
+
+/* ---- 07 KKT ---- */
+S({lv:'07',tp:'最適化・不等式制約',n:7,
+  title:'どの制約が効くかは、解く前には分からない',
+  msg:'不等式が入った途端、場合分けが事前に確定しない問題になります。',
+  eq:`<span style="font-size:.72em">
+   ① ${oo('∇')}${vv('f')} ${oo('+')} ${SGM}${vv('λ')}${oo('∇')}${vv('h')} ${oo('+')} ${SGM}${tk('mu','ng',vv('μ'))}${oo('∇')}${vv('g')} ${oo('=')} 0<br>
+   ② ${vv('h')} ${oo('=')} 0 ,&nbsp; ${vv('g')} ${oo('≤')} 0 &nbsp;&nbsp;&nbsp; ③ ${tk('mu','ng',vv('μ'))} ${oo('≥')} 0<br>
+   ④ ${tk('cs','ng',vv('μ')+'<sub>j</sub> '+vv('g')+'<sub>j</sub>'+oo('(')+vv('x')+oo(')')+' '+oo('=')+' 0')}</span>`,
+  cap:'① 停留性　② 実行可能性　③ 双対実行可能性　④ 相補性',
+  canvas:['fKKTg',980,360],
+  say:['','等高線と制約線は前と同じ。ここに上限 P₂ ≤ 80 を足します。',
+       '上限を入れると、さっきの最適点 (200, 100) が実行不能領域に入ってしまう。',
+       '最適点は境界に押し付けられ、(220, 80) になる。',
+       'そこでは勾配が<b>2本</b>で釣り合う。<span class="mq xs">∇F = λ∇g + μ∇h</span>。',
+       '<b class="cN">μ = 3.60</b> — 上限を 1 MW 緩めたら費用がいくら下がるか。<b>制約の値段</b>です。',
+       '<b class="cN">④ 相補性 μ·g = 0</b> が本質。効いていない制約は μ=0、μ&gt;0 なら必ず境界上。どちらになるかは<b>解くまで分からない</b>。m 個の不等式なら 2ᵐ 通りの場合分けです。'],
+  keys:[null,null,null,null,null,'mu','cs'],
+  render:i=>fKKTg(i)});
+
+S({lv:'07',tp:'最適化・不等式制約',type:'algo',stepper:'lamst',
+  title:'1手ずつ：等λ法で有効制約を探し当てる',
+  msg:'λ を二分探索し、範囲の外に出た機は境界でクリップする。このクリップこそが相補性条件そのものです。',
+  ctl:`<div class="ctl"><label>需要 D [MW]</label>
+    <input type="range" id="dem2" min="400" max="1200" step="25" value="1150"><span class="val" id="dem2v">1150</span></div>`,
+  build:()=>lamSteps(),
+  side:'<canvas id="fLamLine" width="500" height="300"></canvas><p class="cap2" style="margin-top:8px">縦線は各機の運転範囲。λ 線（緑破線）が1手ごとに上下し、範囲外に出た機は赤くクリップされます。</p>',
+  draw:(st,i)=>fLamLine(st[i])});
+
+/* ---- 08 凸性 ---- */
+S({lv:'08',tp:'凸性',n:4,
+  title:'凸かどうかが、保証の有無を分ける',
+  msg:'KKT は必要条件。凸性が加わって初めて十分条件になります。',
+  eq:`${oo('∇')}<sup>2</sup>${vv('f')}${oo('(')}${vv('x')}${oo(')')} ${oo('⪰')} 0`,
+  cap:'ヘッセ行列が半正定値、かつ実行可能領域が凸集合',
+  canvas:['fConv',980,290],
+  say:['','<b class="cO">凸関数</b> — 2点を結ぶ弦が必ずグラフの上にある。谷は1つだけ ⇒ 局所最適 = 大域最適。',
+       '<b class="cN">非凸関数</b> — 弦がグラフを下回る区間がある。谷が複数あり、どこに落ちるかは初期値しだい。',
+       '<b>領域</b>の凸性も必要。整数条件 u ∈ {0,1} は領域を点の集まりにするので、最も強い非凸です。'],
+  render:i=>fConv(i),
+  extra:`<table class="tb">
+   <tr><th>問題</th><th>凸性</th><th>言えること</th></tr>
+   <tr class="hi"><td>経済負荷配分（2次コスト・線形制約）</td><td>凸QP</td><td>大域最適が保証される</td></tr>
+   <tr class="hi"><td>DC最適潮流</td><td>LP / 凸QP</td><td>多項式時間で解ける</td></tr>
+   <tr><td>AC最適潮流</td><td>非凸</td><td>局所最適しか保証されない・NP困難</td></tr>
+   <tr><td>起動停止（整数）</td><td>非凸（離散）</td><td>緩和して下界を作るしかない</td></tr></table>
+   <p class="dimtx" style="margin-top:10px;font-size:13.5px"><b>非凸への対処</b> — SDP/SOCP 緩和で凸問題に包んで下界を得る、逐次凸化（SLP・SQP）で近似を繰り返す、分枝限定で領域を切り分ける。</p>`});
+
+/* ---- 09 整数 ---- */
+S({lv:'09',tp:'整数変数',n:4,
+  title:'0/1 が入ると、微分が使えなくなる',
+  msg:'連続最適化の道具が全部効かなくなる階層。残るのは「上下から挟む」ことだけです。',
+  eq:`${fnn('min')} ${SGM} ${oo('(')}${tk('F','d',vv('F')+'<sub>i</sub>'+vv('u')+'<sub>i</sub>')} ${oo('+')} ${vv('b')}<sub>i</sub>${vv('P')}<sub>i</sub>${oo(')')} &nbsp;&nbsp; ${fnn('s.t.')} &nbsp; ${tk('u','ng',vv('u')+'<sub>i</sub> '+oo('∈')+' {0, 1}')}`,
+  cap:'起動停止計画。u が起動状態、F は起動・無負荷費用',
+  canvas:['fBound',980,290],
+  say:['','<b class="cD">F u</b> — 起動していれば固定費がかかる。この項が離散性を持ち込みます。',
+       '<b class="cN">u ∈ {0,1}</b> — ここが本体。微分できないので、勾配もヘッセ行列も使えない。',
+       'そこで <b>u ∈ [0,1] に緩める（LP緩和）</b>。緩めた問題の最適値は必ず真の最適値以下 ＝ <b class="cO">下界</b>。見つかった整数解は実行可能なので <b class="cN">上界</b>。この2つで挟みます。'],
+  keys:[null,'F','u',null],
+  render:i=>fBound(i>=3?{inc:5000}:{inc:Infinity},{cost:4820})});
+
+S({lv:'09',tp:'整数変数',type:'algo',stepper:'bbst',
+  title:'1手ずつ：分枝限定で木を刈る',
+  msg:'1手＝1節点の訪問。下界が暫定最良以上なら、その先を見ずに切り落とせます。',
+  ctl:`<div class="ctl"><label>需要 D [MW]</label>
+    <input type="range" id="dem3" min="150" max="740" step="10" value="500"><span class="val" id="dem3v">500</span></div>`,
+  build:()=>bbSteps(),
+  side:'<canvas id="fBBTree" width="500" height="270"></canvas><p class="cap2" style="margin-top:8px">数字はその枝の下界。LP緩和は <span class="m">u = 0.4</span> のような「0.4台の発電機」を返します。</p>',
+  draw:(st,i)=>fBBTree(st[i])});
+
+/* ---- 10 まとめ ---- */
+S({lv:'10',tp:'まとめ',n:4,
+  title:'難易度の地図',
+  msg:'新しい問題に出会ったら、まず「どの段か」を判定する。段が決まれば、使える道具と諦めるべき保証が決まります。',
+  canvas:['fMap',980,340],
+  render:i=>fMap(i),
+  extra:`<table class="tb">
+  <tr><th>段</th><th>方程式</th><th>電力系統での例</th><th>1手の中身</th><th>失われる保証</th></tr>
+  <tr><td class="n">01</td><td>Ax = b</td><td>直流回路・DC潮流</td><td>1行の掃き出し</td><td>—（有限回で厳密）</td></tr>
+  <tr><td class="n">02</td><td>Ax = b（大規模疎）</td><td>大規模系統</td><td>1成分の更新</td><td>厳密性 → 打ち切り誤差</td></tr>
+  <tr><td class="n">03</td><td>f(x) = 0</td><td>AC潮流</td><td>残差 → J → Δx → 更新</td><td>大域収束・解の一意性</td></tr>
+  <tr><td class="n">04</td><td>dx/dt = f(x)</td><td>過渡安定度・DAE</td><td>1タイムステップ</td><td>離散化誤差・剛性</td></tr>
+  <tr><td class="n">05</td><td>（近似）</td><td>小信号・FDLF・等面積法</td><td>—</td><td>適用範囲</td></tr>
+  <tr><td class="n">06</td><td>min f s.t. h=0</td><td>経済負荷配分</td><td>閉形式（0手）</td><td>—（凸なら大域最適）</td></tr>
+  <tr><td class="n">07</td><td>min f s.t. g≤0</td><td>上下限つき ED</td><td>λ の1回の更新</td><td>有効制約の事前決定</td></tr>
+  <tr><td class="n">08</td><td>非凸</td><td>AC-OPF</td><td>勾配1歩</td><td>大域最適性</td></tr>
+  <tr><td class="n">09</td><td>混合整数</td><td>起動停止計画</td><td>1節点の訪問</td><td>多項式時間</td></tr></table>`});
+
+/* =========================================================
+   補助の描画
+   ========================================================= */
+function drawGEside(i){
+  const g=cx('fGEside'); if(!g)return; clr(g);
+  const n=3,cw=58,ch=38,x0=(g.W-cw*4-18)/2,y0=32;
+  const elim=[[1,0],[2,0],[2,1]];
+  for(let r=0;r<n;r++)for(let c=0;c<4;c++){
+    const x=x0+c*cw+(c===3?18:0), y=y0+r*ch;
+    let col=COL.faint,bg=null;
+    const ei=elim.findIndex(([a,b])=>a===r&&b===c);
+    if(ei>=0){ if(i-1>ei){col=COL.ok;bg=tint(COL.ok,.14);}
+      else if(i-1===ei){col=COL.d;bg=tint(COL.d,.16);}
+      else {col=COL.ng;bg=tint(COL.ng,.08);} }
+    else if(c===3)col=COL.dim; else if(r<=c)col=COL.l;
+    if(bg){g.save();g.fillStyle=bg;g.fillRect(x+1,y+1,cw-2,ch-2);g.restore();}
+    g.save();g.strokeStyle=COL.hair;g.strokeRect(x+.5,y+.5,cw-1,ch-1);g.restore();
+    const s=(ei>=0&&i-1>=ei)?'0':(c===3?'b'+(r+1):'a'+(r+1)+(c+1));
+    TM(g,s,x+cw/2,y+ch/2,col,14,'center');
+  }
+  T(g, i===0?'まだ何もしていない': i<=3?`前進消去 ${i} / 3 手`:`後退代入 ${Math.min(3,i-3)} / 3 手`,
+    g.W/2,y0+n*ch+26,i<=3?COL.d:COL.ok,13,'center');
+  if(i>=7)T(g,'完了 — 6手で厳密解',g.W/2,y0+n*ch+50,COL.ok,13.5,'center');
+}
+function drawRhoChart(){
+  const A=IT.A,b=IT.b,xe=mat.solve(A,b),K=10;
+  const run=(m,w)=>{
+    const save=itMethod; itMethod=m;
+    let x=[0,0,0],out=[Math.max(...xe.map(Math.abs))];
+    for(let s=0;s<K;s++){
+      const xo=x.slice();
+      for(let i=0;i<3;i++){
+        const src=m==='J'?xo:x;
+        const raw=(b[i]-A[i].reduce((a,v,j)=>j===i?a:a+v*src[j],0))/A[i][i];
+        x=x.slice(); x[i]=m==='SOR'?x[i]+w*(raw-x[i]):raw;
+      }
+      out.push(Math.max(...x.map((v,i)=>Math.abs(v-xe[i]))));
+    }
+    itMethod=save; return out;
+  };
+  logChart('fRhoChart',[[run('SOR',1.15),COL.u,1.6,[5,4]],[run('J'),COL.gold,2.2],[run('GS'),COL.l,2.2]],
+    K,0,-8,'掃引',[['ヤコビ  ρ = 0.672',COL.gold,0],['ガウス・ザイデル  ρ = 0.459',COL.l,20],['SOR ω=1.15  ρ = 0.233',COL.u,40]]);
+}
+function drawNRres(steps,i){
+  const h=steps[i].hist||[];
+  logChart('fNRres',[[h,COL.ok,2.4]],8,1,-15,'反復回数');
+}
+function drawOdeTr(steps,i){
+  const st=steps[i], g=cx('fOdeTr'); if(!g)return; clr(g);
+  const x0=52,y0=18,W=g.W-76,H=g.H-56;
+  GR(g,x0,y0,W,H,6,6);
+  const TX=SW.dt*SW.N, DY=Math.PI*1.5;
+  const px=t=>x0+W*t/TX, py=d=>y0+H*(1-d/DY);
+  for(let dg=0;dg<=270;dg+=45)T(g,dg+'°',x0-8,py(dg*Math.PI/180),COL.faint,10.5,'right',undefined,'o');
+  for(let t=0;t<=TX+1e-9;t+=0.25)T(g,t.toFixed(2),px(t),y0+H+15,COL.faint,10.5,'center',undefined,'o');
+  T(g,'時間 [s]　／　縦軸 δ',x0+W/2,y0+H+33,COL.dim,12,'center');
+  const dmax=Math.PI-Math.asin(SW.Pm/SW.Ppost);
+  LN(g,[[x0,py(dmax)],[x0+W,py(dmax)]],COL.u,1.4,[4,4]);
+  T(g,'δmax',x0+W-6,py(dmax)-12,COL.u,11.5,'right');
+  LN(g,[[px(steps.tc),y0],[px(steps.tc),y0+H]],COL.d,1.4,[4,3]);
+  T(g,'遮断',px(steps.tc)+6,y0+13,COL.d,11.5,'left');
+  const cl=p=>p.map(([t,d])=>[px(t),py(Math.min(d,DY))]);
+  LN(g,cl(st.tre),COL.ng,1.8,[5,4]);
+  LN(g,cl(st.tr),COL.ok,2.4);
+  const L=st.tr[st.tr.length-1];
+  DOT(g,px(L[0]),py(Math.min(L[1],DY)),COL.d,5.5);
+}
+let _rk4demo=null;
+function RK4DEMO(){
+  if(_rk4demo)return _rk4demo;
+  const el=document.getElementById('odetc');
+  const prev=el?el.value:null; if(el)el.value='0.15';
+  const s=odeSteps(); if(el&&prev!=null)el.value=prev;
+  return _rk4demo=s[1];
+}
+
+/* =========================================================
+   追加スライド（歴史・技法）
+   ========================================================= */
+const EXTRA=[
+
+/* ── 導入 ── */
+['方程式は、どこから「解けない」のか',[
+ {lv:'00',tp:'導入',lay:'split',n:4,
+  title:'難しさは3つの軸で決まる',
+  msg:'方程式の「難しさ」は、次数でも項の数でもありません。次の3つのどれが失われたかで決まります。',
+  eq:`${tk('a','l','線形性')} <span class="o">·</span> ${tk('b','d','連続性')} <span class="o">·</span> ${tk('c','ng','凸性')}`,
+  cap:'この3つを1つずつ失っていくのが、この講義の道筋',
+  keys:[null,'a','b','c'],
+  say:['','<b class="cL">線形性</b>を失うと、閉形式解が消えて<b>反復</b>するしかなくなる。AC潮流がここ。',
+    '<b class="cD">連続性</b>を失うと、微分が使えず<b>探索</b>するしかなくなる。整数変数がここ。',
+    '<b class="cN">凸性</b>を失うと、見つけた解が最良かどうか<b>言えなくなる</b>。AC-OPF がここ。'],
+  extra:`<div class="cards"><div class="card"><h4>失われる順に並べると</h4>
+    <table class="tb"><tr><th>失うもの</th><th>できなくなること</th><th>代わりの武器</th></tr>
+    <tr><td>閉形式解</td><td>式で書く</td><td>反復法</td></tr>
+    <tr><td>大域収束</td><td>どこからでも届く</td><td>良い初期値・連続法</td></tr>
+    <tr><td>厳密性</td><td>有限回で終わる</td><td>打ち切り基準</td></tr>
+    <tr><td>凸性</td><td>最良だと言う</td><td>緩和・下界</td></tr>
+    <tr><td>多項式時間</td><td>現実的に解く</td><td>ギャップで打ち切る</td></tr></table>
+    <p class="dimtx" style="margin-top:12px">研究の仕事は、多くの場合この表を<b>上に押し戻す</b>ことです。</p></div></div>`},
+
+ {lv:'00',tp:'歴史',lay:'hero',n:13,
+  title:'方程式の歴史 — 「解く」の意味が3回変わった',
+  msg:'解の公式を求める時代、反復して近づける時代、一番良いものを選ぶ時代。',
+  canvas:['fTimeline',1380,330],
+  render:i=>fTimeline(i),
+  cap2:'前1800年のバビロニアから 20 世紀半ばまで。<b>1824年の Abel と 1832年の Galois</b> が分水嶺で、ここで「代数的に解けない方程式がある」ことが証明され、近似解法が正当な数学になりました。'},
+
+ {lv:'00',tp:'歴史',lay:'hero',n:6,
+  title:'「解の公式」は5次で終わった',
+  msg:'これは技術が未熟だったのではなく、原理的に不可能だと証明された話です。',
+  canvas:['fDegree',1200,350],
+  render:i=>fDegree(i),
+  cap2:'3次・4次までは公式がある。5次以上には無い — しかも「まだ見つかっていない」のではなく<b>存在しないことが証明された</b>。ここから数学は「厳密に書く」ことを諦め、「いくらでも精度よく近づける」方向へ舵を切ります。'},
+
+ {lv:'00',tp:'歴史',lay:'board',n:1,
+  title:'「解く」から「近づける」へ — 反復法の系譜',
+  msg:'解の公式を諦めた後、人類が手にした道具の系譜です。',
+  extra:`<div class="cards c2"><div class="card"><h4>非線形方程式</h4>
+   <table class="tb"><tr><th>年</th><th>人</th><th>やったこと</th></tr>
+   <tr><td class="n">1671</td><td>Newton</td><td>級数展開で根を逐次改良（『流率法』）</td></tr>
+   <tr><td class="n">1690</td><td>Raphson</td><td>いまの反復式の形に整理</td></tr>
+   <tr><td class="n">1740</td><td>Simpson</td><td>微分を使う形として一般化、連立へ拡張</td></tr>
+   <tr class="hi"><td class="n">1961</td><td>Van Ness</td><td>電力系統の潮流計算へ適用</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">「接線で横軸を切る」という発想は、微積分の誕生とほぼ同時に生まれています。</p></div>
+   <div class="card"><h4>線形方程式の反復解法</h4>
+   <table class="tb"><tr><th>年</th><th>人</th><th>やったこと</th></tr>
+   <tr><td class="n">前200頃</td><td>九章算術</td><td>「方程術」＝連立1次の消去法</td></tr>
+   <tr><td class="n">1809</td><td>Gauss</td><td>最小二乗と消去法（小惑星の軌道決定）</td></tr>
+   <tr><td class="n">1826</td><td>Gauss</td><td>Gerling 宛書簡で反復法を示す</td></tr>
+   <tr><td class="n">1845</td><td>Jacobi</td><td>ヤコビ法</td></tr>
+   <tr><td class="n">1874</td><td>Seidel</td><td>ガウス・ザイデル法</td></tr>
+   <tr><td class="n">1950</td><td>Young</td><td>SOR と最適 ω の理論</td></tr>
+   <tr class="hi"><td class="n">1952</td><td>Hestenes &amp; Stiefel</td><td>共役勾配法（クリロフ法の始まり）</td></tr>
+   <tr class="hi"><td class="n">1986</td><td>Saad &amp; Schultz</td><td>GMRES</td></tr></table></div></div>`},
+
+ {lv:'00',tp:'歴史',lay:'hero',n:13,
+  title:'電力系統の計算史 — 模型で測る時代から',
+  msg:'1929年、系統の潮流は「計算」ではなく縮小模型で「測る」ものでした。',
+  canvas:['fTimeline2',1380,330],
+  render:i=>fTimeline2(i),
+  cap2:'交流計算盤（Network Analyzer）は抵抗とリアクトルで系統を組み、電圧計で潮流を読む装置でした。<b>デジタル計算機で潮流方程式を解けるようになったのは 1956年</b>。この講義で扱う全アルゴリズムは、そこからの 70 年に詰まっています。'},
+
+ {lv:'00',tp:'歴史',lay:'board',n:1,
+  title:'電力系統が数値計算に返したもの',
+  msg:'電力系統は数学の応用先であるだけでなく、汎用の数値計算技術を生み出した側でもあります。',
+  extra:`<table class="tb">
+   <tr><th>年</th><th>成果</th><th>内容</th><th>その後</th></tr>
+   <tr class="hi"><td class="n">1967</td><td>Tinney &amp; Walker<br>疎行列 LU と順序付け</td>
+     <td>フィルインを最小化する消去順序（Tinney scheme 1/2/3）と、疎行列の格納・因数分解の体系</td>
+     <td>回路シミュレーション・構造解析・線形計画など、あらゆる分野の疎行列ソルバの基礎に</td></tr>
+   <tr class="hi"><td class="n">1969</td><td>Dommel<br>EMTP</td>
+     <td>台形則で回路素子を「抵抗＋電流源」に置き換え、毎ステップ線形回路を解く</td>
+     <td>電磁過渡解析の世界標準。いまの PSCAD / EMTP-RV / PSIM の系譜</td></tr>
+   <tr><td class="n">1968</td><td>Dommel &amp; Tinney<br>最適潮流の解法</td>
+     <td>ラグランジュ乗数と勾配法で OPF を実際に解いた最初の実装</td><td>OPF 研究の出発点</td></tr>
+   <tr><td class="n">1974</td><td>Stott &amp; Alsaç<br>FDLF</td>
+     <td>P–δ / Q–V の弱結合を使ってヤコビアンを定数化し、一度だけ分解</td>
+     <td>系統運用のオンライン計算（コンティンジェンシー解析）を可能にした</td></tr>
+   <tr><td class="n">2012–</td><td>AC-OPF の凸緩和</td>
+     <td>SDP / SOCP で非凸問題を包み、条件付きで厳密性を証明</td>
+     <td>非凸最適化の理論側にも影響</td></tr></table>
+   <p style="margin-top:14px;font-size:15px">数万母線の連立方程式を毎日解かねばならないという要求が、汎用アルゴリズムを押し上げてきました。<b>制約の厳しさが技術を作る</b>典型例です。</p>`}
+]],
+
+/* ── LEVEL 01 ── */
+['1手ずつ：ガウス消去',[
+ {lv:'01',tp:'線形代数方程式',lay:'split',n:4,
+  title:'解けても、正しいとは限らない — 条件数',
+  msg:'消去は必ず終わりますが、答えがどれだけ信用できるかは別の話です。',
+  eq:`${vv('κ')}${oo('(')}${vv('A')}${oo(')')} ${oo('=')} ${oo('‖')}${vv('A')}${oo('‖')} <span class="o">·</span> ${oo('‖')}${vv('A')}<sup>−1</sup>${oo('‖')}`,
+  cap:'条件数。入力の誤差が答えで何倍に増幅されるかの上限',
+  keys:[null,null,null,null],
+  say:['','κ が 10ⁿ なら、答えの有効桁が n 桁失われると思ってよい。',
+    'ピボットが小さいと乗数 m が巨大になり、丸め誤差が増幅される。だから<b>部分ピボット選択</b>（列で絶対値最大の行を選ぶ）を必ず入れる。',
+    '電力系統の B′ 行列は対角優位で条件が良い。しかし<b>非常に長い線路や小さいリアクタンスが混じると悪化</b>する。スケーリング（行・列の正規化）が効きます。'],
+  extra:`<div class="cards"><div class="card"><h4>直接法まわりの技法</h4>
+   <table class="tb"><tr><th>技法</th><th>何のため</th></tr>
+   <tr><td>部分ピボット選択</td><td>丸め誤差の増幅を防ぐ</td></tr>
+   <tr><td>スケーリング</td><td>行・列の桁を揃えて κ を下げる</td></tr>
+   <tr><td>反復改良</td><td>残差 r = b − Ax̂ を使って解を1〜2回磨く</td></tr>
+   <tr><td>コレスキー分解</td><td>対称正定値なら計算量が半分（B′ 行列がこれ）</td></tr>
+   <tr><td>ブロック分解</td><td>キャッシュ効率。実測で数倍の差</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">「解けるか」ではなく「速く・正確に解けるか」がこの階層の勝負どころです。</p></div></div>`},
+
+ {lv:'01',tp:'線形代数方程式',lay:'hero',n:4,
+  title:'順序を変えるだけで、計算量が10分の1になる',
+  msg:'直接法の本体は消去そのものではなく、どの順に消去するかの設計です。',
+  canvas:['fOrder',1180,340],
+  render:i=>fOrder(i),
+  cap2:'星形では中心を先に消すと下三角が全部埋まり、最後に消せばフィルインは<b>ゼロ</b>。IEEE 14母線でも順序次第で 82 個と 8 個の差が出ます。Tinney scheme 1（次数の小さい母線から消す）はこれを貪欲に狙う古典的手法です。'},
+
+ {lv:'01',tp:'線形代数方程式',lay:'split',n:3,
+  title:'一度分解すれば、あとは使い回せる',
+  msg:'潮流計算もコンティンジェンシー解析も、同じ行列に対して右辺だけを何度も変えて解く問題です。',
+  eq:`${vv('A')} ${oo('=')} ${tk('LU','l',vv('L')+vv('U'))} &nbsp;&nbsp;→&nbsp;&nbsp; ${tk('fb','ok',vv('L')+vv('y')+oo('=')+vv('b')+' ,&nbsp; '+vv('U')+vv('x')+oo('=')+vv('y'))}`,
+  cap:'分解は1回、前進後退代入は右辺の数だけ',
+  keys:[null,'LU','fb'],
+  say:['','<b class="cL">分解</b>が重い。密なら n³/3、疎なら非零数に比例。ここは1回で済ませたい。',
+    '<b class="cO">前進後退代入</b>は軽い。疎行列なら非零数に比例するだけ。<b>右辺が1000本あっても、分解は1回。</b>'],
+  extra:`<div class="cards"><div class="card"><h4>電力系統でどう効くか</h4>
+   <ul><li><b>N−1 コンティンジェンシー解析</b> — 数千通りの事故ケースを、母線数と同じ行列に対する右辺の違いとして扱う</li>
+   <li><b>感度計算</b> — PTDF / LODF は単位ベクトルを右辺にした解そのもの</li>
+   <li><b>ニュートン法の反復</b> — ヤコビアンが大きく変わらない間は再分解を省く（dishonest Newton）</li>
+   <li><b>ランク1修正</b> — 線路1本の開放は行列のランク1変更。Sherman–Morrison 公式で分解を作り直さずに済む</li></ul>
+   <p class="dimtx" style="margin-top:10px">「重い計算を1回にまとめ、軽い計算を繰り返す」— この構図は、この先の階層でも何度も出てきます。</p></div></div>`}
+]],
+
+/* ── LEVEL 02 ── */
+['収束するかどうかは、行列の性質だけで決まる',[
+ {lv:'02',tp:'行列分割と反復法',lay:'split',n:4,
+  title:'収束を保証する、確かめやすい条件',
+  msg:'ρ(T) を毎回計算するのは現実的ではありません。行列を見るだけで判定できる十分条件があります。',
+  eq:`${oo('|')}${vv('a')}<sub>ii</sub>${oo('|')} ${oo('&gt;')} ${SGM}<sub>j≠i</sub> ${oo('|')}${vv('a')}<sub>ij</sub>${oo('|')}`,
+  cap:'厳密優対角。全ての行でこれが成り立てば、ヤコビもガウス・ザイデルも必ず収束する',
+  keys:[null,null,null,null],
+  say:['','対角成分が、その行の他の成分の合計より大きい。これだけで ρ(T) &lt; 1 が保証されます。',
+    '電力系統の B′ 行列は、対地アドミタンスがあれば優対角になる。<b>だから GS 法が最初の潮流計算に使えた。</b>',
+    '対称正定値なら、ガウス・ザイデルと SOR（0&lt;ω&lt;2）は<b>常に</b>収束します（Ostrowski–Reich）。ヤコビは保証されません。'],
+  extra:`<div class="cards"><div class="card"><h4>収束の十分条件</h4>
+   <table class="tb"><tr><th>条件</th><th>ヤコビ</th><th>GS</th><th>SOR</th></tr>
+   <tr><td>厳密優対角</td><td class="n">○</td><td class="n">○</td><td class="n">○ (0&lt;ω≤1)</td></tr>
+   <tr><td>既約優対角</td><td class="n">○</td><td class="n">○</td><td class="n">○</td></tr>
+   <tr><td>対称正定値</td><td class="n">—</td><td class="n">○</td><td class="n">○ (0&lt;ω&lt;2)</td></tr>
+   <tr><td>M行列</td><td class="n">○</td><td class="n">○</td><td class="n">○</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">必要十分条件は ρ(T) &lt; 1 だけ。上の表はすべて「確かめやすいが強すぎる」十分条件です。逆に言えば、これを満たさなくても収束することはあります。</p>
+   <p style="margin-top:10px;font-size:14.5px">ω の範囲 <span class="m">0 &lt; ω &lt; 2</span> は必要条件でもある（Kahan）。これを外れたら何をしても発散します。</p></div></div>`},
+
+ {lv:'02',tp:'行列分割と反復法',lay:'hero',n:3,
+  title:'SOR — 「行き過ぎる」ことで速くする',
+  msg:'ガウス・ザイデルの修正量を ω 倍に伸ばす。ただし谷は鋭く、外すと逆効果です。',
+  eq:`${vv('x')}<sub>i</sub> ${oo('←')} ${vv('x')}<sub>i</sub> ${oo('+')} ${tk('w','u',vv('ω'))} ${oo('(')} ${vv('x̃')}<sub>i</sub> ${oo('−')} ${vv('x')}<sub>i</sub> ${oo(')')}`,
+  cap:'x̃ はガウス・ザイデルが出す値。ω = 1 なら GS そのもの',
+  canvas:['fSOR',1120,330],
+  render:i=>fSOR(i),
+  keys:[null,'w','w'],
+  say:['','ω を横軸に取り、ρ を縦軸に取ると V 字の谷になる。谷の底が最適 ω。',
+    'Young の公式は ρ_J さえ分かれば ω* を与えるが、<b>その ρ_J を知るのが元の問題と同じくらい難しい</b>。実務では適応的に ω を推定するか、そもそも SOR を使わずクリロフ法へ行きます。']},
+
+ {lv:'02',tp:'行列分割と反復法',lay:'hero',n:4,
+  title:'現代の主役は「前処理付きクリロフ法」',
+  msg:'ヤコビ・GS・SOR は教育的には要ですが、実際の大規模計算はここに置き換わっています。',
+  eq:`${tk('pre','ok',vv('M')+'<sup>−1</sup>')}${vv('A')}${vv('x')} ${oo('=')} ${tk('pre','ok',vv('M')+'<sup>−1</sup>')}${vv('b')}`,
+  cap:'M は「A に似ていて、しかも簡単に解ける」行列',
+  canvas:['fPrecond',1120,300],
+  render:i=>fPrecond(i),
+  keys:[null,null,'pre','pre'],
+  say:['','元の行列は固有値が 2 から 800 まで散らばっている。κ = 407。',
+    '<b class="cO">前処理</b>を掛けると固有値が 1 のまわりに密集し、κ = 1.21 になる。',
+    '<b>反復法の性能を決めるのは、もはや反復の種類ではなく前処理の設計。</b>']},
+
+ {lv:'02',tp:'行列分割と反復法',lay:'board',n:1,
+  title:'反復解法カタログ',
+  msg:'定常反復法からクリロフ部分空間法へ。何を捨てて何を得たか。',
+  extra:`<table class="tb">
+   <tr><th>手法</th><th>年</th><th>考え方</th><th>1反復の重さ</th><th>向き不向き</th></tr>
+   <tr><td>ヤコビ</td><td class="n">1845</td><td>M = D。全成分を前回値で更新</td><td>最軽量・完全並列</td><td>並列計算機・前処理の部品</td></tr>
+   <tr><td>ガウス・ザイデル</td><td class="n">1874</td><td>M = D + L。更新済みを即使う</td><td>軽い・逐次</td><td>初期の潮流計算</td></tr>
+   <tr><td>SOR</td><td class="n">1950</td><td>修正量を ω 倍</td><td>GS と同じ</td><td>ω を当てられるとき</td></tr>
+   <tr class="hi"><td>共役勾配法 CG</td><td class="n">1952</td><td>残差の張る部分空間で最適な近似を取る</td><td>行列ベクトル積1回</td><td>対称正定値。B′ 行列に最適</td></tr>
+   <tr class="hi"><td>GMRES</td><td class="n">1986</td><td>非対称でも残差ノルムを最小化</td><td>反復とともに増える（要リスタート）</td><td>ヤコビアンなど非対称行列</td></tr>
+   <tr><td>BiCGSTAB</td><td class="n">1992</td><td>短い漸化式で非対称に対応</td><td>一定</td><td>メモリが厳しいとき</td></tr>
+   <tr class="hi"><td>ILU 前処理</td><td class="n">1977–</td><td>フィルインを捨てた不完全 LU を M に使う</td><td>—</td><td>ほぼ全ての大規模問題</td></tr>
+   <tr><td>代数的マルチグリッド</td><td class="n">1980s</td><td>粗い格子と細かい格子を行き来する</td><td>—</td><td>楕円型・大規模</td></tr></table>
+   <p style="margin-top:12px;font-size:15px">CG は <b>n 回で厳密解に到達する</b>ので、理屈の上では直接法でもあります。実際には √κ に比例する回数で十分な精度になるため、反復法として使われます。<b>直接法と反復法の境界は、実はそれほど固くない。</b></p>`}
+]],
+
+/* ── LEVEL 03 ── */
+['1手ずつ：残差 → ヤコビアン → Δx → 更新',[
+ {lv:'03',tp:'非線形代数方程式',lay:'hero',n:5,
+  title:'ヤコビアンには、はっきりした偏りがある',
+  msg:'P は位相角と、Q は電圧と強く結びつく。この偏りが高速化の入口です。',
+  eq:`${vv('J')} ${oo('=')} <span style="font-size:.9em">[ ${tk('H','d',vv('H'))} &nbsp; ${tk('N','faint',vv('N'))} ; &nbsp; ${tk('M','faint',vv('M'))} &nbsp; ${tk('L','d',vv('L'))} ]</span>`,
+  cap:'H = ∂P/∂θ、N = ∂P/∂V、M = ∂Q/∂θ、L = ∂Q/∂V',
+  canvas:['fJacStruct',1160,300],
+  render:i=>fJacStruct(i),
+  keys:[null,'H','N','M','L'],
+  say:['','<b class="cD">H = ∂P/∂θ</b> — 大きい。有効電力は位相角で動く。',
+    '<b>N = ∂P/∂V</b> — 小さい。X ≫ R なので、電圧を変えても P はあまり動かない。',
+    '<b>M = ∂Q/∂θ</b> — 小さい。同じ理由。',
+    '<b class="cD">L = ∂Q/∂V</b> — 大きい。無効電力は電圧で動く。<b>この対角優位が FDLF の根拠になります。</b>']},
+
+ {lv:'03',tp:'非線形代数方程式',lay:'split',n:4,
+  title:'2次収束を捨てて、1反復を桁違いに軽くする',
+  msg:'高速分離解法（FDLF, 1974）。オンライン運用を可能にした発明です。',
+  eq:`${tk('p','d','[H] Δθ')} ${oo('=')} ${vv('ΔP')}${oo('/')}${vv('V')} ,&nbsp;&nbsp; ${tk('q','l','[L] ΔV')} ${oo('=')} ${vv('ΔQ')}${oo('/')}${vv('V')}`,
+  cap:'2つの独立な線形方程式に分かれ、係数行列は定数',
+  keys:[null,'p','q',null],
+  say:['','交差項 N と M を 0 と置くと、<b class="cD">P–δ の式</b>と<b class="cL">Q–V の式</b>が完全に分離する。',
+    'さらに H と L を「電圧 1.0、角度差 0、抵抗無視」で近似すると<b>定数行列</b>になり、最初に一度 LU 分解すれば以後は前進後退代入だけ。',
+    '収束は 2 次から 1 次に落ち、反復回数は 4 回程度から 10 回程度に増える。それでも<b>1反復の費用が桁で下がる</b>ので総時間は短くなります。'],
+  extra:`<div class="cards"><div class="card"><h4>解法の選び方</h4>
+   <table class="tb"><tr><th>手法</th><th>収束</th><th>1反復</th><th>使う場面</th></tr>
+   <tr><td>ガウス・ザイデル</td><td>1次</td><td>最軽量</td><td>初期値作り・教育</td></tr>
+   <tr class="hi"><td>ニュートン・ラフソン</td><td>2次</td><td>重い</td><td>計画・精度が要る計算</td></tr>
+   <tr class="hi"><td>FDLF</td><td>1次</td><td>非常に軽い</td><td>N−1 解析・オンライン運用</td></tr>
+   <tr><td>DC潮流</td><td>—（線形）</td><td>1回で終わり</td><td>市場計算・混雑管理</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">R/X 比の大きい配電系統では FDLF の前提が崩れ、収束が悪化します。そのため配電系統では前進後退掃引法など別系統の解法が使われます。</p>
+   <p style="margin-top:8px;font-size:14.5px"><b>「良い性質を捨てて速さを買う」</b>— これは LEVEL 05 の簡略化と同じ発想です。</p></div></div>`},
+
+ {lv:'03',tp:'非線形代数方程式',lay:'hero',n:4,
+  title:'鼻先を回るには、未知数を増やす',
+  msg:'解が消える点では行列が特異になります。連続法は、そこを避けるのではなく通り抜けます。',
+  canvas:['fCPF',1160,330],
+  render:i=>fCPF(i),
+  say:['','通常の潮流計算は P を固定して解く。鼻先では det J → 0 になり必ず破綻する。',
+    '<b class="cU">予測子</b> — いまの解から接線方向へ一歩踏み出す。',
+    '<b class="cL">修正子</b> — 曲線に垂直な方向に拘束を1本足して、曲線上へ引き戻す。',
+    '<b>P を未知数に格上げし、弧長を新しい助変数にする</b>のが要点。こうすれば鼻先でも行列が正則なままで、下枝まで一筆で追えます。電圧安定余裕の算定はこれで行います。']},
+
+ {lv:'03',tp:'非線形代数方程式',lay:'board',n:1,
+  title:'非線形方程式を「収束させる」技法',
+  msg:'ニュートン法は速いが脆い。実務はそれを支える工夫で成り立っています。',
+  extra:`<div class="cards c2"><div class="card"><h4>初期値をどう作るか</h4>
+   <table class="tb"><tr><th>方法</th><th>中身</th><th>効き方</th></tr>
+   <tr><td>フラットスタート</td><td>V=1.0、δ=0</td><td>軽負荷なら十分</td></tr>
+   <tr class="hi"><td>DCスタート</td><td>DC潮流の解を初期値に</td><td>重負荷で効く</td></tr>
+   <tr class="hi"><td>前時刻の解</td><td>時系列計算で直前の解を使う</td><td>反復1〜2回で収束</td></tr>
+   <tr><td>負荷段階投入</td><td>負荷を分割して徐々に増やす</td><td>連続法の簡易版</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">ニュートン法が収束しないとき、原因は「解が無い」か「初期値が悪い」かのどちらか。この2つを切り分けられることが実務では重要です。</p></div>
+   <div class="card"><h4>反復を安定させる工夫</h4>
+   <ul><li><b>減衰ニュートン</b> — Δx をそのまま足さず、残差が減る歩幅 α を線探索で決める（大域収束性が上がる）</li>
+   <li><b>信頼領域法</b> — 1反復で動ける半径を制限し、モデルが信用できる範囲だけ進む</li>
+   <li><b>不正直ニュートン</b> — ヤコビアンを毎回作り直さず数反復使い回す。収束次数は落ちるが総時間は短い</li>
+   <li><b>ニュートン・クリロフ法</b> — JΔx = f を反復法で近似的に解く。J を陽に作らなくてよい</li>
+   <li><b>解の多重性</b> — 上枝（高電圧・運転点）と下枝（低電圧・不安定）がある。下枝に落ちていないか必ず確認する</li></ul></div></div>`}
+]],
+
+/* ── LEVEL 04 ── */
+['1手ずつ：RK4 と前進オイラーを並走させる',[
+ {lv:'04',tp:'微分方程式',lay:'hero',n:4,
+  title:'Δt を決めるのは精度ではなく、安定性',
+  msg:'刻みが大きすぎると誤差が大きくなるのではなく、解が爆発します。',
+  eq:`${vv('z')} ${oo('=')} ${vv('λ')} ${vv('Δt')} &nbsp;&nbsp; が安定領域の中にあること`,
+  cap:'λ は系の固有値。z がこの領域を出た瞬間、数値解は発散する',
+  canvas:['fStab',1160,330],
+  render:i=>fStab(i),
+  cap2:'陽解法の安定領域は有限。陰解法（後退オイラー・台形則）は<b>左半平面すべて</b>で安定（A-安定）なので、Δt を「見たい現象」の側で自由に選べます。'},
+
+ {lv:'04',tp:'微分方程式',lay:'hero',n:4,
+  title:'剛性 — 速い現象が、遅い計算の足を引っ張る',
+  msg:'見たいのは0.5秒の動揺なのに、2ミリ秒の現象のせいで刻みを縮めさせられる。',
+  canvas:['fStiff',1160,330],
+  render:i=>fStiff(i),
+  say:['','<b class="cO">遅い現象</b> — 発電機の動揺。時定数 0.5 秒。これが見たいもの。',
+    '<b class="cN">速い現象</b> — 電磁過渡。時定数 2 ミリ秒。すぐ消えて答えに影響しない。',
+    'それでも<b>陽解法は安定性のために、速い方に合わせて刻ませられる</b>。これが剛性です。',
+    '陰解法なら Δt を遅い現象に合わせられる。代わりに毎ステップ非線形方程式を解くことになり、<b>LEVEL 03 が内側に入ってきます。</b>']},
+
+ {lv:'04',tp:'微分方程式',lay:'split',n:3,
+  title:'台形則と EMTP — 回路を毎ステップの抵抗回路に変える',
+  msg:'Dommel（1969）の発想。微分方程式を、時間刻みごとの線形代数方程式に変換します。',
+  eq:`${vv('L')} ${frr('d'+vv('i'),'d'+vv('t'))} ${oo('=')} ${vv('v')} &nbsp;→&nbsp; ${tk('eq','ok',vv('i')+'(t) '+oo('=')+' '+frr(vv('Δt'),'2'+vv('L'))+vv('v')+'(t) '+oo('+')+' '+vv('I')+'<sub>hist</sub>')}`,
+  cap:'インダクタが「抵抗 2L/Δt ＋ 履歴電流源」に化ける',
+  keys:[null,'eq','eq'],
+  say:['','台形則で離散化すると、<b>リアクタンスもキャパシタンスも「抵抗＋電流源」になる</b>。',
+    '結果として、各時刻でやることは<b>抵抗回路の節点方程式 Gv = i を解くこと</b>だけ。Δt が一定なら G は変わらないので、LU 分解は最初に1回。<b>LEVEL 01 に戻ってきます。</b>'],
+  extra:`<div class="cards"><div class="card"><h4>台形則が選ばれた理由</h4>
+   <ul><li><b>A-安定</b> — どんな Δt でも発散しない</li>
+   <li><b>2次精度</b> — 後退オイラーより誤差が小さい</li>
+   <li><b>エネルギー保存に近い</b> — 無損失回路の振動を減衰させない</li>
+   <li><b>実装が軽い</b> — 履歴項が前ステップの値だけで書ける</li></ul>
+   <p class="dimtx" style="margin-top:10px">欠点は、スイッチング直後などに<b>数値振動（hoot）</b>が出ること。対策として後退オイラーを半ステップ挟む CDA 法などが使われます。</p>
+   <p style="margin-top:10px;font-size:14.5px">PSIM・PSCAD・EMTP-RV はすべてこの系譜。<b>Δt = 50 μs 程度</b>で、スイッチング素子を含む回路を解いています。</p></div></div>`},
+
+ {lv:'04',tp:'微分方程式',lay:'board',n:1,
+  title:'DAE をどう解くか — 微分と代数の連立',
+  msg:'実系統は発電機の微分方程式とネットワークの代数方程式が絡み合った DAE です。',
+  extra:`<div class="cards c2"><div class="card"><h4>2つの解き方</h4>
+   <table class="tb"><tr><th></th><th>交互法（partitioned）</th><th>同時法（simultaneous）</th></tr>
+   <tr><td>やり方</td><td>微分方程式を1ステップ進め、次に潮流を解く。これを交互に</td><td>微分方程式も台形則で代数化し、全部まとめてニュートン法</td></tr>
+   <tr><td>長所</td><td>実装が容易・モジュール化しやすい</td><td>数値的に安定・大きな Δt が取れる</td></tr>
+   <tr><td>短所</td><td>界面誤差が出る・小さい Δt が必要</td><td>行列が大きい・実装が重い</td></tr>
+   <tr><td>使われ方</td><td>従来の位相安定度解析</td><td>剛性の強い系・長時間解析</td></tr></table></div>
+   <div class="card"><h4>解析の種類と刻み幅</h4>
+   <table class="tb"><tr><th>解析</th><th>Δt の目安</th><th>見たいもの</th></tr>
+   <tr class="hi"><td>EMT（電磁過渡）</td><td class="n">1–50 μs</td><td>スイッチング・高調波・インバータ制御</td></tr>
+   <tr><td>位相安定度</td><td class="n">1–10 ms</td><td>発電機の動揺・過渡安定度</td></tr>
+   <tr><td>中長期動特性</td><td class="n">0.1–1 s</td><td>調速機・OLTC・負荷回復</td></tr>
+   <tr><td>準定常（QSS）</td><td class="n">数十秒</td><td>電圧崩壊の進行</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">インバータ主体系統では慣性が減り、速い現象と遅い現象の境界が曖昧になっています。<b>EMT と位相安定度の中間を埋める解法</b>（EMT-TS ハイブリッド）が現在の研究課題です。</p></div></div>`}
+]],
+
+/* ── LEVEL 05 ── */
+['解けないなら、解ける形に落とす',[
+ {lv:'05',tp:'簡略化して解く',lay:'split',n:4,
+  title:'テイラー展開が、簡略化のほぼ全部の親',
+  msg:'線形化も、ニュートン法も、小信号安定度も、同じ1本の式から出ています。',
+  eq:`${vv('f')}${oo('(')}${vv('x')}<sub>0</sub>${oo('+')}${vv('Δx')}${oo(')')} ${oo('=')} ${tk('a','ok',vv('f')+oo('(')+vv('x')+'<sub>0</sub>'+oo(')'))} ${oo('+')} ${tk('b','d',vv('J')+oo('(')+vv('x')+'<sub>0</sub>'+oo(')')+vv('Δx'))} ${oo('+')} ${tk('c','faint','O(Δx²)')}`,
+  cap:'どこで切るか、切った項をどう扱うかで、違う手法になる',
+  keys:[null,'a','b','c'],
+  say:['','<b class="cO">0次項</b>だけ残す → 定数近似。動作点そのもの。',
+    '<b class="cD">1次項</b>まで残す → 線形化。これを<b>反復して2次項を取り戻す</b>のがニュートン法、<b>1次で止めて固有値を見る</b>のが小信号安定度解析。',
+    '<b>2次以降を捨てた瞬間</b>に、その式は平衡点の近くでしか正しくなくなる。これが「適用範囲」の正体です。'],
+  extra:`<div class="cards"><div class="card"><h4>同じ展開から生まれたもの</h4>
+   <table class="tb"><tr><th>手法</th><th>切り方</th><th>目的</th></tr>
+   <tr class="hi"><td>ニュートン法</td><td>1次で切って反復</td><td>非線形方程式を解く</td></tr>
+   <tr class="hi"><td>小信号安定度</td><td>1次で止める</td><td>固有値・モード解析</td></tr>
+   <tr><td>感度解析</td><td>1次係数そのもの</td><td>∂出力/∂入力</td></tr>
+   <tr><td>SQP</td><td>目的は2次、制約は1次</td><td>非線形最適化</td></tr>
+   <tr><td>DC潮流</td><td>1次＋物理的仮定</td><td>線形化した潮流</td></tr>
+   <tr><td>逐次凸化</td><td>1次または凸2次</td><td>非凸問題の近似解</td></tr></table>
+   <p style="margin-top:10px;font-size:14.5px">違うのは<b>目的</b>だけで、数学的な操作は同じ。この見方ができると、新しい手法の理解が速くなります。</p></div></div>`},
+
+ {lv:'05',tp:'簡略化して解く',lay:'split',n:4,
+  title:'平均化とインピーダンス — 電力変換器の簡略化',
+  msg:'スイッチング周期で平均化し、dq 変換で定常量にし、小信号でインピーダンスに落とす。同じ発想の3段重ねです。',
+  eq:`<span style="font-size:.8em">${tk('a','ng','スイッチング')} ${oo('→')} ${tk('b','d','平均値モデル')} ${oo('→')} ${tk('c','l','dq 座標')} ${oo('→')} ${tk('d','ok','インピーダンス Z(s)')}</span>`,
+  cap:'各段で「見なくてよいもの」を捨て、扱える形にしていく',
+  keys:[null,'a','b','d'],
+  say:['','<b class="cN">スイッチングモデル</b> — 真の姿。μ秒刻みが必要で、系統全体には使えない。',
+    '<b class="cD">平均化</b> — スイッチング周期で平均を取り、高調波を捨てる。連続時間の非線形システムになる。',
+    '<b class="cO">インピーダンスモデル</b> — 動作点まわりで線形化し、周波数領域の Z(s) にする。<b>変換器を「1つのインピーダンス」として扱えるので、系統との相互作用（共振・不安定化）をナイキスト判定で見られる。</b>'],
+  extra:`<div class="cards"><div class="card"><h4>捨てたものと、引き換えに得たもの</h4>
+   <table class="tb"><tr><th>段</th><th>捨てるもの</th><th>得るもの</th></tr>
+   <tr><td>平均化</td><td>スイッチングリップル・高調波</td><td>Δt が 1000 倍取れる</td></tr>
+   <tr><td>dq 変換</td><td>三相の時間変動</td><td>定常点が「直流」になり線形化できる</td></tr>
+   <tr class="hi"><td>小信号線形化</td><td>大擾乱時の挙動</td><td>伝達関数・固有値・安定判別</td></tr>
+   <tr class="hi"><td>インピーダンス化</td><td>内部の状態変数</td><td>機器を1つの端子特性として扱える</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">GFM / GFL インバータの安定性議論がインピーダンスで行われるのは、この最後の一段のおかげです。<b>ただし大擾乱・非線形飽和はこのモデルの外側</b>にあり、そこは EMT シミュレーションで確認する必要があります。</p></div></div>`}
+]],
+
+/* ── LEVEL 06 / 07 ── */
+['1手ずつ：等λ法で有効制約を探し当てる',[
+ {lv:'07',tp:'最適化・不等式制約',lay:'split',n:4,
+  title:'乗数は価格になる — 限界価格 LMP',
+  msg:'ラグランジュ乗数と KKT 乗数は、単なる計算の道具ではなく市場価格そのものです。',
+  eq:`${vv('LMP')}<sub>i</sub> ${oo('=')} ${tk('l','ok',vv('λ'))} ${oo('+')} ${tk('c','ng',SGM+'<sub>k</sub> '+vv('μ')+'<sub>k</sub> '+vv('a')+'<sub>ki</sub>')} ${oo('−')} ${tk('s','d',vv('λ')+'<sub>loss,i</sub>')}`,
+  cap:'エネルギー成分 ＋ 混雑成分 ＋ 損失成分',
+  keys:[null,'l','c','s'],
+  say:['','<b class="cO">λ</b> — 需給バランス制約の乗数。系統全体で共通のエネルギー価格。',
+    '<b class="cN">Σ μ a</b> — 送電線の容量制約の乗数。混雑している線路があると、その影響で母線ごとに価格が割れる。<b>μ &gt; 0 の線路が「混雑している」線路。</b>',
+    '損失成分を加えると、各母線に固有の価格 LMP になる。<b>KKT 条件を解くことが、そのまま市場の値付けになっている。</b>'],
+  extra:`<div class="cards"><div class="card"><h4>乗数の読み方</h4>
+   <table class="tb"><tr><th>制約</th><th>乗数</th><th>意味</th></tr>
+   <tr class="hi"><td>需給バランス ΣP = D</td><td>λ</td><td>需要 1 MW 増の限界費用 [$/MWh]</td></tr>
+   <tr class="hi"><td>送電容量 f ≤ f<sup>max</sup></td><td>μ</td><td>容量 1 MW 増でいくら得するか＝増強の価値</td></tr>
+   <tr><td>発電機上限 P ≤ P<sup>max</sup></td><td>μ</td><td>その機の増出力の価値＝レント</td></tr>
+   <tr><td>予備力要件</td><td>μ</td><td>予備力の価格</td></tr></table>
+   <p style="margin-top:10px;font-size:14.5px">感度としても使えます。制約 b を少し動かしたときの目的関数の変化は <span class="m">∂f*/∂b = −λ</span>（包絡線定理）。<b>設備増強の便益評価が、最適化を1回解くだけで出てくる。</b></p>
+   <p class="dimtx" style="margin-top:8px">乗数が意味を持つには制約想定（LICQ など）が必要で、退化した場合には乗数が一意でなくなります。価格が不安定になる現象の一因です。</p></div></div>`},
+
+ {lv:'07',tp:'最適化・不等式制約',lay:'hero',n:3,
+  title:'有効制約を「当てる」か「避ける」か',
+  msg:'2ᵐ 通りの場合分けを、どう回避するか。ここに2つの流儀があります。',
+  canvas:['fIPM',1160,330],
+  render:i=>fIPM(i),
+  say:['','<b class="cD">有効制約法・単体法</b> — 境界の上を歩いて、頂点ごとに有効集合を入れ替える。小規模なら速い。',
+    '<b class="cO">内点法</b> — 不等式を対数バリアで目的関数に押し込み、内側を通って境界に漸近する。場合分けそのものを回避します。反復回数が問題規模にほとんど依存しないのが強み。']},
+
+ {lv:'07',tp:'最適化・不等式制約',lay:'board',n:1,
+  title:'最適潮流（OPF）の 60 年',
+  msg:'電力系統の最適化は、そのまま非線形計画法の応用史になっています。',
+  extra:`<table class="tb">
+   <tr><th>年</th><th>出来事</th><th>技術的な中身</th><th>何が可能になったか</th></tr>
+   <tr class="hi"><td class="n">1962</td><td>Carpentier<br>OPF の定式化</td><td>潮流方程式を等式制約に、運用限界を不等式制約に置いた非線形計画問題として定式化</td><td>「経済負荷配分＋潮流」を1つの問題として書けるようになった</td></tr>
+   <tr><td class="n">1968</td><td>Dommel &amp; Tinney</td><td>ラグランジュ乗数＋簡約勾配法。潮流計算を内側のループに使う</td><td>初めて実際に解けた</td></tr>
+   <tr><td class="n">1970s</td><td>逐次線形計画 SLP</td><td>各点で線形化して LP を解く操作を繰り返す</td><td>不等式制約を大量に扱えるように</td></tr>
+   <tr class="hi"><td class="n">1984</td><td>Karmarkar<br>内点法</td><td>多項式時間の LP 解法。のちに非線形計画へ拡張</td><td>制約数が数万でも解ける</td></tr>
+   <tr class="hi"><td class="n">1990s</td><td>内点法による OPF</td><td>主双対内点法・予測子修正子法</td><td>大規模 AC-OPF が実用に。市場計算の基盤へ</td></tr>
+   <tr><td class="n">2000s</td><td>セキュリティ制約付き OPF</td><td>N−1 事故ケースを制約に取り込む。Benders 分解や制約の遅延生成</td><td>信頼度と経済性の同時最適化</td></tr>
+   <tr class="hi"><td class="n">2012–</td><td>凸緩和</td><td>SDP / SOCP 緩和と厳密性条件の理論</td><td>非凸問題に対して「どれだけ良いか」を言えるように</td></tr>
+   <tr><td class="n">現在</td><td>不確実性・分散化</td><td>確率計画・ロバスト最適化・ADMM による分散求解</td><td>再エネ変動と多数機器の協調</td></tr></table>
+   <p style="margin-top:12px;font-size:15px">60 年かけてやってきたことは、一貫して<b>「非凸で大規模な問題を、解ける形に近づける」</b>ことです。LEVEL 05 の簡略化と本質的に同じ営みが、最適化の側でも続いています。</p>`}
+]],
+
+/* ── LEVEL 08 ── */
+['凸かどうかが、保証の有無を分ける',[
+ {lv:'08',tp:'凸性',lay:'hero',n:4,
+  title:'非凸を、凸で包む',
+  msg:'解けない問題を「解ける、少し広い問題」に置き換えて、下界を手に入れます。',
+  canvas:['fRelax',1160,330],
+  render:i=>fRelax(i),
+  say:['','元の実行可能領域は非凸。最適解を探しても、それが最良だと言えない。',
+    '<b class="cO">凸緩和</b> — 領域を凸集合で包む。広くなったので最適値は必ず元より小さい ＝ 下界。',
+    '包んだ問題は凸なので、<b>大域最適が保証され、多項式時間で解ける</b>。',
+    '緩和解が元の領域に入っていれば、それは元問題の最適解でもある（<b>厳密／tight</b>）。入っていなければギャップが残ります。']},
+
+ {lv:'08',tp:'凸性',lay:'split',n:3,
+  title:'緩和が「厳密」になるとき',
+  msg:'包んだだけでは近似ですが、条件が揃えば緩和解がそのまま元の答えになります。',
+  eq:`${tk('r','ok','rank')} ${oo('(')} ${vv('W')} ${oo(')')} ${oo('=')} 1`,
+  cap:'SDP緩和では、持ち上げた行列 W のランクが 1 なら厳密',
+  keys:[null,'r','r'],
+  say:['','AC-OPF は電圧の積 <span class="m">V<sub>i</sub>V<sub>k</sub></span> が非凸の原因。そこで <span class="m">W = VV<sup>H</sup></span> と置くと制約は W について線形になり、非凸性は <b>rank(W) = 1</b> という条件1本に閉じ込められる。',
+    'この rank 条件を外すと半正定値計画（SDP）になり凸。<b>解いた W のランクが 1 なら、元の V が復元できて厳密。</b>放射状配電系統では、条件付きで厳密性が理論的に示されています。'],
+  extra:`<div class="cards"><div class="card"><h4>緩和の種類と強さ</h4>
+   <table class="tb"><tr><th>緩和</th><th>強さ</th><th>速さ</th><th>電力系統での適用</th></tr>
+   <tr><td>線形（DC潮流）</td><td>弱い</td><td>最速</td><td>市場計算・混雑管理</td></tr>
+   <tr class="hi"><td>SOCP</td><td>中</td><td>速い</td><td>配電系統 OPF（DistFlow）</td></tr>
+   <tr class="hi"><td>SDP</td><td>強い</td><td>重い</td><td>中規模系統・理論解析</td></tr>
+   <tr><td>モーメント階層</td><td>最強</td><td>非常に重い</td><td>小規模・厳密性の検証</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">強い緩和ほどギャップは小さいが計算量が増える。<b>どこで折り合いをつけるかが設計判断</b>になります。</p>
+   <p style="margin-top:8px;font-size:14.5px">厳密でない場合も、下界が得られること自体に価値があります。「手元のヒューリスティック解は最適値から最大でも 1.2% 以内」と言えるようになるからです。</p></div></div>`},
+
+ {lv:'08',tp:'凸性',lay:'split',n:3,
+  title:'逐次凸化 — 近似して解く、を繰り返す',
+  msg:'一度で包めないなら、いまいる場所の近くだけ凸に近似して、進んでは近似し直す。',
+  eq:`${fnn('min')} ${tk('q','ok',frr('1','2')+vv('d')+'<sup>T</sup>'+vv('B')+vv('d')+' '+oo('+')+' '+oo('∇')+vv('f')+'<sup>T</sup>'+vv('d'))} &nbsp; ${fnn('s.t.')} &nbsp; ${tk('l','d',vv('g')+' '+oo('+')+' '+oo('∇')+vv('g')+'<sup>T</sup>'+vv('d')+' '+oo('≤')+' 0')}`,
+  cap:'SQP — 目的関数は2次近似、制約は1次近似',
+  keys:[null,'q','l'],
+  say:['','いまの点で<b class="cO">目的関数を凸2次</b>、<b class="cD">制約を線形</b>に近似すると、部分問題は凸QP になり確実に解ける。',
+    'その解の方向へ進み、また近似し直す。<b>ニュートン法の最適化版</b>です。B にはヘッセ行列の近似（BFGS など）を使い、信頼領域や線探索で暴れを抑えます。'],
+  extra:`<div class="cards"><div class="card"><h4>非凸への3つの構え</h4>
+   <table class="tb"><tr><th>方針</th><th>手法</th><th>得られる保証</th></tr>
+   <tr class="hi"><td>包む</td><td>SDP / SOCP 緩和</td><td>下界。条件が揃えば大域最適</td></tr>
+   <tr class="hi"><td>近似を繰り返す</td><td>SQP / SLP / 逐次凸化</td><td>局所最適（KKT点）のみ</td></tr>
+   <tr><td>領域を割る</td><td>空間分枝限定</td><td>大域最適。ただし指数時間</td></tr></table>
+   <p style="margin-top:10px;font-size:14.5px">実務の AC-OPF は<b>内点法で局所解を求め、緩和で下界を取って良さを測る</b>という組み合わせで使われることが多い。「解を出す道具」と「解を評価する道具」を分けて持つのが賢いやり方です。</p></div></div>`}
+]],
+
+/* ── LEVEL 09 ── */
+['1手ずつ：分枝限定で木を刈る',[
+ {lv:'09',tp:'整数変数',lay:'hero',n:4,
+  title:'刈るだけでなく、削る — 切除平面',
+  msg:'領域そのものを狭めれば、下界が上がって刈れる枝が増えます。',
+  canvas:['fCut',1160,330],
+  render:i=>fCut(i),
+  say:['','LP緩和の最適解は、たいてい小数の頂点にある。',
+    '<b class="cD">切除平面</b> — すべての整数解を残したまま、その小数の頂点だけを切り落とす不等式を追加する。',
+    '領域が狭まって下界が上がる。<b>分枝限定 ＋ 切除平面 ＝ 分枝カット</b>が現代の商用ソルバの中核です。']},
+
+ {lv:'09',tp:'整数変数',lay:'split',n:4,
+  title:'同じ問題でも、書き方で速度が桁で変わる',
+  msg:'MILP では「定式化のタイトさ」＝ LP緩和が整数凸包にどれだけ近いか、が性能を決めます。',
+  eq:`${tk('a','ng',vv('P')+'<sub>i</sub> '+oo('≤')+' '+vv('P')+'<sup>max</sup> '+vv('u')+'<sub>i</sub>')} &nbsp;&nbsp; vs &nbsp;&nbsp; ${tk('b','ok','より強い不等式の追加')}`,
+  cap:'制約の書き方を変えるだけで、探索木の大きさが変わる',
+  keys:[null,'a','b',null],
+  say:['','<b class="cN">緩い定式化</b> — LP緩和の領域が広く、下界が甘い。刈れないので木が爆発する。',
+    '<b class="cO">タイトな定式化</b> — 整数凸包に近い。下界が上がり、探索が一気に減る。',
+    '起動停止なら、最小運転時間・最小停止時間を<b>タイトな不等式の族</b>で書けることが知られています。同じ制約を表す書き方が複数あり、そのどれを選ぶかが実装の腕になります。'],
+  extra:`<div class="cards"><div class="card"><h4>MILP を速くする技法</h4>
+   <table class="tb"><tr><th>技法</th><th>効き方</th></tr>
+   <tr class="hi"><td>タイトな定式化</td><td>下界が上がり、木が小さくなる。最も効く</td></tr>
+   <tr class="hi"><td>切除平面（分枝カット）</td><td>解きながら領域を削る</td></tr>
+   <tr><td>プリソルブ</td><td>冗長制約の除去・変数の固定・係数の締め直し</td></tr>
+   <tr><td>分枝変数の選択</td><td>強分枝・擬似コストで、良い枝から見る</td></tr>
+   <tr><td>ヒューリスティック</td><td>早く良い整数解を見つけて上界を下げる</td></tr>
+   <tr><td>ウォームスタート</td><td>前時刻の解から始める。時系列運用で効く</td></tr>
+   <tr><td>対称性の除去</td><td>同型の機を区別しない制約を足す</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">アルゴリズム自体は 1960 年の分枝限定から変わっていません。<b>この60年の性能向上の大半は、緩和の締め方とカットの改良</b>によるものです。</p></div></div>`},
+
+ {lv:'09',tp:'整数変数',lay:'split',n:3,
+  title:'大きすぎるなら、分けて解く',
+  msg:'変数を「難しい部分」と「簡単な部分」に切り分けて、交互に解く。',
+  eq:`<span style="font-size:.82em">${tk('a','d','ラグランジュ緩和')} &nbsp;/&nbsp; ${tk('b','l','Benders 分解')} &nbsp;/&nbsp; ${tk('c','ok','ADMM')}</span>`,
+  cap:'いずれも「絡んでいる制約を外して、独立に解けるようにする」発想',
+  keys:[null,'a','b'],
+  say:['','<b class="cD">ラグランジュ緩和</b> — 機をまたぐ需給バランス制約を乗数で目的関数に移すと、<b>発電機ごとに独立な小問題に分かれる</b>。乗数を劣勾配法で更新する。1980〜90年代の起動停止の標準解法でした。',
+    '<b class="cL">Benders 分解</b> — 整数変数を決める主問題と、それを固定して解く部分問題に分ける。部分問題の双対解から主問題へ「カット」を返す。<b>セキュリティ制約付き OPF はこれで解かれます。</b>'],
+  extra:`<div class="cards"><div class="card"><h4>問題規模の実際</h4>
+   <table class="tb"><tr><th>問題</th><th>規模の目安</th><th>要求時間</th></tr>
+   <tr><td>日前の起動停止</td><td>数百機 × 24〜48 時間</td><td>10〜30 分</td></tr>
+   <tr><td>実時間の経済負荷配分</td><td>数百機 × 数十分</td><td>数秒〜1分</td></tr>
+   <tr><td>N−1 付き OPF</td><td>数万母線 × 数千事故</td><td>数分</td></tr>
+   <tr><td>長期計画</td><td>数十年 × 代表日</td><td>数時間〜</td></tr></table>
+   <p style="margin-top:10px;font-size:14.5px">日前市場は締切が決まっているので、<b>「30分で出せる最良の解」</b>が答えになります。厳密解を待つ選択肢は最初から無い。<b>時間制約が定式化の一部</b>だというのが、この階層の実務です。</p></div></div>`},
+
+ {lv:'09',tp:'整数変数',lay:'board',n:1,
+  title:'厳密解を諦める、という設計判断',
+  msg:'この階層だけは「最適でない解を出す」ことが正当な工学判断になります。',
+  extra:`<div class="cards c2"><div class="card"><h4>ギャップで打ち切るとはどういうことか</h4>
+   <p style="font-size:16px">解を出した時点で、こう言えます。</p>
+   <p style="font-size:17px;margin:12px 0"><span class="m">下界 ≤ 真の最適値 ≤ いま持っている解</span></p>
+   <p style="font-size:16px">この幅が 0.1% なら、<b>「これ以上頑張っても最大 0.1% しか良くならない」</b>と保証できる。燃料費が 1 億円なら 10 万円の差です。そこに計算時間を何時間も使う意味はありません。</p>
+   <p style="font-size:16px;margin-top:12px"><b>近似解であることと、品質が分からないことは別</b>。分枝限定は「近似解＋その品質保証」を同時に出すところに価値があります。</p></div>
+   <div class="card"><h4>他の階層との違い</h4>
+   <table class="tb"><tr><th>階層</th><th>打ち切りの基準</th><th>品質は分かるか</th></tr>
+   <tr><td>反復法（LEVEL 02）</td><td>残差ノルム</td><td>分かる（誤差評価）</td></tr>
+   <tr><td>ニュートン法（03）</td><td>ミスマッチ</td><td>分かる</td></tr>
+   <tr><td>数値積分（04）</td><td>局所誤差推定</td><td>おおむね分かる</td></tr>
+   <tr><td>非凸最適化（08）</td><td>KKT残差</td><td class="n">×  局所解としか言えない</td></tr>
+   <tr class="hi"><td>MILP（09）</td><td>最適性ギャップ</td><td>分かる（上下界で挟む）</td></tr></table>
+   <p class="dimtx" style="margin-top:10px">皮肉なことに、<b>最も難しい階層のほうが、解の品質をはっきり言える</b>。非凸連続最適化（LEVEL 08）は「解けたように見えて、実は何も保証していない」ことがあります。</p></div></div>`}
+]],
+
+/* ── まとめ ── */
+['難易度の地図',[
+ {lv:'10',tp:'まとめ',lay:'board',n:1,
+  title:'一段下げるための技法カタログ',
+  msg:'難しい問題に出会ったとき、実際に使える手はこれだけあります。',
+  extra:`<table class="tb">
+   <tr><th>したいこと</th><th>技法</th><th>電力系統での例</th><th>代償</th></tr>
+   <tr><td rowspan="3">非線形 → 線形</td><td>テイラー1次近似</td><td>小信号安定度・感度解析</td><td>平衡点の近傍のみ</td></tr>
+   <tr><td>物理的仮定の追加</td><td>DC潮流（sinδ≈δ, V≈1, R≪X）</td><td>電圧・無効電力・損失</td></tr>
+   <tr><td>反復して線形問題に帰着</td><td>ニュートン法・SQP</td><td>初期値依存・局所解</td></tr>
+   <tr><td rowspan="2">非凸 → 凸</td><td>SOCP / SDP 緩和</td><td>配電系統 OPF・AC-OPF</td><td>ギャップが残りうる</td></tr>
+   <tr><td>逐次凸化</td><td>SQP による OPF</td><td>局所最適のみ</td></tr>
+   <tr><td rowspan="2">離散 → 連続</td><td>LP緩和＋分枝限定</td><td>起動停止計画</td><td>指数時間・ギャップ運用</td></tr>
+   <tr><td>ラグランジュ緩和</td><td>機ごとの分解</td><td>双対ギャップ</td></tr>
+   <tr><td rowspan="2">大規模 → 小規模</td><td>分解（Benders・ADMM）</td><td>SCOPF・分散最適化</td><td>反復が必要</td></tr>
+   <tr><td>モデル低次元化</td><td>等価系統・動的縮約</td><td>詳細な内部挙動</td></tr>
+   <tr><td rowspan="2">重い → 軽い</td><td>行列の定数化・分解</td><td>FDLF</td><td>2次収束</td></tr>
+   <tr><td>因数分解の再利用</td><td>N−1 解析・時系列計算</td><td>行列が変わると使えない</td></tr>
+   <tr><td>剛性を回避</td><td>陰解法（台形則）</td><td>EMTP・長時間解析</td><td>毎ステップ非線形求解</td></tr>
+   <tr><td>条件を良くする</td><td>前処理・スケーリング・順序付け</td><td>疎行列LU・クリロフ法</td><td>設計コスト</td></tr></table>
+   <p style="margin-top:12px;font-size:15px">縦に読むと「何を捨てたか」の一覧になります。<b>捨てたものを言えないなら、その簡略化は使えません。</b></p>`},
+
+ {lv:'10',tp:'まとめ',lay:'board',n:1,
+  title:'授業で使える問い',
+  msg:'理解を確かめるより、境界を意識させるための問いです。',
+  extra:`<div class="cards c2">
+   <div class="card"><h4>LEVEL 01–04</h4>
+   <ul style="font-size:15.5px;line-height:1.9">
+   <li>消去の順番を変えても答えは同じなのに、計算量が10倍変わるのはなぜか</li>
+   <li>ヤコビと GS で、同じ掃引数なのに誤差が違う理由を1行で説明せよ</li>
+   <li>反復法の誤差と、直接法の丸め誤差は何が違うか</li>
+   <li>ニュートン法の残差が「桁数が倍」で減るのは、式のどこから来るか</li>
+   <li>潮流計算が収束しないとき、原因を切り分ける手順を述べよ</li>
+   <li>FDLF は収束が遅いのに、なぜオンラインで使われるのか</li>
+   <li>同じ系統でも EMT と位相安定度で Δt が 1000 倍違う理由は何か</li>
+   <li>陰解法は「毎ステップ非線形方程式を解く」のに、なぜ速いことがあるのか</li></ul></div>
+   <div class="card"><h4>LEVEL 05–09</h4>
+   <ul style="font-size:15.5px;line-height:1.9">
+   <li>DC潮流で損失が出ないのは、どの仮定を捨てたからか</li>
+   <li>インピーダンスモデルで判定できないことは何か</li>
+   <li>λ が価格になるのは、どの制約に対する乗数だからか</li>
+   <li>内点法が「場合分けを回避する」とはどういう意味か</li>
+   <li>凸緩和が厳密でないとき、その解にはどんな価値があるか</li>
+   <li>LP緩和の解を四捨五入してはいけないのはなぜか</li>
+   <li>分枝限定で「刈れる」条件を、上界・下界の言葉で述べよ</li>
+   <li>最適性ギャップ 0.1% で打ち切ることの実務的な意味は何か</li></ul></div></div>
+   <p style="margin-top:14px;font-size:15px">最後にひとつ。<b>「この手法は、どの仮定を捨てているか」</b>— 新しい論文を読むときも、自分で手法を作るときも、まずここを確かめてください。難易度の階段を一段降りたことに気づかないまま結論を出すのが、いちばん危ない失敗です。</p>`}
+]]
+];
+
+EXTRA.forEach(([anchor,arr])=>{
+  const i=SL.findIndex(s=>s.title===anchor);
+  if(i<0){console.warn('anchor not found:',anchor);return;}
+  SL.splice(i+1,0,...arr);
+});
+/* =========================================================
+   式変形スライド（潮流計算のゴニョゴニョ）
+   ========================================================= */
+const K=s=>`<span class="kill">${s}</span>`;
+const HI=s=>`<span class="keep">${s}</span>`;
+const Vi=vv('V'), th=vv('θ'), Gg=vv('G'), Bb=vv('B');
+const sub=(a,b)=>`${a}<sub>${b}</sub>`;
+
+/* ---- ① 潮流方程式を組み立てる ---- */
+const DER_PF=[
+ {eq:`${sub(vv('S'),'i')} ${oo('=')} ${sub(vv('V'),'i')} ${sub(vv('I'),'i')}<sup>*</sup>`,
+  cap:'複素電力の定義（* は複素共役）',
+  gain:'出発点は1行だけ',
+  say:'母線 i から系統に流れ込む複素電力は、その母線の電圧と流出電流の共役の積。ここから始めます。'},
+ {assume:'キルヒホッフ則　I = Y V を代入',
+  eq:`${sub(vv('S'),'i')} ${oo('=')} ${sub(vv('V'),'i')} ${oo('(')} ${SGM}<sub>k</sub> ${sub(vv('Y'),'ik')} ${sub(vv('V'),'k')} ${oo(')')}<sup>*</sup>`,
+  gain:'ネットワークの構造が Y に入った',
+  say:'電流をアドミタンス行列で書き換えます。<b>ここで系統のつながり方が式に入ってくる。</b>'},
+ {assume:'共役を分配　(ab)* = a* b*',
+  eq:`${sub(vv('S'),'i')} ${oo('=')} ${SGM}<sub>k</sub> ${sub(vv('V'),'i')} ${sub(vv('Y'),'ik')}<sup>*</sup> ${sub(vv('V'),'k')}<sup>*</sup>`,
+  gain:'和の外に出せる形になった',
+  say:'共役は積と和に分配できるので、Σ の中に押し込めます。'},
+ {assume:'極形式　V = |V| e<sup>jθ</sup>、Y = G + jB',
+  eq:`${sub(vv('S'),'i')} ${oo('=')} ${SGM}<sub>k</sub> ${oo('|')}${sub(vv('V'),'i')}${oo('|')}${oo('|')}${sub(vv('V'),'k')}${oo('|')} ${vv('e')}<sup>j θ<sub>ik</sub></sup> ${oo('(')} ${sub(vv('G'),'ik')} ${oo('−')} ${vv('j')}${sub(vv('B'),'ik')} ${oo(')')}`,
+  gain:'θ<sub>ik</sub> = θ<sub>i</sub> − θ<sub>k</sub>（角度差）だけが残る',
+  say:'電圧を大きさと位相に分けると、<b>絶対的な位相は消えて角度差 θ<sub>ik</sub> だけが残ります。</b>これが潮流方程式の重要な性質。'},
+ {assume:'オイラーの式　e<sup>jθ</sup> = cos θ + j sin θ',
+  eq:`${sub(vv('S'),'i')} ${oo('=')} ${SGM}<sub>k</sub> ${sub(vv('V'),'i')}${sub(vv('V'),'k')} ${oo('(')}${fnn('cos')} ${sub(th,'ik')} ${oo('+')} ${vv('j')} ${fnn('sin')} ${sub(th,'ik')}${oo(')')}${oo('(')}${sub(vv('G'),'ik')} ${oo('−')} ${vv('j')}${sub(vv('B'),'ik')}${oo(')')}`,
+  gain:'実部と虚部に分けられる形',
+  say:'ここまでは<b>厳密な変形</b>。近似はまだ一つも入っていません。'},
+ {assume:'実部を取る',
+  eq:`${tk('P','ok',sub(vv('P'),'i'))} ${oo('=')} ${SGM}<sub>k</sub> ${sub(vv('V'),'i')}${sub(vv('V'),'k')} ${oo('(')} ${sub(vv('G'),'ik')} ${fnn('cos')} ${sub(th,'ik')} ${oo('+')} ${sub(vv('B'),'ik')} ${fnn('sin')} ${sub(th,'ik')} ${oo(')')}`,
+  gain:'有効電力の潮流方程式',
+  say:'<b class="cO">有効電力</b>の式。V の積と三角関数が同居していて、ここから先は反復するしかありません。'},
+ {assume:'虚部を取る',
+  eq:`${tk('Q','l',sub(vv('Q'),'i'))} ${oo('=')} ${SGM}<sub>k</sub> ${sub(vv('V'),'i')}${sub(vv('V'),'k')} ${oo('(')} ${sub(vv('G'),'ik')} ${fnn('sin')} ${sub(th,'ik')} ${oo('−')} ${sub(vv('B'),'ik')} ${fnn('cos')} ${sub(th,'ik')} ${oo(')')}`,
+  gain:'無効電力の潮流方程式',
+  say:'<b class="cL">無効電力</b>の式。母線数 n なら 2n 本の非線形連立方程式になります。<b>ここまで近似ゼロ。</b>'}];
+
+/* ---- ② DC潮流へ落とす ---- */
+const DER_DC=[
+ {eq:`${sub(vv('P'),'i')} ${oo('=')} ${SGM}<sub>k</sub> ${sub(vv('V'),'i')}${sub(vv('V'),'k')} ${oo('(')} ${K(sub(vv('G'),'ik')+' '+fnn('cos')+' '+sub(th,'ik'))} ${oo('+')} ${sub(vv('B'),'ik')} ${fnn('sin')} ${sub(th,'ik')} ${oo(')')}`,
+  cap:'出発点：厳密な有効電力の潮流方程式',
+  say:'ここから仮定を3つ置くだけで、非線形の式が線形になります。<b>赤い項が次に消えます。</b>'},
+ {assume:'① 送電線は  R ≪ X  ⇒  G<sub>ik</sub> ≈ 0',
+  eq:`${sub(vv('P'),'i')} ${oo('=')} ${SGM}<sub>k</sub> ${K(sub(vv('V'),'i')+sub(vv('V'),'k'))} ${sub(vv('B'),'ik')} ${fnn('sin')} ${sub(th,'ik')}`,
+  lost:'抵抗 ⇒ <b>送電損失が消える</b>',
+  say:'高圧送電線は X/R が 5〜20 程度。コンダクタンス項を落とします。<b class="cN">この瞬間、損失がゼロの世界になります。</b>'},
+ {assume:'② 電圧はほぼ一定　|V| ≈ 1.0 pu',
+  eq:`${sub(vv('P'),'i')} ${oo('=')} ${SGM}<sub>k</sub> ${sub(vv('B'),'ik')} ${K(fnn('sin')+' '+sub(th,'ik'))}`,
+  lost:'電圧の変動と<b>無効電力</b>',
+  say:'運用中の母線電圧は 0.95〜1.05 pu に収まる。1.0 と置いてしまいます。<b class="cN">電圧が未知数でなくなるので、Q の式も要らなくなります。</b>'},
+ {assume:'③ 角度差は小さい　sin θ<sub>ik</sub> ≈ θ<sub>ik</sub>',
+  eq:`${sub(vv('P'),'i')} ${oo('=')} ${SGM}<sub>k</sub> ${sub(vv('B'),'ik')} ${sub(th,'ik')} ${oo('=')} ${SGM}<sub>k≠i</sub> ${frr(sub(th,'i')+' '+oo('−')+' '+sub(th,'k'), sub(vv('x'),'ik'))}`,
+  lost:'大きな角度差での非線形性',
+  say:'通常運転では角度差は 10〜30°。<b class="cO">ここで θ について線形になりました。</b>B<sub>ik</sub> = 1/x<sub>ik</sub> を入れると、リアクタンスだけの式になります。'},
+ {assume:'④ 行列にまとめる',
+  eq:`${tk('m','ok',vv('P')+' '+oo('=')+' '+vv('B')+'′ '+vv('θ'))}`,
+  cap:"B′<sub>ii</sub> = Σ<sub>k≠i</sub> 1/x<sub>ik</sub> ,　B′<sub>ik</sub> = −1/x<sub>ik</sub>",
+  gain:'LEVEL 01 の Ax = b に戻った',
+  say:'<b>非線形連立方程式が、ただの線形方程式になりました。</b>あとはスラック母線で θ を1つ固定して解くだけ。反復も初期値も要りません。'},
+ {assume:'⑤ 実際に解いてみる（3母線）',
+  eq:`<span style="font-size:.62em">${vv('B')}′ ${oo('=')} [ 15 &nbsp;−10 &nbsp;−5 ; &nbsp;−10 &nbsp;14 &nbsp;−4 ; &nbsp;−5 &nbsp;−4 &nbsp;9 ] &nbsp;&nbsp; ${vv('θ')} ${oo('=')} ( 0 , &nbsp;−3.646° , &nbsp;−4.167° )</span>`,
+  cap:'x₁₂=0.10, x₁₃=0.20, x₂₃=0.25、母線2に0.60、母線3に0.40の負荷',
+  gain:'AC の答え（−3.639°, −4.173°）とほぼ一致',
+  say:'角度は AC 潮流と<b>0.01° しか違わない</b>。一方で電圧は AC だと 0.969 / 0.963 pu まで下がっているのに、DC はそれを一切知りません。<b>角度と潮流だけが欲しいなら十分、電圧を見たいなら全く使えない。</b>'}];
+
+/* ---- ③ FDLF へ落とす ---- */
+const DER_FD=[
+ {eq:`[ ${vv('ΔP')} ; ${vv('ΔQ')} ] ${oo('=')} [ ${tk('H','d',vv('H'))} &nbsp; ${K(vv('N'))} ; &nbsp; ${K(vv('M'))} &nbsp; ${tk('L','d',vv('L'))} ] [ ${vv('Δθ')} ; ${vv('ΔV')}${oo('/')}${vv('V')} ]`,
+  cap:'出発点：ニュートン法の補正方程式',
+  say:'ヤコビアンを4つのブロックに分けたところから始めます。<b class="cN">交差項 N と M が次に消えます。</b>'},
+ {assume:'① X ≫ R ⇒ 交差項は小さい　N ≈ 0, M ≈ 0',
+  eq:`${tk('a','d',vv('ΔP')+' '+oo('=')+' '+vv('H')+' '+vv('Δθ'))} &nbsp;&nbsp;&nbsp; ${tk('b','l',vv('ΔQ')+' '+oo('=')+' '+vv('L')+' '+vv('ΔV')+oo('/')+vv('V'))}`,
+  lost:'P–V と Q–δ の相互作用',
+  say:'<b class="cD">P–θ の式</b>と<b class="cL">Q–V の式</b>が完全に分離しました。<b>2n×2n の行列が、n×n が2つになる。</b>これだけで計算量が半分以下になります。'},
+ {assume:'② θ<sub>ik</sub> ≈ 0 ⇒ cos ≈ 1、G sin θ ≪ B cos θ',
+  eq:`${sub(vv('H'),'ik')} ${oo('=')} ${sub(vv('V'),'i')}${sub(vv('V'),'k')}${oo('(')}${K(sub(vv('G'),'ik')+' '+fnn('sin')+' '+sub(th,'ik'))} ${oo('−')} ${sub(vv('B'),'ik')} ${K(fnn('cos')+' '+sub(th,'ik'))}${oo(')')} ${oo('≈')} ${oo('−')}${sub(vv('V'),'i')}${sub(vv('V'),'k')}${sub(vv('B'),'ik')}`,
+  lost:'角度差が大きいときの精度',
+  say:'ヤコビアンの成分そのものを近似します。三角関数が消えて、<b>B だけの式</b>になりました。'},
+ {assume:'③ |V| ≈ 1 ⇒ ヤコビアンが動作点に依存しなくなる',
+  eq:`${sub(vv('H'),'ik')} ${oo('≈')} ${oo('−')}${sub(vv('B'),'ik')} &nbsp;&nbsp;&nbsp; ${sub(vv('L'),'ik')} ${oo('≈')} ${oo('−')}${sub(vv('B'),'ik')}`,
+  lost:'ヤコビアンが真の傾きでなくなる ⇒ <b>2次収束</b>',
+  say:'<b class="cO">これで H も L も定数行列になりました。</b>反復のたびに作り直す必要がありません。代わりに、これはもう本当の接線ではないので、2次収束は失われます。'},
+ {assume:'④ 2本の定数係数方程式にまとめる',
+  eq:`${tk('a','d',vv('ΔP')+oo('/')+vv('V')+' '+oo('=')+' '+vv('B')+'′ '+vv('Δθ'))} &nbsp;&nbsp;&nbsp; ${tk('b','l',vv('ΔQ')+oo('/')+vv('V')+' '+oo('=')+' '+vv('B')+'″ '+vv('ΔV'))}`,
+  cap:"B′ は直列リアクタンスのみ、B″ は対地容量やタップを含む",
+  gain:'係数行列が2つとも定数',
+  say:'B′ と B″ の作り方をあえて変えるのが FDLF の工夫です。<b>それぞれの式に効く要素だけを残す</b>ことで、近似なのに収束が良くなります。'},
+ {assume:'⑤ 最初に一度だけ LU 分解する',
+  eq:`${vv('B')}′ ${oo('=')} ${vv('L')}<sub>1</sub>${vv('U')}<sub>1</sub> ,&nbsp;&nbsp; ${vv('B')}″ ${oo('=')} ${vv('L')}<sub>2</sub>${vv('U')}<sub>2</sub>`,
+  cap:'以後の反復は前進後退代入だけ',
+  gain:'1反復の費用が桁で下がる',
+  say:'反復回数は 4 回程度から 10 回程度に増えます。それでも<b>1反復が桁違いに軽い</b>ので総時間は短い。<b>「良い性質を捨てて速さを買う」</b>取引です。'}];
+
+const DERS=[
+ ['未知数が掛け合わされた瞬間、閉形式解が消える',{
+   lv:'03',tp:'非線形代数方程式',lay:'derive',
+   title:'潮流方程式は、こうやって組み立てる',
+   msg:'S = V I* の1行から、あの長い式まで。ここまでは近似がひとつも入っていません。',
+   col2:'分かること', der:DER_PF}],
+ ['2次収束を捨てて、1反復を桁違いに軽くする',{
+   lv:'03',tp:'非線形代数方程式',lay:'derive',
+   title:'FDLF の式変形を1手ずつ',
+   msg:'ニュートン法の補正方程式に仮定を5つ置くと、定数係数の2本の式になります。',
+   der:DER_FD}],
+ ['解けないなら、解ける形に落とす',{
+   lv:'05',tp:'簡略化して解く',lay:'derive',
+   title:'DC潮流の式変形を1手ずつ',
+   msg:'非線形の潮流方程式に仮定を3つ置くだけで、Ax = b に戻ります。',
+   der:DER_DC}]];
+DERS.forEach(([anchor,sl])=>{
+  const i=SL.findIndex(s=>s.title===anchor);
+  if(i<0){console.warn('der anchor not found:',anchor);return;}
+  SL.splice(i+1,0,sl);
+});
+
+/* ---- ヤコビアンを実際に微分して作る ---- */
+const DER_J=[
+ {eq:`${sub(vv('P'),'i')} ${oo('=')} ${SGM}<sub>k</sub> ${sub(vv('V'),'i')}${sub(vv('V'),'k')} ${oo('(')} ${sub(vv('G'),'ik')} ${fnn('cos')} ${sub(th,'ik')} ${oo('+')} ${sub(vv('B'),'ik')} ${fnn('sin')} ${sub(th,'ik')} ${oo(')')}`,
+  cap:'出発点。未知数は各母線の θ と |V|',
+  gain:'これを未知数で微分するだけ',
+  say:'ヤコビアンは特別なものではありません。<b>「各方程式を、各未知数で偏微分した表」</b>それだけです。実際に微分してみます。'},
+ {assume:'ヤコビアンの定義',
+  eq:`${vv('J')} ${oo('=')} [ ${frr('∂'+vv('P'),'∂'+vv('θ'))} &nbsp; ${frr('∂'+vv('P'),'∂'+vv('V'))} ; &nbsp; ${frr('∂'+vv('Q'),'∂'+vv('θ'))} &nbsp; ${frr('∂'+vv('Q'),'∂'+vv('V'))} ] ${oo('=')} [ ${tk('H','d',vv('H'))} &nbsp; ${tk('N','faint',vv('N'))} ; &nbsp; ${tk('M','faint',vv('M'))} &nbsp; ${tk('L','d',vv('L'))} ]`,
+  gain:'4つのブロックは、ただの名前',
+  say:'方程式が P と Q の2種類、未知数が θ と V の2種類。組み合わせて 4 ブロック。<b>H・N・M・L という名前がついているだけで、中身は偏微分です。</b>'},
+ {assume:'まず  ∂P<sub>i</sub> / ∂θ<sub>k</sub>　(k ≠ i)',
+  eq:`${frr('∂'+sub(th,'ik'),'∂'+sub(th,'k'))} ${oo('=')} ${oo('−')}1 &nbsp;⇒&nbsp; ${frr('∂','∂'+sub(th,'k'))}${fnn('cos')}${sub(th,'ik')} ${oo('=')} ${oo('+')}${fnn('sin')}${sub(th,'ik')} ,&nbsp; ${frr('∂','∂'+sub(th,'k'))}${fnn('sin')}${sub(th,'ik')} ${oo('=')} ${oo('−')}${fnn('cos')}${sub(th,'ik')}`,
+  gain:'θ<sub>ik</sub> = θ<sub>i</sub> − θ<sub>k</sub> なので符号が反転する',
+  say:'θ<sub>k</sub> は角度差に<b>マイナス</b>で入っているので、微分すると符号がひっくり返ります。ここを間違えると全部ずれます。'},
+ {assume:'代入すると',
+  eq:`${tk('H','d',sub(vv('H'),'ik'))} ${oo('=')} ${frr('∂'+sub(vv('P'),'i'),'∂'+sub(th,'k'))} ${oo('=')} ${sub(vv('V'),'i')}${sub(vv('V'),'k')} ${oo('(')} ${sub(vv('G'),'ik')} ${fnn('sin')} ${sub(th,'ik')} ${oo('−')} ${sub(vv('B'),'ik')} ${fnn('cos')} ${sub(th,'ik')} ${oo(')')}`,
+  gain:'非対角の H が出た',
+  say:'Σ のうち k 番目の項だけが θ<sub>k</sub> を含むので、和は消えて1項だけ残ります。'},
+ {assume:'対角成分 ∂P<sub>i</sub> / ∂θ<sub>i</sub> は、他の全部の和',
+  eq:`${sub(vv('H'),'ii')} ${oo('=')} ${oo('−')}${SGM}<sub>k≠i</sub> ${sub(vv('H'),'ik')} ${oo('=')} ${oo('−')}${sub(vv('Q'),'i')} ${oo('−')} ${sub(vv('B'),'ii')}${sub(vv('V'),'i')}<sup>2</sup>`,
+  gain:'すでに計算した Q から作れる',
+  say:'θ<sub>i</sub> は全部の項に<b>プラス</b>で入るので、非対角の総和に符号を変えたものになります。整理すると <b>Q<sub>i</sub> と B<sub>ii</sub> だけで書ける</b>。潮流計算で Q はすでに手元にあるので、追加の計算はほとんど要りません。'},
+ {assume:'電圧での微分も同じ手順',
+  eq:`${sub(vv('N'),'ii')} ${oo('=')} ${frr('∂'+sub(vv('P'),'i'),'∂'+sub(vv('V'),'i'))} ${oo('=')} ${frr(sub(vv('P'),'i'),sub(vv('V'),'i'))} ${oo('+')} ${sub(vv('G'),'ii')}${sub(vv('V'),'i')}`,
+  gain:'N も P と G から作れる',
+  say:'同じ要領で N・M・L も出ます。<b>4ブロックすべてが、潮流計算の途中で出てくる P・Q・G・B から組み立てられる。</b>だからヤコビアンを作るコストは、実は思ったより小さい。'},
+ {assume:'2母線・フラットスタートで数値を入れる',
+  eq:`<span style="font-size:.72em">${vv('J')} ${oo('=')} [ 9.6154 &nbsp; 1.9231 ; &nbsp;−1.9231 &nbsp; 9.6154 ]</span>`,
+  cap:'r = 0.02, x = 0.10 → G = 1.9231, B = −9.6154',
+  gain:'|H| / |N| = 9.6154 / 1.9231 = 5.00 = X / R',
+  say:'<b>交差項が小さい理由がここで数字になります。</b>H は B から、N は G から来る。だから H と N の比は、そのまま <b>X / R</b>。送電線の X/R が 5 なら、交差項は 5 分の 1 しかない。これが FDLF で N と M を捨ててよい根拠です。'}];
+DERS2=[['ヤコビアンには、はっきりした偏りがある',{
+   lv:'03',tp:'非線形代数方程式',lay:'derive',
+   title:'ヤコビアンは、ただ微分しただけ',
+   msg:'H・N・M・L は特別な行列ではありません。潮流方程式を未知数で偏微分した表です。',
+   der:DER_J}]];
+DERS2.forEach(([anchor,sl])=>{
+  const i=SL.findIndex(s=>s.title===anchor);
+  if(i<0){console.warn('anchor not found:',anchor);return;}
+  SL.splice(i+1,0,sl);
+});
+
+/* =========================================================
+   実行時 — 16:9 固定ステージ
+   ========================================================= */
+/* レイアウト割り当てと、表だけのスライドを切り出す */
+const LAYMAP={'Ax = b は、有限回で終わる唯一の階層':'split',
+  '未知数が掛け合わされた瞬間、閉形式解が消える':'split',
+  '未知数が「値」から「関数」になる':'split'};
+const SPLITOUT={'凸かどうかが、保証の有無を分ける':['08','凸性','電力系統の問題は、どこまで凸か',
+    '凸なら KKT は十分条件になり、見つけた停留点が大域最適だと保証されます。'],
+  '難易度の地図':['10','まとめ','段ごとの「1手」と「失われる保証」',
+    '新しい問題に出会ったら、まずこの表のどの行かを判定する。']};
+const DECK=[];
+SL.forEach((s,i)=>{
+  s.lay = s.lay || (s.type==='algo' ? 'algo' : (i===0?'title':(LAYMAP[s.title]||'hero')));
+  if(SPLITOUT[s.title]){
+    const [lv,tp,ti,ms]=SPLITOUT[s.title], ex=s.extra; s.extra=null;
+    DECK.push(s); DECK.push({lv,tp,title:ti,msg:ms,lay:'board',n:1,extra:ex});
+  } else DECK.push(s);
+});
+SL.length=0; DECK.forEach(x=>SL.push(x));
+
+const SW_=1600, SH_=900, PADX=72, CW=SW_-PADX*2, CTOP=212, CBOT=40, CH=SH_-CTOP-CBOT;
+function canvasHTML(s,availW,availH){
+  if(!s.canvas)return '';
+  const [id,w,h]=s.canvas;
+  const sc=Math.max(.85,Math.min(availW/w, availH/h, 1.8));
+  return `<div class="figz"><canvas id="${id}" width="${w}" height="${h}" data-w="${w}" data-h="${h}" data-scale="${sc.toFixed(3)}"></canvas></div>`;
+}
+function sideHTML(html,availW,availH){
+  return (html||'').replace(/<canvas ([^>]*)width="(\d+)" height="(\d+)"/,(m,pre,w,h)=>{
+    const sc=Math.min(availW/w, availH/h, 1.5);
+    return `<canvas ${pre}width="${w}" height="${h}" data-w="${w}" data-h="${h}" data-scale="${sc.toFixed(3)}"`;});
+}
+const stage=document.getElementById('stage');
+SL.forEach((s,i)=>{
+  const d=document.createElement('section');
+  d.className='sl'+(s.msg?'':' tall'); d.id='sl'+i;
+  const eqTall=(s.eq||'').indexOf('<br>')>=0;
+  const eqH=s.eq?(eqTall?150:120):0;
+  const eq=s.eq?`<div class="eqz" style="height:${eqH}px;display:flex;flex-direction:column;justify-content:center">
+      <div><span class="mq">${s.eq}</span></div>${s.cap?`<div class="cap">${s.cap}</div>`:''}</div>`:'';
+  let body='';
+  if(s.lay==='algo'){
+    const ctlH=s.ctl?52:0;
+    body=`<div class="body algo">${s.ctl||'<div></div>'}
+      <div class="row"><div class="stp" id="stp${i}">
+        <div class="stwork"></div>
+        <div class="strow"><span class="stlab">記号</span><span class="stv sym"></span></div>
+        <div class="strow"><span class="stlab">代入</span><span class="stv num"></span></div>
+        <div class="strow"><span class="stlab">結果</span><span class="stv res"></span></div>
+        <div class="stnote"></div></div>
+      <div>${sideHTML(s.side,700,466)}</div></div></div>`;
+  } else if(s.lay==='split'){
+    body=`<div class="body split"><div class="lft">${eq}<div class="say"></div></div>
+      <div>${s.extra||''}</div></div>`;
+  } else if(s.lay==='derive'){
+    body=`<div class="body derive">
+      <div class="dvPrev"></div><div class="dvArrow"></div>
+      <div class="dvNow"></div><div class="say"></div>
+      <div class="dvFoot">
+        <div class="card"><h4>置いた仮定</h4><ol class="asl"></ol></div>
+        <div class="card"><h4>${s.col2||'失うもの'}</h4><ol class="lsl"></ol></div>
+      </div></div>`;
+  } else if(s.lay==='board'){
+    body=`<div class="body board">${s.extra||''}</div>`;
+  } else if(s.lay==='title'){
+    const figH=CH-14-150;
+    body=`<div class="body hero" style="grid-template-rows:1fr 150px">
+      ${canvasHTML(s,CW,figH)}<div>${s.extra||''}</div></div>`;
+  } else {
+    const ctlH=s.ctl?50:0;
+    const rows=[ctlH?ctlH+'px':null, eqH?eqH+'px':null, '1fr', '92px'].filter(Boolean);
+    const gaps=(rows.length-1)*14;
+    const figH=CH-ctlH-eqH-gaps-92;
+    body=`<div class="body hero" style="grid-template-rows:${rows.join(' ')}">
+      ${s.ctl||''}${eq}${canvasHTML(s,CW,figH)}<div class="say"></div></div>`;
+  }
+  d.innerHTML=`<div class="shead"><span class="lv">LEVEL ${s.lv}</span><span class="tp">${s.tp}</span>
+      <span class="no">${String(i+1).padStart(2,'0')} / ${SL.length}</span></div>
+    <h2>${s.title}</h2>${s.msg?`<p class="msg">${s.msg}</p>`:''}<div class="rulez"></div>${body}`;
+  stage.appendChild(d); s.el=d; s.n=s.der?s.der.length:(s.n||1);
+});
+/* 目次 */
+const rws=document.getElementById('rws'); let lastLv=null;
+SL.forEach((s,i)=>{
+  if(s.lv!==lastLv){lastLv=s.lv;
+    const h=document.createElement('div'); h.className='grp';
+    h.textContent='LEVEL '+s.lv+' · '+s.tp; rws.appendChild(h);}
+  const b=document.createElement('button'); b.className='rw'; b.textContent=s.title;
+  b.onclick=()=>{go(i);document.body.classList.remove('nav');};
+  rws.appendChild(b); s.rw=b;
+});
+/* ステージ拡縮 */
+function fit(){
+  const w=document.getElementById('wrap');
+  const k=Math.min(w.clientWidth/SW_, w.clientHeight/SH_);
+  stage.style.transform='scale('+k+')';
+}
+addEventListener('resize',fit);
+
+let cur=0, step=0, timer=null;
+const dots=document.getElementById('dots');
+function setFocus(sl,key){
+  sl.el.querySelectorAll('.mq .t').forEach(sp=>{
+    sp.classList.toggle('dim',!!key&&sp.dataset.k!==key);
+    sp.classList.toggle('hot',!!key&&sp.dataset.k===key);});
+}
+function fitMath(root){
+  if(!root||!root.querySelectorAll)return;
+  root.querySelectorAll('.mq').forEach(el=>{
+    el.style.fontSize='';
+    const box=el.parentElement; if(!box)return;
+    const avail=box.clientWidth; if(!avail)return;
+    const w=el.scrollWidth; if(!w||w<=avail)return;
+    const base=parseFloat(getComputedStyle(el).fontSize)||30;
+    el.style.fontSize=Math.max(14,base*avail/w*0.97).toFixed(1)+'px';
+  });
+}
+function renderStep(){
+  const s=SL[cur];
+  if(s.lay==='algo'){
+    const st=s._steps[step]||{}, root=document.getElementById('stp'+cur);
+    root.querySelector('.stwork').innerHTML=st.work||'';
+    root.querySelector('.sym').innerHTML=st.sym||'';
+    root.querySelector('.num').innerHTML=st.num||'';
+    root.querySelector('.res').innerHTML=st.res||'';
+    root.querySelector('.stnote').innerHTML=(st.phase?`<span class="stph">${st.phase}</span>　`:'')+(st.note||'');
+    if(s.draw)s.draw(s._steps,step);
+  } else if(s.lay==='derive'){
+    const D=s.der, cur=D[step], prev=step>0?D[step-1]:null;
+    s.el.querySelector('.dvPrev').innerHTML=prev?`<span class="mq sm">${prev.eq}</span>`:'';
+    s.el.querySelector('.dvArrow').innerHTML=cur.assume
+      ?`<span class="ar">↓</span><span class="asm">${cur.assume}</span>`:'';
+    s.el.querySelector('.dvNow').innerHTML=`<span class="mq">${cur.eq}</span>`
+      +(cur.cap?`<div class="cap">${cur.cap}</div>`:'');
+    const as=[],ls=[];
+    for(let k=0;k<=step;k++){
+      if(D[k].assume)as.push(D[k].assume);
+      if(D[k].lost)ls.push(D[k].lost); else if(D[k].gain)ls.push(D[k].gain);}
+    s.el.querySelector('.asl').innerHTML=as.map((t,q)=>
+      `<li${q===as.length-1?' class="fresh"':''}>${t}</li>`).join('');
+    s.el.querySelector('.lsl').innerHTML=ls.map((t,q)=>
+      `<li${q===ls.length-1?' class="fresh"':''}>${t}</li>`).join('');
+    const el=s.el.querySelector('.say');
+    el.innerHTML=cur.say||''; el.classList.toggle('k',!!cur.say);
+  } else {
+    if(s.render)s.render(step);
+    if(s.keys)setFocus(s,s.keys[step]||null);
+    const el=s.el.querySelector('.say');
+    if(el){const t=(s.say&&s.say[step])||(step===0?'':'')||s.cap2||'';
+      el.innerHTML=t; el.classList.toggle('k',!!(s.say&&s.say[step]));}
+  }
+  dots.innerHTML='';
+  if(s.n>1)for(let k=0;k<s.n;k++){const d=document.createElement('i');
+    d.className=k===step?'on':k<step?'past':''; dots.appendChild(d);}
+  document.getElementById('where').innerHTML=
+    `LEVEL ${s.lv} · ${s.tp}　<b>${String(cur+1).padStart(2,'0')}</b> / ${SL.length}`;
+  fitMath(s.el);
+  document.getElementById('bPrev').disabled=(cur===0&&step===0);
+  document.getElementById('bNext').disabled=(cur===SL.length-1&&step>=s.n-1);
+}
+function go(i,atEnd){
+  stopAuto();
+  cur=Math.max(0,Math.min(SL.length-1,i));
+  const s=SL[cur];
+  SL.forEach((q,k)=>{q.el.classList.toggle('on',k===cur);
+    q.rw.classList.toggle('on',k===cur); q.rw.classList.toggle('done',k<cur);});
+  if(s.build){s._steps=s.build(); s.n=s._steps.length;}
+  step=atEnd?s.n-1:0;
+  renderStep();
+  if(s.rw.scrollIntoView)s.rw.scrollIntoView({block:'nearest'});
+}
+function next(){const s=SL[cur];
+  if(step<s.n-1){step++;renderStep();} else if(cur<SL.length-1)go(cur+1);}
+function prev(){if(step>0){step--;renderStep();} else if(cur>0)go(cur-1,true);}
+function stopAuto(){if(timer){clearInterval(timer);timer=null;
+  document.getElementById('bAuto').textContent='自動';}}
+document.getElementById('bNext').onclick=()=>{stopAuto();next();};
+document.getElementById('bPrev').onclick=()=>{stopAuto();prev();};
+document.getElementById('bNav').onclick=()=>document.body.classList.toggle('nav');
+document.getElementById('bSkip').onclick=()=>{stopAuto();
+  const s=SL[cur]; if(step<s.n-1){step=Math.min(s.n-1,step+10);renderStep();} else next();};
+document.getElementById('scrim').onclick=()=>document.body.classList.remove('nav');
+document.getElementById('bAuto').onclick=e=>{
+  if(timer)stopAuto();
+  else{e.target.textContent='停止';
+    timer=setInterval(()=>{if(cur===SL.length-1&&step>=SL[cur].n-1)stopAuto();else next();},900);}};
+addEventListener('keydown',e=>{
+  if(/input|textarea/i.test(e.target.tagName))return;
+  if(e.key==='ArrowRight'){e.preventDefault();stopAuto();go(cur+1);}
+  else if(e.key==='ArrowLeft'){e.preventDefault();stopAuto();go(cur-1);}
+  else if(e.key===' '||e.key==='n'||e.key==='N'){e.preventDefault();stopAuto();next();}
+  else if(e.key==='b'||e.key==='B'){e.preventDefault();stopAuto();prev();}
+  else if(e.key==='m'||e.key==='M')document.body.classList.toggle('nav');
+  else if(e.key==='Escape')document.body.classList.remove('nav');
+});
+function wireSeg(segId,rowId,wId,wvId,after){
+  const seg=document.getElementById(segId); if(!seg)return;
+  seg.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    itMethod=b.dataset.m;
+    seg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    const r=document.getElementById(rowId); if(r)r.style.display=itMethod==='SOR'?'flex':'none';
+    after&&after();});
+  const w=document.getElementById(wId);
+  if(w)w.addEventListener('input',()=>{
+    document.getElementById(wvId).textContent=(+w.value).toFixed(2);
+    const main=document.getElementById('itw'); if(main&&main!==w)main.value=w.value;
+    after&&after();});
+}
+wireSeg('segM','rowW','itw','itwv',()=>renderStep());
+wireSeg('segM2','rowW2','itw2','itwv2',()=>{const a=document.getElementById('itw2'),b=document.getElementById('itw');
+  if(a&&b)b.value=a.value; go(cur);});
+['nrpl','odetc','dem2','dem3'].forEach(id=>{
+  const el=document.getElementById(id); if(!el)return;
+  el.addEventListener('input',()=>{
+    const lab=document.getElementById(id+'v');
+    if(lab)lab.textContent=(id==='nrpl'||id==='odetc')?(+el.value).toFixed(2):el.value;
+    go(cur);});});
+fit(); go(0);
+
+</script>
+</body>
+</html>

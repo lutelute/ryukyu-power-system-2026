@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第10回 気象と再エネ出力 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第10回 気象と再エネ出力 — 風は 3 乗、光は温度、予測誤差は「場所」で決まる</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch10.html">📖 講義ノート（第10回）</a><a class="e" href="../ex/ch10.html">✍ 演習で確かめる</a></div>
+  <div class="lead">太陽光と風力の出力は天候で決まり、こちらの意思では動かせません。第8回の需給バランス Δ<i>P</i> = <i>K</i>Δ<i>F</i> の「Δ<i>P</i>」が<b>供給側からも生まれる</b>ということです。この回は気象量から発電量へ変換するモデルを実計算し、<b>予測誤差がどこで最も大きくなるか</b>、<b>サイトを集めると誤差がどれだけ減るか</b>をシード付きの実験で確かめます。前提は<a href="inverter.html">第9回</a>、次は<a href="demand.html">第11回 需要予測</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「風速の予報が 10% 外れた」を「出力が 10% 外れる」と読むと、実際は 33% 外れています。3 乗則を知らないと予備力を過小に見積もります。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>日射と気温を太陽光の出力に、風速をハブ高さに直して 3 乗して風力の出力にする。誤差は 3 乗とカットアウトで増幅される。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>気象庁 MSM/GSM を入力にした前日の需給計画、スポット市場入札、沖縄電力の再エネ出力予測。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>気温 <input type="range" id="tRange" min="-12" max="8" step="1" value="0"> <span id="tVal">+0</span> °C</label>
+      <label>ハブ高 <input type="range" id="hubRange" min="10" max="120" step="5" value="90"> <span id="hubVal">90</span> m</label>
+      <label>相関 <input type="range" id="corrRange" min="0" max="0.9" step="0.1" value="0.7"> <span id="corrVal">0.7</span></label>
+      <button id="diceBtn">🎲</button>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>予測精度の改善は「当たって気持ちいい」で終わりません — <b>予備力として待機させる火力が減る</b>ので、そのまま燃料費の削減になります。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>気象予報の風速をそのままパワーカーブに入れれば風力の出力予測になる。</div>
+    <div class="row"><span class="o">✓</span>予報の風速は地上 10 m の値で、ハブ高さ（80〜120 m）では 1.3 倍前後速い。3 乗されるので<b>補正を忘れると出力を半分以下に見誤ります</b>（図で実測）。</div>
+    <div class="row"><span class="x">✗</span>太陽光のサイトを 100 か所集めれば、予測誤差は 1/10（=1/√100）になる。</div>
+    <div class="row"><span class="o">✓</span>それは誤差が独立なときだけ。同じ島の雲は同じように動くので相関があり、<b>相関 0.7 なら何か所集めても誤差は √0.7 ≈ 84% までしか下がりません</b>。沖縄で平滑化が効きにくい理由です。</div>
+  </div>
+  <details><summary>もっと詳しく：日射モデル・NOCT・べき法則・nRMSE</summary><div class="det">
+    晴天日射は Haurwitz モデル <i>G</i> = 1098 cos <i>z</i> · exp(−0.059/cos <i>z</i>)（<i>z</i>：天頂角）。傾斜面日射は直達・散乱・反射を分けて計算しますが、本ページは水平面（GHI）で代用しています。
+    セル温度は NOCT モデル <i>T</i><sub>cell</sub> = <i>T<sub>a</sub></i> + (NOCT−20)/800 · <i>G</i>（NOCT ≈ 45 °C）。出力は <i>P</i> = <i>P</i><sub>rated</sub>(<i>G</i>/1000)[1 + γ(<i>T</i><sub>cell</sub> − 25)]η<sub>sys</sub>、γ ≈ −0.004/°C。
+    風速の高度補正はべき法則 <i>u</i>(<i>z</i>) = <i>u</i>(<i>z</i><sub>ref</sub>)(<i>z</i>/<i>z</i><sub>ref</sub>)<sup>α</sup>、α は海上 0.10〜0.14、農地 0.16〜0.20、市街地 0.30〜0.40。
+    再エネ予測の評価は定格容量で正規化した nRMSE を使います。太陽光は夜間 <i>y</i>=0 で MAPE が発散するためです。
+    <b>限界：</b>晴天モデルなので雲の影響（実際の予測誤差の主因）は入っていません。平滑化実験は等相関の正規誤差という単純化です。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const gauss = () => { const u = Math.max(rng(), 1e-9), v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+/* ---- 太陽光（那覇 7/15） ---- */
+let TOFF = 0, HUB = 90, CORR = 0.7, ROUND = 0; const LAT = 26.21, LON = 127.68, DOY = 196;
+function zenith(hour) { const lat = LAT * Math.PI / 180, decl = 23.45 * Math.PI / 180 * Math.sin(2 * Math.PI * (284 + DOY) / 365); const B = 2 * Math.PI * (DOY - 81) / 364, eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B); const st = hour + (4 * (LON - 135) + eot) / 60; const om = 15 * (st - 12) * Math.PI / 180; const cz = Math.sin(lat) * Math.sin(decl) + Math.cos(lat) * Math.cos(decl) * Math.cos(om); return Math.max(-1, Math.min(1, cz)); }
+const ghi = hour => { const cz = zenith(hour); return cz > 0 ? 1098 * cz * Math.exp(-0.059 / cz) : 0; };
+const tair = (hour, off = 0) => 29.5 - 2.5 * Math.cos(2 * Math.PI * (hour - 14) / 24) + off;
+function pv(G, T, prated = 1000, gamma = -0.004, noct = 45, eta = 0.82) { const tc = T + (noct - 20) / 800 * G; return { p: Math.max(0, prated * G / 1000 * (1 + gamma * (tc - 25)) * eta), tc }; }
+function dayEnergy(off) { let e = 0, tmax = -99; for (let h = 0; h < 24; h += .25) { const r = pv(ghi(h), tair(h, off)); e += r.p * .25; tmax = Math.max(tmax, r.tc); } return { e, tmax }; }
+/* ---- 風力 ---- */
+const RHO = 1.225, D = 90, A = Math.PI * (D / 2) ** 2, CP = 0.45, PR = 3.0, UIN = 3, URATED = 12, UOUT = 25;
+const shear = (u10, z, alpha = 0.14) => u10 * Math.pow(z / 10, alpha);
+const curve = u => (u < UIN || u > UOUT) ? 0 : Math.min(PR * ((u ** 3 - UIN ** 3) / (URATED ** 3 - UIN ** 3)), PR);
+/* ---- 平滑化（等相関モデル・シード付き） ---- */
+function smooth(n, corr, sigma = 0.12, trials = 2500) { seed = 314 + ROUND * 7919 + Math.round(corr * 100) * 13 + n; let ss = 0; for (let t = 0; t < trials; t++) { const c = gauss() * Math.sqrt(corr); let m = 0; for (let i = 0; i < n; i++) m += sigma * (c + gauss() * Math.sqrt(1 - corr)); m /= n; ss += m * m; } return Math.sqrt(ss / trials); }
+const f1 = x => x.toFixed(1), f2 = x => x.toFixed(2), f3 = x => x.toFixed(3);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 太陽光', c: 'var(--upd)', start: 3 }, { t: 'Ⅲ 風力', c: 'var(--loss)', start: 7 }, { t: 'Ⅳ 誤差・まとめ', c: 'var(--accent)', start: 10 } ];
+const SLIDES = [
+  { legend: '需給バランスの式の「ΔP」が、需要側だけでなく供給側からも生まれる',
+    html() { return '<h3>問題：供給側にも「予測できない ΔP」が入った</h3><div class="eq curr">Δ<i>P</i> = <i>K</i>Δ<i>F</i>　— 従来 Δ<i>P</i> は需要の変動だけ。再エネ以後は<b>発電の変動</b>も加わる<span class="read">読み：発電は制御できるものだったが、太陽光・風力は天候が決める。第8回の需給バランスに「供給側の不確実性」が加わった。</span></div><div class="desc">予測を外した分は火力の待機（予備力）で埋めるしかなく、<b>予測精度はそのまま運用コスト</b>になります。この回は「気象量 → 発電量」の変換を実計算し、誤差がどこで増幅されるかを見ます。</div>'; },
+    draw() { drawBalance(); caption('右の皿にも「不確実な重り」が乗った'); } },
+  { legend: 'NWP の 3 要素：モデル・初期値・境界条件。カオス性で予報可能期間に限界',
+    html() { return '<h3>数値気象予報（NWP）：物理方程式を格子で解く</h3><div class="eq curr">運動方程式・連続の式・熱力学の式・状態方程式・水蒸気保存　→　3 次元格子で時間積分<span class="read">読み：大気の物理法則を格子点上で数値的に解く。観測をデータ同化して初期値を作る。</span></div><div class="desc">大気は初期値鋭敏性を持つカオス系なので、どんなに計算機が速くなっても<b>決定論的予報には 1〜2 週間の原理的限界</b>があります。だから不確実性そのものを扱う（アンサンブル予報、Ⅳ 章）必要が出てきます。</div>'; },
+    draw() { drawNWP(); caption('初期値の小さな差が指数的に育つ'); } },
+  { legend: '日本の数値予報モデル：格子間隔と予報期間。翌日計画は MSM が主力',
+    html() { return '<h3>どのモデルを使うか：時間軸で決まる</h3><div class="eq curr">GSM 20 km / 264 h（週間）　MSM 5 km / 78 h（<b>翌日計画</b>）　LFM 2 km / 18 h（当日）　MEPS 21 メンバー（不確実性）<span class="read">読み：先を見るほど粗く、直近ほど細かい。電力運用の業務（週間・翌日・当日・リアルタイム）に対応する。</span></div><div class="desc">前日のスポット市場入札には MSM、当日の調整には LFM、予備力の設計には MEPS（アンサンブル）。過去の学習データには ERA5 再解析（第12回の教師データ）を使います。</div>'; },
+    draw() { drawModels(); caption('翌日 = MSM、当日 = LFM、幅 = MEPS'); } },
+
+  { legend: '那覇 7/15 晴天の全天日射 GHI（Haurwitz モデル）。正午に約 1000 W/m²',
+    html() { let gmax = 0; for (let h = 0; h < 24; h += .25) gmax = Math.max(gmax, ghi(h)); return '<h3>日射量：太陽の高さで決まる</h3><div class="eq curr"><i>G</i><sub>GHI</sub> = <i>G</i><sub>DNI</sub> cos θ<sub>z</sub> + <i>G</i><sub>DHI</sub>　　晴天正午（那覇 7/15）：<b class="res">' + gmax.toFixed(0) + '</b> W/m²<span class="read">読み：直達（太陽から直接）と散乱（空から）の和。天頂角 θ_z が小さい正午が最大。太陽電池の定格はこの 1000 W/m² が基準（STC）。</span></div><div class="desc">図は太陽位置（赤緯・時角）から天頂角を計算し、晴天モデルで日射に直したものです。実際にはここに雲が乗って減ります。<b>雲の予測が太陽光予測の本体</b>ですが、まず晴天の上限を押さえます。</div>'; },
+    draw() { drawGHI(); caption('正午がピーク。ここに雲が乗る'); } },
+  { legend: 'PVWatts 型モデル：日射 × 温度補正 × システム効率',
+    html() { const r = pv(950, 33); return '<h3>日射と気温から出力へ：温度係数が効く</h3><div class="eq curr"><i>P</i> = <i>P</i><sub>rated</sub> <span class="frac"><span><i>G</i></span><span>1000</span></span> [1 + γ(<i>T</i><sub>cell</sub> − 25)] η<sub>sys</sub>　→　950 W/m²・33 °C：<i>T</i><sub>cell</sub> = <b class="res">' + f1(r.tc) + '</b> °C, <i>P</i> = <b class="res">' + r.p.toFixed(0) + '</b> kW（定格 1000）<span class="read">読み：日射に比例、セル温度が 25 °C より高いと γ=−0.4%/°C で目減り、配線・PCS・汚れで η=0.82。</span></div><div class="desc">セル温度は外気温より 30 °C 近く高くなります（NOCT モデル）。気温 33 °C なら <i>T</i><sub>cell</sub> ≈ ' + f1(r.tc) + ' °C で <b>' + ((1 - (1 + -0.004 * (r.tc - 25))) * 100).toFixed(1) + '% の温度損失</b>。亜熱帯の沖縄では、この項が本土より大きく効きます（次のスライドで A/B）。</div>'; },
+    draw() { drawPVday(false); caption('セル温度は外気温 + 30 °C 近くまで上がる'); } },
+  { legend: 'A/B：気温オフセット（スライダ）で日積算発電量がどう変わるか。同じ日射で比較',
+    mini: () => { const a = dayEnergy(0), b = dayEnergy(TOFF); return '<div>那覇 <b>' + (a.e / 1000).toFixed(2) + ' MWh</b></div><div>' + (TOFF >= 0 ? '+' : '') + TOFF + '°C <b>' + (b.e / 1000).toFixed(2) + ' MWh</b></div>'; },
+    html() { const a = dayEnergy(0), b = dayEnergy(-9), c = dayEnergy(TOFF); return '<h3>A/B：那覇 vs 気温 −9 °C（福井相当）— 同じ日射で ' + ((b.e / a.e - 1) * 100).toFixed(1) + '% 差</h3><div class="eq curr">那覇（最高 32 °C）：<b class="res">' + (a.e / 1000).toFixed(2) + '</b> MWh/日　／　−9 °C：<b class="res">' + (b.e / 1000).toFixed(2) + '</b> MWh/日　／　スライダ ' + (TOFF >= 0 ? '+' : '') + TOFF + ' °C：<b class="res">' + (c.e / 1000).toFixed(2) + '</b> MWh/日（1 MW 設備）<span class="read">読み：日射は同じ晴天モデル、気温だけを変えて日積算した。セル最高温度は那覇 ' + f1(a.tmax) + ' °C、−9 °C では ' + f1(b.tmax) + ' °C。</span></div><div class="desc">気温スライダを動かしてください。<b>気温が 9 °C 低いだけで同じ日射から ' + ((b.e / a.e - 1) * 100).toFixed(1) + '% 多く発電</b>できます。沖縄の太陽光の設備利用率が本土より伸びにくい理由の 1 つで、需要予測（第11回）の湿度と並ぶ「沖縄固有の項」です。</div>'; },
+    draw() { drawPVday(true); caption('同じ日射でも気温で数%変わる'); } },
+  { legend: '太陽光の評価指標：MAPE は夜間（y=0）で発散 → 定格で正規化した nRMSE を使う',
+    html() { return '<h3>評価の落とし穴：太陽光に MAPE を使ってはいけない</h3><div class="eq curr">MAPE = <span class="frac"><span>100</span><span><i>T</i></span></span>Σ|<span class="frac"><span><i>y<sub>t</sub></i> − <i>ŷ<sub>t</sub></i></span><span><i>y<sub>t</sub></i></span></span>|　←　夜は <i>y<sub>t</sub></i> = 0 で発散　／　nRMSE = RMSE / <i>P</i><sub>rated</sub><span class="read">読み：割り算の分母が 0 になる時刻があるので百分率誤差は使えない。定格容量で割った RMSE を使う。</span></div><div class="desc">実用の目安：太陽光の翌日予測は単一サイトで nRMSE 8〜15%、広域集約で 4〜8%。風力は 12〜20% / 8〜12%。<b>「集約すると下がる」の理由と限界</b>を Ⅳ 章で実験します。</div>'; },
+    draw() { drawMetrics(); caption('夜間ゼロが MAPE を壊す'); } },
+
+  { legend: '風のエネルギーは u³（第1回の再掲）。パワーカーブに 3 つの折れ目',
+    html() { return '<h3>風力：風速の 3 乗、そしてパワーカーブ</h3><div class="eq curr"><i>P</i> = ½ρ<i>Au</i>³<i>C<sub>p</sub></i>　（カットイン 3 / 定格 12 / カットアウト 25 m/s）<span class="read">読み：風速が 2 割増えるとエネルギーは 7 割増える。定格に達したらピッチ制御で頭打ち、25 m/s 超は保護のため停止。</span></div><div class="desc">第1回で見た 3 乗則が、ここでは<b>予測誤差を増幅する係数</b>として効きます。風速の予報誤差が 10% なら出力誤差は約 33%。さらにカットアウト付近では 1 m/s の読み違いが「定格 → 0」になります。</div>'; },
+    draw() { drawPowerCurve(false); caption('3 乗 + 崖 = 誤差の増幅装置'); } },
+  { legend: 'A/B：ハブ高さ補正 あり／なし。地上 10 m の風速 7 m/s、べき指数 0.14（海上）',
+    mini: () => '<div>10 m <b>7.0</b> → ' + HUB + ' m <b>' + f2(shear(7, HUB)) + ' m/s</b></div><div>出力 <b>' + f2(curve(7)) + ' → ' + f2(curve(shear(7, HUB))) + ' MW</b></div>',
+    html() { const uh = shear(7, HUB), p0 = curve(7), p1 = curve(uh); return '<h3>A/B：ハブ高さ補正を忘れると出力を ' + ((1 - p0 / p1) * 100).toFixed(0) + '% 過小評価する</h3><div class="eq curr"><i>u</i>(<i>z</i>) = <i>u</i>(10) (<i>z</i>/10)<sup>0.14</sup>　→　7.0 × (' + HUB + '/10)<sup>0.14</sup> = <b class="res">' + f2(uh) + '</b> m/s　⇒　出力 ' + f2(p0) + ' → <b class="res">' + f2(p1) + '</b> MW<span class="read">読み：気象予報の風速は地上 10 m。ハブ高さでは境界層の効果で速く、べき法則で補正する。3 乗されるので効果が大きい。</span></div><div class="desc">ハブ高さスライダを動かしてください。<b>風速はたった ' + ((uh / 7 - 1) * 100).toFixed(0) + '% 増えるだけなのに、出力は ' + (p1 / Math.max(p0, 1e-9)).toFixed(2) + ' 倍</b>。実務で最も多い初歩的な誤りが、この補正の見落としです。</div>'; },
+    draw() { drawPowerCurve(true); caption('風速 +' + ((shear(7, HUB) / 7 - 1) * 100).toFixed(0) + '% → 出力 ×' + (curve(shear(7, HUB)) / Math.max(curve(7), 1e-9)).toFixed(2)); } },
+  { legend: 'パワーカーブの傾き |dP/du|。誤差が最も増幅される風速は定格の手前',
+    html() { let umax = 0, smax = 0; for (let u = 0; u <= 25; u += .1) { const s = Math.abs(curve(u + .05) - curve(u - .05)) / .1; if (s > smax) { smax = s; umax = u; } } return '<h3>誤差が最大になる風速：定格の手前とカットアウト</h3><div class="eq curr">∂<i>P</i>/∂<i>u</i> = <span class="frac"><span>3</span><span>2</span></span>ρ<i>Au</i>²<i>C<sub>p</sub></i>　→　最大は <i>u</i> ≈ <b class="res">' + f1(umax) + '</b> m/s で <b class="res">' + (smax * 1000).toFixed(0) + '</b> kW/(m/s)<span class="read">読み：出力曲線の傾きが風速誤差の「倍率」。u² で増えるので定格風速の直前が最も鋭敏。定格以上は平らで誤差ゼロ。</span></div><div class="desc">風速 1 m/s の予報誤差が、5 m/s では ' + (Math.abs(curve(6) - curve(4)) / 2 * 1000).toFixed(0) + ' kW、11 m/s では ' + (Math.abs(curve(12) - curve(10)) / 2 * 1000).toFixed(0) + ' kW の出力誤差になります。そして 24.5 m/s では<b>カットアウトを跨ぐかどうかで 3000 kW</b>。台風の常襲地・沖縄ではこの崖が最大のリスクです。</div>'; },
+    draw() { drawSensitivity(); caption('鋭敏なのは定格手前、危険なのはカットアウト'); } },
+
+  { legend: 'A/B：サイト数 N を増やしたときの誤差。相関 0（点線）vs スライダの相関（実線）。シード付き 2,500 試行',
+    mini: () => '<div>1 サイト <b>' + (smooth(1, CORR) * 100).toFixed(1) + '%</b></div><div>50 サイト <b>' + (smooth(50, CORR) * 100).toFixed(1) + '%</b></div>',
+    html() { const s1 = smooth(1, CORR), s50 = smooth(50, CORR), s50i = smooth(50, 0); return '<h3>A/B：平滑化効果 — 相関があると 1/√N には下がらない</h3><div class="eq curr">独立なら σ/√<i>N</i>：50 サイトで <b class="res">' + (s50i * 100).toFixed(1) + '%</b>　／　相関 ' + CORR + '：<b class="res">' + (s50 * 100).toFixed(1) + '%</b>（下限 σ√ρ = ' + (12 * Math.sqrt(CORR)).toFixed(1) + '%）<span class="read">読み：各サイトの誤差 12% を、共通成分（相関）と独立成分に分けて N 個平均した実測。独立成分は打ち消せるが共通成分は残る。</span></div><div class="desc">相関スライダを動かしてください。<b>相関 0.7 では 50 サイト集めても ' + (s50 * 100).toFixed(1) + '% までしか下がりません</b>。同じ島の雲は同じように動くので、地理的に狭い沖縄では平滑化が効きにくい。本土（広域・相関 0.3 程度）との決定的な違いです。🎲 で乱数を振り直せます。</div>'; },
+    draw() { drawSmoothing(); caption('共通成分は何か所集めても消えない'); } },
+  { legend: 'アンサンブル予報：メンバーのばらつき（スプレッド）が不確実性の大きさ',
+    html() { return '<h3>アンサンブル：「どれくらい外れうるか」を予報する</h3><div class="eq curr">必要予備力 = <i>f</i>(予測誤差の分布)　←　点予測 1 つでは決められない<span class="read">読み：初期値やモデル物理を少しずつ変えた多数の予報を走らせ、そのばらつきで不確実性を測る。スプレッドが大きい日は予備力を厚く。</span></div><div class="desc">MEPS（21 メンバー）を使うと、「明日の太陽光は 80% の確率で 300〜450 MW」のような<b>確率予測</b>ができます。予備力を日ごとに最適化でき、待機火力の燃料費（例：45 MW 分で年 10 億円規模）が直接減ります。第12回で機械学習による分位点予測として実装します。</div>'; },
+    draw() { drawEnsemble(); caption('幅が分かれば、予備力を日ごとに変えられる'); } },
+  { legend: '沖縄の気象特性と、それが予測に与える影響',
+    html() { return '<h3>まとめ：沖縄の予測は「3 つの理由で」難しい</h3><div class="eq curr">①台風 → カットアウトの崖　②高温・高湿 → 温度損失（次回：湿度で需要）　③島嶼で狭い → 平滑化が効かない<span class="read">読み：風力は崖、太陽光は熱、両方に地理的な相関。本土の常識が通じない 3 点。</span></div><div class="desc">積雲が速く動く海洋性気候では、数十秒で出力が 50% 変動するランピングも起きます（NWP では捉えられず、全天カメラや蓄電池で対応）。次回は<b>需要側の予測</b>。気温だけでなく湿度（不快指数）が効く、という沖縄固有の項がここでも出てきます。</div>'; },
+    draw() { drawOkinawa(); caption('崖・熱・相関。次は需要側へ'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawBalance() { const cx = 180, cy = 200; line([[cx - 130, cy], [cx + 130, cy]], getCSS('--text'), 4); line([[cx, cy], [cx, cy + 60]], getCSS('--text'), 4); rect(cx - 150, cy - 50, 60, 50, getCSS('--accent'), .75); txt('火力', cx - 120, cy - 20, { align: 'center', size: 11, bold: true, color: '#fff' }); rect(cx - 88, cy - 50, 40, 50, getCSS('--warm'), .75); txt('PV', cx - 68, cy - 20, { align: 'center', size: 11, bold: true, color: '#fff' }); txt('？', cx - 68, cy - 60, { align: 'center', size: 20, bold: true, color: getCSS('--neg') }); rect(cx + 90, cy - 50, 60, 50, getCSS('--upd'), .75); txt('需要', cx + 120, cy - 20, { align: 'center', size: 11, bold: true, color: '#fff' }); txt('？', cx + 120, cy - 60, { align: 'center', size: 20, bold: true, color: getCSS('--neg') }); txt('左の皿にも「天候で決まる重り」', CW / 2, 300, { align: 'center', size: 11 }); txt('外した分 = 予備力（待機火力）で埋める = コスト', CW / 2, 325, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawNWP() { const L = 40, T = 50, R = 335, B = 300; axes(L, T, R, B, '予報時間 [日]', '誤差'); const xOf = d => L + d / 14 * (R - L), yOf = e => B - e / 1.1 * (B - T); [0, .002, -.002, .004, -.004].forEach((d0, i) => { const pts = []; for (let d = 0; d <= 14; d += .25) pts.push([xOf(d), yOf(Math.min(1, Math.abs(d0) * Math.exp(d / 1.6) + .02 * d))]); line(pts, getCSS(i === 0 ? '--upd' : '--faint'), i === 0 ? 2.5 : 1.2); }); line([[L, yOf(.5)], [R, yOf(.5)]], getCSS('--neg'), 1, [4, 3]); txt('実用限界', R - 4, yOf(.5) - 5, { align: 'right', size: 9.5, color: getCSS('--neg') }); [0, 7, 14].forEach(d => txt(d, xOf(d), B + 14, { align: 'center', size: 9, mono: true })); txt('初期値のわずかな差 → 指数的に育つ（カオス）', CW / 2, 340, { align: 'center', size: 10.5 }); }
+function drawModels() { const rows = [['GSM', 20, 264, '週間'], ['MSM', 5, 78, '翌日'], ['LFM', 2, 18, '当日'], ['MEPS', 5, 39, '幅']]; const L = 60, T = 50, R = 335, B = 300; axes(L, T, R, B, '予報期間 [h]（対数）', '格子 [km]'); const xOf = h => L + (Math.log10(h) - 1) / 1.5 * (R - L), yOf = k => B - (Math.log10(k)) / 1.5 * (B - T); rows.forEach(([n, k, h, use], i) => { const x = xOf(h), y = yOf(k); dot(x, y, 12 + (n === 'MSM' ? 4 : 0), getCSS(n === 'MSM' ? '--accent' : (n === 'MEPS' ? '--upd' : '--warm')), '#fff'); txt(n, x, y - 18, { align: 'center', size: 10.5, bold: true }); txt(use, x, y + 26, { align: 'center', size: 9, color: getCSS('--muted') }); }); [10, 100, 264].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); [1, 5, 20].forEach(k => txt(k, L - 4, yOf(k) + 4, { align: 'right', size: 9, mono: true })); }
+function drawGHI() { const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '時刻 [h]', 'W/m²'); const xOf = h => L + h / 24 * (R - L), yOf = g => B - g / 1100 * (B - T); const pts = []; for (let h = 0; h <= 24; h += .1) pts.push([xOf(h), yOf(ghi(h))]); line(pts, getCSS('--warm'), 2.5); ctx.save(); ctx.globalAlpha = .18; ctx.fillStyle = getCSS('--warm'); ctx.beginPath(); ctx.moveTo(xOf(0), B); pts.forEach(p => ctx.lineTo(p[0], p[1])); ctx.lineTo(xOf(24), B); ctx.closePath(); ctx.fill(); ctx.restore(); [0, 6, 12, 18, 24].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); [0, 500, 1000].forEach(g => txt(g, L - 4, yOf(g) + 4, { align: 'right', size: 9, mono: true })); let gmax = 0, hmax = 12; for (let h = 0; h < 24; h += .05) if (ghi(h) > gmax) { gmax = ghi(h); hmax = h; } dot(xOf(hmax), yOf(gmax), 6, getCSS('--neg')); txt(gmax.toFixed(0) + ' W/m² @ ' + f1(hmax) + ' 時', xOf(hmax), yOf(gmax) - 12, { align: 'center', size: 10, mono: true, bold: true }); txt('那覇 7/15 晴天（Haurwitz）', L, 340, { size: 10, color: getCSS('--muted') }); }
+function drawPVday(ab) { const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '時刻 [h]', 'kW'); const xOf = h => L + h / 24 * (R - L), yOf = p => B - p / 900 * (B - T); const a = [], b = [], tc = []; for (let h = 0; h <= 24; h += .1) { const r = pv(ghi(h), tair(h, 0)); a.push([xOf(h), yOf(r.p)]); if (ab) b.push([xOf(h), yOf(pv(ghi(h), tair(h, TOFF)).p)]); tc.push([xOf(h), yOf(r.tc * 10)]); } line(a, getCSS('--warm'), 2.5); if (ab) line(b, getCSS('--accent'), 2.5, [5, 3]); [0, 6, 12, 18, 24].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); [0, 300, 600, 900].forEach(p => txt(p, L - 4, yOf(p) + 4, { align: 'right', size: 9, mono: true })); const e0 = dayEnergy(0); txt('那覇 ' + (e0.e / 1000).toFixed(2) + ' MWh', L + 8, T + 14, { size: 10.5, color: getCSS('--warm'), bold: true }); if (ab) { const e1 = dayEnergy(TOFF); txt((TOFF >= 0 ? '+' : '') + TOFF + '°C ' + (e1.e / 1000).toFixed(2) + ' MWh', L + 8, T + 30, { size: 10.5, color: getCSS('--accent'), bold: true }); } else { line(tc, getCSS('--neg'), 1.5, [3, 3]); txt('セル温度 ×10（最高 ' + f1(e0.tmax) + '°C）', R - 4, T + 14, { align: 'right', size: 9.5, color: getCSS('--neg') }); } txt('1 MW 設備・晴天・γ=−0.4%/°C', L, 340, { size: 10, color: getCSS('--muted') }); }
+function drawMetrics() { const L = 45, T = 40, R = 335, B = 260; axes(L, T, R, B, '時刻', 'kW'); const xOf = h => L + h / 24 * (R - L), yOf = p => B - p / 900 * (B - T); const y = [], yh = []; seed = 99; for (let h = 0; h <= 24; h += .5) { const p = pv(ghi(h), tair(h)).p; y.push([xOf(h), yOf(p)]); yh.push([xOf(h), yOf(Math.max(0, p * (1 + .15 * gauss()) + (p > 0 ? 0 : 20 * rng())))]); } line(y, getCSS('--text'), 2); line(yh, getCSS('--neg'), 1.5, [4, 3]); rect(xOf(0), T, xOf(6) - xOf(0), B - T, getCSS('--neg'), .1); rect(xOf(19), T, xOf(24) - xOf(19), B - T, getCSS('--neg'), .1); txt('y=0 → MAPE ∞', xOf(3), T + 14, { align: 'center', size: 9.5, color: getCSS('--neg'), bold: true }); txt('y=0', xOf(21.5), T + 14, { align: 'center', size: 9.5, color: getCSS('--neg'), bold: true }); [0, 6, 12, 18, 24].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); txt('実線=実績 / 点線=予測', L + 8, B - 8, { size: 9.5, color: getCSS('--muted') }); txt('nRMSE = RMSE / 定格 → 夜間でも計算できる', CW / 2, 310, { align: 'center', size: 10.5 }); txt('目安：太陽光 8〜15%（単一）/ 4〜8%（広域）', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawPowerCurve(ab) { const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, 'ハブ高さ風速 [m/s]', 'MW'); const xOf = u => L + u / 28 * (R - L), yOf = p => B - p / 3.4 * (B - T); const pts = []; for (let u = 0; u <= 28; u += .1) pts.push([xOf(u), yOf(curve(u))]); line(pts, getCSS('--upd'), 2.5); [[UIN, 'カットイン'], [URATED, '定格'], [UOUT, 'カットアウト']].forEach(([u, l]) => { line([[xOf(u), T], [xOf(u), B]], getCSS('--faint'), 1, [3, 3]); txt(l, xOf(u), T - 6, { align: 'center', size: 8.5, color: getCSS('--muted') }); }); rect(xOf(25), T, xOf(28) - xOf(25), B - T, getCSS('--neg'), .1); [0, 5, 10, 15, 20, 25].forEach(u => txt(u, xOf(u), B + 14, { align: 'center', size: 9, mono: true })); [1, 2, 3].forEach(p => txt(p, L - 4, yOf(p) + 4, { align: 'right', size: 9, mono: true })); if (ab) { const uh = shear(7, HUB); dot(xOf(7), yOf(curve(7)), 7, getCSS('--neg')); txt('補正なし 7.0 → ' + f2(curve(7)), xOf(7) + 8, yOf(curve(7)) - 10, { size: 10, mono: true, color: getCSS('--neg'), bold: true }); dot(xOf(uh), yOf(curve(uh)), 7, getCSS('--accent')); txt('補正あり ' + f2(uh) + ' → ' + f2(curve(uh)), xOf(uh) + 8, yOf(curve(uh)) + 16, { size: 10, mono: true, color: getCSS('--accent'), bold: true }); } txt('定格 3 MW・直径 90 m', L, 340, { size: 10, color: getCSS('--muted') }); }
+function drawSensitivity() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '風速 [m/s]', 'kW/(m/s)'); const xOf = u => L + u / 28 * (R - L); let smax = 0; const vals = []; for (let u = 0; u <= 28; u += .1) { const s = Math.abs(curve(u + .05) - curve(u - .05)) / .1 * 1000; vals.push([u, s]); smax = Math.max(smax, s); } const yOf = s => B - s / (smax * 1.1) * (B - T); line(vals.map(([u, s]) => [xOf(u), yOf(s)]), getCSS('--neg'), 2.5); let umax = 0; vals.forEach(([u, s]) => { if (s >= smax) umax = u; }); line([[xOf(umax), T], [xOf(umax), B]], getCSS('--faint'), 1, [3, 3]); txt('最大 ' + f1(umax) + ' m/s', xOf(umax) + 6, T + 14, { size: 10, bold: true }); rect(xOf(24.5), T, xOf(25.5) - xOf(24.5), B - T, getCSS('--neg'), .3); txt('崖', xOf(25), T + 14, { align: 'center', size: 10, color: getCSS('--neg'), bold: true }); [0, 5, 10, 15, 20, 25].forEach(u => txt(u, xOf(u), B + 14, { align: 'center', size: 9, mono: true })); txt('風速 1 m/s の誤差あたりの出力誤差', L, 340, { size: 10, color: getCSS('--muted') }); }
+function drawSmoothing() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, 'サイト数 N', 'nRMSE [%]'); const xOf = n => L + n / 100 * (R - L), yOf = e => B - e / 13 * (B - T); const ns = [1, 2, 3, 5, 8, 12, 20, 30, 50, 75, 100]; const a = ns.map(n => [xOf(n), yOf(smooth(n, 0) * 100)]), b = ns.map(n => [xOf(n), yOf(smooth(n, CORR) * 100)]); line(a, getCSS('--faint'), 2, [5, 4]); line(b, getCSS('--neg'), 2.5); b.forEach(p => dot(p[0], p[1], 3, getCSS('--neg'))); line([[L, yOf(12 * Math.sqrt(CORR))], [R, yOf(12 * Math.sqrt(CORR))]], getCSS('--neg'), 1, [3, 3]); txt('下限 ' + (12 * Math.sqrt(CORR)).toFixed(1) + '%', R - 4, yOf(12 * Math.sqrt(CORR)) - 5, { align: 'right', size: 9.5, color: getCSS('--neg') }); txt('相関 0（独立）', xOf(60), yOf(smooth(60, 0) * 100) + 16, { size: 10, color: getCSS('--muted') }); txt('相関 ' + CORR, xOf(60), yOf(smooth(60, CORR) * 100) - 10, { size: 10, color: getCSS('--neg'), bold: true }); [1, 25, 50, 75, 100].forEach(n => txt(n, xOf(n), B + 14, { align: 'center', size: 9, mono: true })); [0, 4, 8, 12].forEach(e => txt(e, L - 4, yOf(e) + 4, { align: 'right', size: 9, mono: true })); txt('各サイト σ=12%、2,500 試行、seed ' + (314 + ROUND * 7919), L, 340, { size: 9.5, color: getCSS('--muted'), mono: true }); }
+function drawEnsemble() { const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '時刻', 'MW'); const xOf = h => L + h / 24 * (R - L), yOf = p => B - p / 550 * (B - T); seed = 7; const members = []; for (let m = 0; m < 12; m++) { const sc = 1 + .18 * gauss(), sh = .6 * gauss(); const pts = []; for (let h = 0; h <= 24; h += .5) pts.push([xOf(h), yOf(Math.max(0, 500 * sc * Math.max(0, Math.sin(Math.PI * (h - 6 + sh) / 13))))]); members.push(pts); line(pts, getCSS('--faint'), 1); } const mean = []; for (let k = 0; k < members[0].length; k++) mean.push([members[0][k][0], members.reduce((s, m) => s + m[k][1], 0) / members.length]); line(mean, getCSS('--upd'), 2.5); [0, 6, 12, 18, 24].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); txt('太線=平均 / 細線=各メンバー', L + 8, T + 14, { size: 10, color: getCSS('--muted') }); txt('ばらつき（スプレッド）= 不確実性', CW / 2, 340, { align: 'center', size: 10.5, bold: true }); }
+function drawOkinawa() { const rows = [['台風', 'カットアウトの崖', '--neg'], ['高温・高湿', '温度損失 / 需要は湿度', '--warm'], ['島嶼で狭い', '平滑化が効かない', '--upd']]; rows.forEach(([a, b, c], i) => { const y = 80 + i * 80; rect(20, y - 25, 320, 58, getCSS(c), .14); txt(a, 100, y + 5, { align: 'center', size: 13, bold: true, color: getCSS(c) }); txt('→ ' + b, 240, y + 5, { align: 'center', size: 10.5 }); }); txt('本土の常識が通じない 3 点', CW / 2, 340, { align: 'center', size: 11, bold: true }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur2 = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur2 ? 'active' : (i < cur2 ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur2 ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+function sync() { document.getElementById('tVal').textContent = (TOFF >= 0 ? '+' : '') + TOFF; document.getElementById('hubVal').textContent = HUB; document.getElementById('corrVal').textContent = CORR.toFixed(1); }
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; TOFF = 0; HUB = 90; CORR = .7; ROUND = 0; document.getElementById('tRange').value = 0; document.getElementById('hubRange').value = 90; document.getElementById('corrRange').value = .7; sync(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('tRange').oninput = e => { TOFF = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('hubRange').oninput = e => { HUB = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('corrRange').oninput = e => { CORR = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('diceBtn').onclick = () => { ROUND++; renderAll(); draw_(); };
+sync(); goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第9回 演習 — インバータと系統連系</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第9回: PWM の電圧式・THD・力率運転の無効電力・LCL フィルタ・合成慣性。ノート 9.2 節の記号（m_a, m_f, V_dc, V_LL,1, THD, H_virtual）に合わせる。
+// 約束: 線間電圧基本波実効値 V_LL,1 = 0.612 m_a V_dc（線形領域）。進み力率の Q は負（吸収）だが、解答欄では大きさ |Q| を答える。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+const nearestOdd3 = m => { const k = Math.round((m / 3 - 1) / 2); return 3 * (2 * k + 1); };
+
+EX.page({
+  ch: 9,
+  intro: 'インバータは「オンとオフしかないスイッチ」で正弦波を作り、制御次第で電圧も周波数も支えられます。PWM の電圧式、高調波の THD、力率運転の無効電力、LCL フィルタ、合成慣性の必要容量を、数字で確かめます。',
+  problems: [
+    {
+      id: 'pwm-volt', title: 'PWM の基本波電圧', tags: ['9.2.2'],
+      gen(rng) {
+        const Vdc = pick(rng, [350, 400, 450, 500, 600, 700, 800]);
+        const ma = pick(rng, [0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]);
+        const Vph = ma * Vdc / 2;
+        const VLL = 0.612 * ma * Vdc;
+        const Vsix = Math.sqrt(6) / Math.PI * Vdc;
+        return {
+          given: [['直流リンク電圧 V<sub>dc</sub>', Vdc + ' V'], ['振幅変調率 m<sub>a</sub>', ma + ''], ['基本波周波数 f<sub>1</sub>', '60 Hz'], ['各相の出力レベル', '+V<sub>dc</sub>/2 と −V<sub>dc</sub>/2 の 2 値']],
+          q: '三相 PWM インバータ（線形領域）について答えよ。<br>(a) 相電圧の基本波の<b>振幅（波高値）</b> V̂<sub>1</sub> を求めよ。<br>(b) <b>線間電圧の基本波実効値</b> V<sub>LL,1</sub> を求めよ。<br>(c) 過変調の極限（方形波運転）で得られる線間電圧基本波実効値を求めよ。',
+          answers: [
+            { key: 'Vph', label: '(a) V̂_1（相電圧・振幅）', unit: 'V', value: Vph },
+            { key: 'VLL', label: '(b) V_LL,1（線間・実効値）', unit: 'V', value: VLL },
+            { key: 'Vsix', label: '(c) 方形波の V_LL,1', unit: 'V', value: Vsix },
+          ],
+          steps: [
+            '各相の出力は ±V<sub>dc</sub>/2 の 2 値。線形領域（m<sub>a</sub> ≤ 1）ではオン時間の比率が変調波に比例するので、相電圧基本波の振幅は ' + eq('V̂<sub>1</sub> = m<sub>a</sub> V<sub>dc</sub> / 2 = ' + ma + ' × ' + Vdc + ' / 2 = ' + fmt(Vph) + ' V') + '。',
+            '線間電圧は相電圧の √3 倍、実効値は振幅の 1/√2 倍: ' + eq('V<sub>LL,1</sub> = (√3/√2) V̂<sub>1</sub> = (√3 / 2√2) m<sub>a</sub> V<sub>dc</sub> = 0.612 × ' + ma + ' × ' + Vdc + ' = ' + fmt(VLL) + ' V') + '。',
+            '(c) 方形波（1 パルス）運転の基本波は ' + eq('V<sub>LL,1</sub> = (√6/π) V<sub>dc</sub> = 0.78 × ' + Vdc + ' = ' + fmt(Vsix) + ' V') + '。線形領域の上限 0.612 V<sub>dc</sub> より約 27% 大きいが、低次高調波が急増する。',
+          ],
+          insight: 'm<sub>a</sub> で電圧の大きさ、変調波の位相で出力位相が決まる。第3回の P = V<sub>s</sub>V<sub>r</sub> sin δ / X に照らせば、インバータは P と Q を独立に決められる装置です。',
+        };
+      },
+    },
+    {
+      id: 'pwm-design', title: '系統連系に必要な m_a と m_f', tags: ['9.2.2', '9.2.3', '例題 9-1'],
+      gen(rng) {
+        const Vgrid = pick(rng, [200, 210, 400, 420, 440, 480]);
+        const Vdc = Math.ceil(Vgrid / 0.612 / 50) * 50 + pick(rng, [0, 50, 100, 150]);
+        const fsw = pick(rng, [1800, 2700, 3600, 4500, 5400, 9000, 10800, 18000]);
+        const f1 = 60;
+        const ma = Vgrid / (0.612 * Vdc);
+        const mf = fsw / f1;
+        const Tsw = 1e6 / fsw;
+        const odd3 = (mf % 3 === 0) && ((mf / 3) % 2 === 1);
+        return {
+          given: [['系統の線間電圧（実効値）', Vgrid + ' V'], ['直流リンク電圧 V<sub>dc</sub>', Vdc + ' V'], ['スイッチング周波数 f<sub>sw</sub>', fsw + ' Hz'], ['基本波周波数 f<sub>1</sub>', f1 + ' Hz']],
+          q: 'この系統に三相インバータを連系する。<br>(a) 必要な<b>振幅変調率 m<sub>a</sub></b> を求めよ（線形領域 V<sub>LL,1</sub> = 0.612 m<sub>a</sub> V<sub>dc</sub>）。<br>(b) <b>周波数変調率 m<sub>f</sub></b> を求めよ。これは基本波 1 周期あたりのパルス数に等しい。<br>(c) 搬送波 1 周期 <b>T<sub>sw</sub></b> を μs で求めよ。',
+          answers: [
+            { key: 'ma', label: '(a) m_a', unit: '', value: ma },
+            { key: 'mf', label: '(b) m_f（1 周期のパルス数）', unit: '', value: mf },
+            { key: 'Tsw', label: '(c) T_sw', unit: 'μs', value: Tsw },
+          ],
+          steps: [
+            '(a) ' + eq('m<sub>a</sub> = V<sub>LL,1</sub> / (0.612 V<sub>dc</sub>) = ' + Vgrid + ' / (0.612 × ' + Vdc + ') = ' + fmt(ma, 3)) + '。' + (ma <= 1 ? 'm<sub>a</sub> ≤ 1 なので線形領域に収まる。' : 'm<sub>a</sub> > 1 なので過変調になる。V<sub>dc</sub> を上げる必要がある。') + ' 必要最小の直流電圧は ' + eq('V<sub>dc,min</sub> = ' + Vgrid + ' / 0.612 = ' + fmt(Vgrid / 0.612) + ' V') + '。',
+            '(b) ' + eq('m<sub>f</sub> = f<sub>sw</sub> / f<sub>1</sub> = ' + fsw + ' / ' + f1 + ' = ' + fmt(mf, 0)) + '。基本波 1 周期（' + fmt(1000 / f1, 2) + ' ms）の間に搬送波が ' + fmt(mf, 0) + ' 回振れるので、パルスも 1 周期あたり ' + fmt(mf, 0) + ' 個。' + (odd3 ? ' 3 の奇数倍なので、線間電圧で第 3 調波とその奇数倍が相殺される。' : ' 3 の奇数倍ではない。第 3 調波を相殺したいなら m<sub>f</sub> = ' + nearestOdd3(mf) + '（f<sub>sw</sub> = ' + (nearestOdd3(mf) * f1) + ' Hz）などに選び直す。'),
+            '(c) ' + eq('T<sub>sw</sub> = 1 / f<sub>sw</sub> = 1 / ' + fsw + ' = ' + fmt(Tsw) + ' μs') + '。この時間幅の中でオン時間を変えるのがパルス幅変調。オンオフ 1 回ごとに損失が出るので、f<sub>sw</sub> を上げるほど損失は比例して増える。',
+          ],
+          insight: '住宅用 PCS は 10〜20 kHz、MW 級の連系装置は 1〜4 kHz。同じ「正弦波を作る」でも、損失とフィルタの大きさのトレードオフで f<sub>sw</sub> の相場が決まっています。',
+        };
+      },
+    },
+    {
+      id: 'thd', title: '高調波と THD', tags: ['9.2.3'],
+      gen(rng) {
+        const V1 = pick(rng, [180, 200, 220, 240, 260, 280]);
+        const p5 = pick(rng, [4, 5, 6, 8, 10]), p7 = pick(rng, [2, 3, 4, 5, 6]), p11 = pick(rng, [1, 1.5, 2, 3]), p13 = pick(rng, [0.5, 1, 1.5, 2]);
+        const V5 = V1 * p5 / 100, V7 = V1 * p7 / 100, V11 = V1 * p11 / 100, V13 = V1 * p13 / 100;
+        const att = pick(rng, [3, 4, 5, 8]);
+        const sq = V5 * V5 + V7 * V7 + V11 * V11 + V13 * V13;
+        const thd = Math.sqrt(sq) / V1 * 100;
+        const dom = Math.max(V5, V7, V11, V13) / V1 * 100;
+        const sq2 = V5 * V5 + V7 * V7 + (V11 / att) ** 2 + (V13 / att) ** 2;
+        const thd2 = Math.sqrt(sq2) / V1 * 100;
+        return {
+          given: [['基本波 V<sub>1</sub>（実効値）', V1 + ' V'], ['第 5 調波 V<sub>5</sub>', fmt(V5, 2) + ' V'], ['第 7 調波 V<sub>7</sub>', fmt(V7, 2) + ' V'], ['第 11 調波 V<sub>11</sub>', fmt(V11, 2) + ' V'], ['第 13 調波 V<sub>13</sub>', fmt(V13, 2) + ' V'], ['フィルタの効果', '第 11・13 調波が 1/' + att + ' に減衰（第 5・7 調波は変わらない）']],
+          q: 'インバータ出力の線間電圧に、上の高調波が含まれている（他の次数は無視する）。<br>(a) <b>THD</b> を % で求めよ。<br>(b) 最も大きい単一の高調波の含有率 <b>V<sub>n</sub>/V<sub>1</sub></b> を % で求めよ。<br>(c) 連系フィルタを通した後の <b>THD</b> を求めよ。',
+          answers: [
+            { key: 'thd', label: '(a) THD', unit: '%', value: thd },
+            { key: 'dom', label: '(b) 最大高調波の含有率', unit: '%', value: dom },
+            { key: 'thd2', label: '(c) フィルタ後の THD', unit: '%', value: thd2 },
+          ],
+          steps: [
+            '定義 ' + eq('THD = √(Σ<sub>n≥2</sub> V<sub>n</sub>²) / V<sub>1</sub> × 100') + '。2 乗和は ' + eq(fmt(V5, 2) + '² + ' + fmt(V7, 2) + '² + ' + fmt(V11, 2) + '² + ' + fmt(V13, 2) + '² = ' + fmt(sq)) + '。',
+            '(a) ' + eq('THD = √' + fmt(sq) + ' / ' + V1 + ' × 100 = ' + fmt(thd) + ' %') + '。' + (thd > 5 ? '高圧の目安「総合電圧歪率 5% 以下」を超えており、フィルタが要る。' : '高圧の目安「総合電圧歪率 5% 以下」に収まっている。'),
+            '(b) 最大は ' + eq(fmt(Math.max(V5, V7, V11, V13), 2) + ' / ' + V1 + ' × 100 = ' + fmt(dom) + ' %') + '。THD は 2 乗和の平方根なので、最大の 1 本が THD の大半を決める。',
+            '(c) 11・13 次だけ 1/' + att + ' にして計算し直す: ' + eq('THD′ = √(' + fmt(V5, 2) + '² + ' + fmt(V7, 2) + '² + (' + fmt(V11, 2) + '/' + att + ')² + (' + fmt(V13, 2) + '/' + att + ')²) / ' + V1 + ' × 100 = ' + fmt(thd2) + ' %') + '。低次（5・7 次）が残るので改善は限定的。低次を減らすには m<sub>f</sub> を上げて高調波を高次へ追いやるのが先。',
+          ],
+          insight: 'フィルタは高い周波数ほど効く。だから「高調波を高次に追いやる（f<sub>sw</sub> を上げる）」と「フィルタで落とす」は一体の設計です。',
+        };
+      },
+    },
+    {
+      id: 'pf-q', title: '力率一定運転の無効電力と電圧', tags: ['9.2.7', '例題 9-2'],
+      gen(rng) {
+        const P = pick(rng, [100, 200, 300, 500, 800, 1000]);
+        const pf = pick(rng, [0.9, 0.95, 0.97]);
+        const tanphi = Math.tan(Math.acos(pf));
+        const Qabs = P * tanphi;
+        const S = P / pf;
+        const X = pick(rng, [0.1, 0.15, 0.2, 0.25]);
+        const V = pick(rng, [1.03, 1.04, 1.05, 1.06]);
+        const dV = X * (Qabs / 1000) / V;
+        return {
+          given: [['太陽光の有効電力 P', P + ' kW'], ['運転力率（進み）', pf + ''], ['配電線のリアクタンス X', X + ' p.u.（S<sub>base</sub> = 1 MVA）'], ['連系点電圧 V', V + ' p.u.']],
+          q: '太陽光インバータを力率一定（進み）で運転する。<br>(a) インバータが<b>吸収する無効電力の大きさ |Q|</b> を求めよ。<br>(b) <b>皮相電力 S</b>（必要なインバータ容量）を求めよ。<br>(c) 例題 9-2 の簡易式 ΔV ≈ XΔQ/V を用い、この Q 吸収による連系点の<b>電圧低下量</b> \[p.u.\] を求めよ。',
+          answers: [
+            { key: 'Q', label: '(a) |Q|', unit: 'kvar', value: Qabs },
+            { key: 'S', label: '(b) S', unit: 'kVA', value: S },
+            { key: 'dV', label: '(c) 電圧低下量', unit: 'p.u.', value: dV, abs: 0.0005 },
+          ],
+          steps: [
+            '力率角 φ = arccos ' + pf + ' → ' + eq('tan φ = ' + fmt(tanphi, 3)) + '。(a) ' + eq('|Q| = P tan φ = ' + P + ' × ' + fmt(tanphi, 3) + ' = ' + fmt(Qabs) + ' kvar') + '。進み力率なので Q = −' + fmt(Qabs) + ' kvar（吸収）。',
+            '(b) ' + eq('S = P / cos φ = ' + P + ' / ' + pf + ' = ' + fmt(S) + ' kVA') + '。有効電力より ' + fmt((S / P - 1) * 100, 1) + ' % 大きい容量が要る。逆に容量が P に等しい PCS なら、Q を出すぶん P を絞ることになる。',
+            '(c) p.u. に直して ' + eq('|Q| = ' + fmt(Qabs / 1000, 4) + ' p.u.') + '。' + eq('ΔV = X |Q| / V = ' + X + ' × ' + fmt(Qabs / 1000, 4) + ' / ' + V + ' = ' + fmt(dV, 4) + ' p.u.') + ' だけ電圧が下がる。R の項は P が変わらないので動かない。',
+          ],
+          insight: '力率 0.95 は Q = 0.329P。電圧が問題ないときも常に吸収して損失を増やすので、電圧が高いときだけ吸収する Volt-Var 制御のほうが合理的です。',
+        };
+      },
+    },
+    {
+      id: 'lcl', title: 'LCL フィルタの共振周波数', tags: ['9.2.3'],
+      gen(rng) {
+        const L1 = pick(rng, [0.5, 0.8, 1.0, 1.2, 1.5, 2.0]);
+        const L2 = pick(rng, [0.2, 0.3, 0.4, 0.5, 0.8]);
+        const C = pick(rng, [5, 10, 15, 20, 30, 47]);
+        const fsw = pick(rng, [3600, 5400, 9000, 10800, 18000]);
+        const VLL = pick(rng, [200, 400, 420, 480]);
+        const f1 = 60;
+        const inner = (L1 + L2) * 1e-3 / (L1 * 1e-3 * L2 * 1e-3 * C * 1e-6);
+        const fres = Math.sqrt(inner) / (2 * Math.PI);
+        const order = fres / f1;
+        const Qc = 2 * Math.PI * f1 * C * 1e-6 * VLL * VLL;
+        const okLow = fres > 10 * f1, okHigh = fres < fsw / 2;
+        return {
+          given: [['インバータ側インダクタンス L<sub>1</sub>', L1 + ' mH'], ['系統側インダクタンス L<sub>2</sub>', L2 + ' mH'], ['フィルタコンデンサ C<sub>f</sub>（星形結線）', C + ' μF'], ['スイッチング周波数 f<sub>sw</sub>', fsw + ' Hz'], ['系統線間電圧 V<sub>LL</sub>', VLL + ' V（f<sub>1</sub> = 60 Hz）']],
+          q: 'LCL フィルタの共振周波数は ' + eq('f<sub>res</sub> = (1/2π) √((L<sub>1</sub>+L<sub>2</sub>) / (L<sub>1</sub> L<sub>2</sub> C<sub>f</sub>))') + ' で与えられる。<br>(a) <b>f<sub>res</sub></b> を求めよ。<br>(b) 共振の<b>次数 f<sub>res</sub>/f<sub>1</sub></b> を求めよ。<br>(c) コンデンサが系統に供給する無効電力 <b>Q<sub>C</sub> = ω<sub>1</sub> C<sub>f</sub> V<sub>LL</sub><sup>2</sup></b>（三相合計）を var で求めよ。',
+          answers: [
+            { key: 'fres', label: '(a) f_res', unit: 'Hz', value: fres },
+            { key: 'order', label: '(b) f_res / f_1', unit: '', value: order },
+            { key: 'Qc', label: '(c) Q_C', unit: 'var', value: Qc },
+          ],
+          steps: [
+            '単位を SI に直す（mH → H、μF → F）。' + eq('(L<sub>1</sub>+L<sub>2</sub>) / (L<sub>1</sub> L<sub>2</sub> C<sub>f</sub>) = ' + fmt((L1 + L2) * 1e-3, 4) + ' / (' + fmt(L1 * 1e-3, 4) + ' × ' + fmt(L2 * 1e-3, 4) + ' × ' + C + '×10<sup>−6</sup>) = ' + inner.toExponential(3) + ' s<sup>−2</sup>') + '。',
+            '(a) ' + eq('f<sub>res</sub> = √(' + inner.toExponential(3) + ') / 2π = ' + fmt(Math.sqrt(inner)) + ' / 6.283 = ' + fmt(fres) + ' Hz') + '。',
+            '(b) ' + eq('f<sub>res</sub> / f<sub>1</sub> = ' + fmt(fres) + ' / 60 = ' + fmt(order)) + '。設計則は 10 f<sub>1</sub> = 600 Hz &lt; f<sub>res</sub> &lt; f<sub>sw</sub>/2 = ' + fmt(fsw / 2, 0) + ' Hz。この設計は' + (okLow && okHigh ? '条件を満たす。' : okLow ? 'f<sub>sw</sub>/2 を超えており、スイッチング高調波を共振で増幅するおそれがある。' : '10 f<sub>1</sub> を下回り、低次高調波や制御帯域と干渉する。'),
+            '(c) ' + eq('Q<sub>C</sub> = 2π × 60 × ' + C + '×10<sup>−6</sup> × ' + VLL + '² = ' + fmt(Qc) + ' var') + '。星形なので 3 × (V<sub>LL</sub>/√3)² ω C = V<sub>LL</sub>² ω C。コンデンサを大きくすると高調波は落ちるが、この進み無効電力が常時流れて力率を崩す。',
+          ],
+          insight: '共振点はフィルタが「効かない」どころか増幅する周波数。f<sub>sw</sub>/2 より下、10 f<sub>1</sub> より上に置き、ダンピング抵抗か制御で共振を抑えるのが定石です。',
+        };
+      },
+    },
+    {
+      id: 'si', title: '合成慣性の必要容量', tags: ['9.2.8', '例題 9-3'],
+      gen(rng) {
+        const S = pick(rng, [1000, 1200, 1500, 2000, 3000]);
+        const Hlow = pick(rng, [1.0, 1.5, 2.0, 2.5]);
+        const Htarget = Hlow + pick(rng, [1.5, 2.0, 2.5, 3.0]);
+        const trip = pick(rng, [100, 150, 200, 250, 300]);
+        const FN = 60;
+        const rocofLow = -trip * FN / (2 * Hlow * S);
+        const rocofT = -trip * FN / (2 * Htarget * S);
+        const Hv = Htarget - Hlow;
+        const Psi = 2 * Hv * S / FN * (-rocofT);
+        return {
+          given: [['系統容量 S<sub>sys</sub>', S + ' MVA'], ['再エネ導入後の慣性定数 H<sub>sys</sub>', Hlow + ' s'], ['戻したい慣性定数', Htarget + ' s'], ['定格周波数 F<sub>N</sub>', FN + ' Hz'], ['電源脱落 ΔP', trip + ' MW']],
+          q: '再エネ導入で H<sub>sys</sub> が下がった系統に、蓄電池の合成慣性で慣性を補う。<br>(a) 現状（H<sub>sys</sub> = ' + Hlow + ' s）での脱落直後の <b>RoCoF</b>（低下は負）を求めよ。<br>(b) 実効的な慣性を ' + Htarget + ' s に戻すために必要な <b>H<sub>virtual</sub></b> を求めよ。<br>(c) そのとき合成慣性が出すべき<b>最大電力 P<sub>SI</sub></b> を求めよ。',
+          answers: [
+            { key: 'rocof', label: '(a) RoCoF', unit: 'Hz/s', value: rocofLow, abs: 0.02 },
+            { key: 'Hv', label: '(b) H_virtual', unit: 's', value: Hv },
+            { key: 'Psi', label: '(c) P_SI', unit: 'MW', value: Psi },
+          ],
+          steps: [
+            '系統全体の動揺方程式 ' + eq('(2 H<sub>sys</sub> S<sub>sys</sub> / F<sub>N</sub>) dF/dt = ΔP') + ' より、(a) ' + eq('RoCoF = ΔP F<sub>N</sub> / (2 H<sub>sys</sub> S<sub>sys</sub>) = −' + trip + ' × 60 / (2 × ' + Hlow + ' × ' + S + ') = ' + fmt(rocofLow) + ' Hz/s') + '。',
+            '(b) 慣性は足し算で効く。' + eq('H<sub>virtual</sub> = ' + Htarget + ' − ' + Hlow + ' = ' + fmt(Hv) + ' s') + '。このとき RoCoF は ' + eq(fmt(rocofT) + ' Hz/s') + ' に緩む。',
+            '(c) 合成慣性の出力は ' + eq('P<sub>SI</sub> = −(2 H<sub>virtual</sub> S<sub>sys</sub> / F<sub>N</sub>) dF/dt = −(2 × ' + fmt(Hv) + ' × ' + S + ' / 60) × (' + fmt(rocofT) + ') = ' + fmt(Psi) + ' MW') + '。脱落量 ' + trip + ' MW の ' + fmt(Psi / trip * 100, 0) + ' % を、周波数が落ち始めた瞬間に出す必要がある。',
+          ],
+          insight: '数百 ms で ' + fmt(Psi, 0) + ' MW を出せるのは蓄電池だけ。太陽光単体は最大出力点にいて上げしろがない。合成慣性は「容量 kWh」より「出力 kW」で決まる用途です。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

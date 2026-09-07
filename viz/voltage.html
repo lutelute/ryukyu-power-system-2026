@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第6回 電圧と無効電力 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第6回 電圧と無効電力 — 電圧は「その場所」で決まり、Q は遠くへ運べない</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch06.html">📖 講義ノート（第6回）</a><a class="e" href="../ex/ch06.html">✍ 演習で確かめる</a></div>
+  <div class="lead">周波数は系統全体で 1 つですが、電圧は母線ごとに違います。この回は<b>受電端電圧の式から相差角 δ を消し</b>、電圧が P と Q にどう応答するか（感度 ρ）を実計算します。さらに、太陽光の逆潮流で電圧が上がる現象と、<b>インバータの力率を変えるだけで連系可能量が伸びる</b>ことを二分探索で確かめます。教科書（加藤・田岡 第6章）準拠。前提は<a href="acpower.html">第3回</a>、次は<a href="swing.html">第7回 安定度</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「電圧が低いなら発電を増やせばよい」は高圧系統では効きません。効くのは無効電力。一方、配電系統では有効電力も効く。この違いを知らないと対策を誤ります。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>高圧では電圧は Q で動く。配電では P も動かす。だから太陽光は Q を吸えば電圧を下げられる。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>変電所の VQC（電圧無効電力制御）、太陽光 PCS の力率 0.95 運転、電圧上昇による連系制約の審査。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>線路 <select id="lineSel"><option value="tx" selected>送電 (X≫R)</option><option value="dx">配電 (R≈X)</option></select></label>
+      <label>負荷 P <input type="range" id="pRange" min="0" max="2.5" step="0.05" value="0.6"> <span id="pVal">0.60</span></label>
+      <label>太陽光 <input type="range" id="pvRange" min="0" max="1.5" step="0.05" value="0.6"> <span id="pvVal">0.60</span></label>
+      <label>亘長 <input type="range" id="lenRange" min="0" max="400" step="10" value="200"> <span id="lenVal">200</span> km</label>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>無効電力は電線を流れるたびに <i>I</i>²<i>X</i> だけ目減りする「運べない通貨」だから、<b>電圧は必ずその場所で稼ぐ</b>しかありません。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>太陽光は無効電力を出していない（力率 1）のだから、電圧を上げることはない。</div>
+    <div class="row"><span class="o">✓</span>配電系統は <i>R</i> ≈ <i>X</i> なので、<b>有効電力の逆潮流だけで電圧が上がります</b>（感度 ρ が 1 に近い）。図の A/B で、Q = 0 でも電圧が 1.05 を超える様子を確かめてください。</div>
+    <div class="row"><span class="x">✗</span>電圧が下がったらコンデンサを入れれば必ず回復する。</div>
+    <div class="row"><span class="o">✓</span>コンデンサの無効電力は <i>V</i>² に比例するので、<b>電圧が下がった一番苦しいときに効きが落ちます</b>。電圧崩壊に近い状態では SVC や同期調相機のような電圧に依存しない供給源が要ります。</div>
+  </div>
+  <details><summary>もっと詳しく：感度の導出・短絡容量・VQC の実装</summary><div class="det">
+    受電端で <i>P</i>+j<i>Q</i> = <i>V<sub>r</sub>I</i>* に <i>I</i> = (<i>V<sub>s</sub></i> − <i>V<sub>r</sub></i>e<sup>−jδ</sup>)/(<i>R</i>+j<i>X</i>) を代入し、実部・虚部を 2 乗して加えると (<i>RP</i>+<i>XQ</i>+<i>V<sub>r</sub></i>²)² + (<i>RQ</i>−<i>XP</i>)² = <i>V<sub>s</sub></i>²<i>V<sub>r</sub></i>²。δ が消えるので <i>V<sub>r</sub></i> は <i>P</i>, <i>Q</i> だけの関数です（教科書 (6.4) 式）。
+    これを偏微分した比 ρ = Δ<i>V<sub>r,P</sub></i>/Δ<i>V<sub>r,Q</sub></i> = (<i>ZP</i>+<i>RC</i>)/(<i>ZQ</i>+<i>XC</i>)、<i>C</i> = <i>V<sub>r</sub></i>²/<i>Z</i> は短絡容量。高圧では <i>X</i>≫<i>R</i> かつ <i>C</i>≫<i>P</i> なので ρ ≈ <i>P</i>/<i>C</i> + <i>R</i>/<i>Z</i> ≪ 1。
+    VQC は一次側・二次側の電圧偏差 (Δ<i>V</i><sub>1</sub>, Δ<i>V</i><sub>2</sub>) の象限で SC 入切・ShR 入切・タップ上下を選び、不感帯で頻繁な動作を防ぎます（教科書 図6.5）。
+    <b>限界：</b>このページの 2 母線モデルは静的です。実際の電圧崩壊は負荷の動特性（誘導電動機の失速・LTC の動作）が絡む動的現象で、PV カーブの鼻先は「静的な限界」の目安です。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+/* ---- モデル ---- */
+const LINES = { tx: { R: 0.01, X: 0.10, name: '送電（R=0.01, X=0.10）' }, dx: { R: 0.10, X: 0.10, name: '配電（R=0.10, X=0.10）' } };
+let LT = 'tx', PL = 0.6, PPV = 0.6, LEN = 200; const VS = 1.0, PF_LOAD = 0.9; const tanL = Math.tan(Math.acos(PF_LOAD)), tan95 = Math.tan(Math.acos(0.95));
+function vr(P, Q, R, X, Vs = VS) { const a = R * P + X * Q, b = R * Q - X * P; const B2 = 2 * a - Vs * Vs, Cc = a * a + b * b; const disc = B2 * B2 - 4 * Cc; if (disc < 0) return null; const u = (-B2 + Math.sqrt(disc)) / 2; return u > 0 ? Math.sqrt(u) : null; }
+function nose(R, X) { let lo = 0, hi = 20; for (let k = 0; k < 60; k++) { const m = (lo + hi) / 2; if (vr(m, m * tanL, R, X) !== null) lo = m; else hi = m; } return lo; }
+function sens(P, Q, R, X) { const h = 1e-4, v0 = vr(P, Q, R, X); if (v0 === null) return null; const vp = vr(P + h, Q, R, X), vq = vr(P, Q + h, R, X); if (vp === null || vq === null) return null; return { dP: (vp - v0) / h, dQ: (vq - v0) / h, v0 }; }
+function rho(P, Q, R, X) { const s = sens(P, Q, R, X); return s ? s.dP / s.dQ : NaN; }
+/* フェランチ（π 型・無負荷）：Vr = Vs / (1 + ZY/2) */
+function ferranti(L) { const r = 0.030 * L, x = 0.35 * L, y = 2 * Math.PI * 60 * 9e-9 * L; const are = 1 - x * y / 2, aim = r * y / 2; const m = Math.hypot(are, aim); return 1 / m; }
+/* 太陽光：逆潮流 P<0 */
+/* 逆潮流は P<0。進み力率（Q 吸収）は消費規約では Q>0 */
+function vrPV(Ppv, pf, R, X) { const Q = pf >= 1 ? 0 : +Ppv * Math.tan(Math.acos(pf)); return vr(-Ppv, Q, R, X); }
+/* 連系可能量：0 から増やして最初に 1.05 を超える（または解が消える）手前の P */
+function hosting(pf, R, X) { for (let p = 0; p <= 5; p += .002) { const v = vrPV(p, pf, R, X); if (v === null || v > 1.05) return Math.max(0, p - .002); } return 5; }
+const f2 = x => x.toFixed(2), f3 = x => x.toFixed(3), f4 = x => x.toFixed(4);
+const cur = () => LINES[LT];
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 感度', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ Q の供給', c: 'var(--loss)', start: 6 }, { t: 'Ⅳ 太陽光・まとめ', c: 'var(--accent)', start: 11 } ];
+const SLIDES = [
+  { legend: '同じ系統でも母線ごとに電圧が違う（第1回の再掲）。赤=範囲外',
+    html() { return '<h3>問題：電圧はなぜ「場所ごと」に違うのか</h3><div class="eq curr">電圧 0.95〜1.05 p.u. を、<b>すべての母線で</b>守る<span class="read">読み：周波数と違い、電圧は母線ごとに値が違う。1 か所でも範囲を外れれば機器の損傷や停電につながる。</span></div><div class="desc">第1回で「電圧は局所量、周波数は共通量」と述べました。この回はその理由を式で示します。答えを先に言うと、<b>電圧を決める無効電力 Q は遠くへ運べない</b>からです。まず 2 母線で、受電端電圧が何で決まるかを導きます。</div>'; },
+    draw() { drawLocal(); caption('電圧はバラつく → 場所ごとの対策が要る'); } },
+  { legend: '2 母線：無限大母線 Vs から Z=R+jX を介して負荷 P+jQ へ。●=いまの負荷での Vr',
+    mini: () => { const { R, X } = cur(); const v = vr(PL, PL * tanL, R, X); return '<div>P <b>' + f2(PL) + '</b></div><div>V<sub>r</sub> <b>' + (v === null ? '解なし' : f4(v)) + '</b></div>'; },
+    html() { const { R, X } = cur(); const v = vr(PL, PL * tanL, R, X); return '<h3>受電端電圧の式：相差角 δ が消える</h3><div class="eq curr">(<i>RP</i> + <i>XQ</i> + <i>V<sub>r</sub></i>²)² + (<i>RQ</i> − <i>XP</i>)² = <i>V<sub>s</sub></i>²<i>V<sub>r</sub></i>²　⇒　<i>V<sub>r</sub></i> = <b class="res">' + (v === null ? '解なし' : f4(v)) + '</b><span class="read">読み：実部と虚部の式を 2 乗して足すと cos²+sin²=1 で δ が消える。受電端電圧は P, Q だけで決まる（教科書 (6.4) 式）。</span></div><div class="desc">' + cur().name + '、負荷 P = ' + f2(PL) + '（力率 0.9 遅れ、Q = ' + f2(PL * tanL) + '）で受電端電圧は <b>' + (v === null ? '解が存在しません' : f4(v) + ' p.u.') + '</b>。<i>V<sub>r</sub></i>² についての 2 次方程式なので<b>解は 2 つ、または存在しない</b>ことがあります。負荷スライダを上げていくと何が起きるか、次のスライドで見ます。</div>'; },
+    draw() { drawTwoBus(); caption('V_r は P と Q だけの関数'); } },
+
+  { legend: 'PV カーブ：負荷 P を増やすと V_r が下がり、鼻先（●）で解が消える',
+    mini: () => { const { R, X } = cur(); return '<div>鼻先 P<sub>max</sub> <b>' + f3(nose(R, X)) + '</b></div><div>いま P <b>' + f2(PL) + '</b></div>'; },
+    html() { const { R, X } = cur(); const pn = nose(R, X); return '<h3>PV カーブ：負荷が鼻先を越えると解が消える（電圧崩壊）</h3><div class="eq curr">判別式 (2<i>a</i> − <i>V<sub>s</sub></i>²)² − 4(<i>a</i>² + <i>b</i>²) = 0 となる負荷 = 鼻先 <i>P</i><sub>max</sub> = <b class="res">' + f3(pn) + '</b>（力率 0.9）<span class="read">読み：2 次方程式の判別式が負になると実数解がなくなる。それが「その負荷を支えられる電圧が存在しない」＝電圧崩壊。</span></div><div class="desc">負荷スライダを ' + f3(pn) + ' より上げると「解なし」になります。鼻先の手前でも電圧は急降下しており、<b>0.95 を割るのは P ≈ ' + (() => { let lo = 0, hi = pn; for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; const v = vr(m, m * tanL, R, X); if (v !== null && v >= .95) lo = m; else hi = m; } return f3(lo); })() + '</b> です。第6回の Python 実習（IEEE 14 母線）で見た「負荷 2.32 倍で 0.95 割れ、4.0 倍で不収束」と同じ現象です。</div>'; },
+    draw() { drawPV(); caption('鼻先を越えると「支えられる電圧」が存在しない'); } },
+  { legend: '感度 ∂V/∂P と ∂V/∂Q（数値微分）。どちらも負',
+    mini: () => { const { R, X } = cur(); const s = sens(PL, PL * tanL, R, X); return s ? '<div>∂V/∂P <b>' + f3(s.dP) + '</b></div><div>∂V/∂Q <b>' + f3(s.dQ) + '</b></div>' : '<div>解なし</div>'; },
+    html() { const { R, X } = cur(); const s = sens(PL, PL * tanL, R, X); return '<h3>感度：P を増やしても Q を増やしても電圧は下がる</h3><div class="eq curr">' + (s ? '∂<i>V<sub>r</sub></i>/∂<i>P</i> = <b class="res">' + f3(s.dP) + '</b>,　∂<i>V<sub>r</sub></i>/∂<i>Q</i> = <b class="res">' + f3(s.dQ) + '</b>　（' + cur().name + '）' : '解なし') + '<span class="read">読み：負荷を 1 p.u. 増やしたときの電圧の変化。負なので、どちらの負荷も電圧を下げる。ただし効き方の大きさが違う。</span></div><div class="desc">教科書 (6.6)(6.7) 式のとおり、<i>V<sub>s</sub></i> ≈ <i>V<sub>r</sub></i> ≈ 1 の通常運転では両方とも負です。問題は<b>どちらがどれだけ効くか</b>。' + (s ? 'いまの設定では Q のほうが P より <b>' + (s.dQ / s.dP).toFixed(1) + ' 倍</b>効いています。' : '') + '次のスライドでこの比を式で見ます。</div>'; },
+    draw() { drawSens(); caption('Q の傾きが急 = Q のほうが電圧に効く'); } },
+  { legend: '感度比 ρ = ΔV_P / ΔV_Q。送電系統（X≫R）では ρ≪1',
+    mini: () => { const { R, X } = cur(); return '<div>ρ <b>' + f3(rho(PL, PL * tanL, R, X)) + '</b></div>'; },
+    html() { const { R, X } = cur(); const Z = Math.hypot(R, X), Q = PL * tanL; const v = vr(PL, Q, R, X) || 1; const C = v * v / Z; const rhoF = (Z * PL + R * C) / (Z * Q + X * C); return '<h3>ρ ≪ 1：高圧系統の電圧は「無効電力で動かす」</h3><div class="eq curr">ρ = <span class="frac"><span><i>ZP</i> + <i>RC</i></span><span><i>ZQ</i> + <i>XC</i></span></span> ≈ <span class="frac"><span><i>P</i></span><span><i>C</i></span></span> + <span class="frac"><span><i>R</i></span><span><i>Z</i></span></span> = <b class="res">' + f3(rhoF) + '</b>　（<i>C</i> = <i>V<sub>r</sub></i>²/<i>Z</i> = ' + f2(C) + ' 短絡容量、数値微分の比 ' + f3(rho(PL, Q, R, X)) + '）<span class="read">読み：P が効く度合いを Q が効く度合いで割った比。短絡容量 C が P より大きく、R が X より小さいので、送電系統では 1 よりずっと小さい。</span></div><div class="desc">教科書 (6.8)(6.9) 式です。ρ = ' + f3(rhoF) + ' は「<b>P を 1 動かす効果は、Q を 1 動かす効果の ' + (rhoF * 100).toFixed(0) + '% しかない</b>」という意味。だから変電所の電圧調整はコンデンサやリアクトル（無効電力）で行い、発電量を動かしても電圧はほとんど変わりません。</div>'; },
+    draw() { drawRhoBars(false); caption('ρ = ' + f3(rho(PL, PL * tanL, cur().R, cur().X)) + '：高圧では Q が主役'); } },
+  { legend: 'A/B：送電（X≫R）vs 配電（R≈X）。配電では ρ が 1 に近づき P も効く',
+    mini: () => '<div>送電 ρ <b>' + f3(rho(PL, PL * tanL, LINES.tx.R, LINES.tx.X)) + '</b></div><div>配電 ρ <b>' + f3(rho(PL, PL * tanL, LINES.dx.R, LINES.dx.X)) + '</b></div>',
+    html() { const rt = rho(PL, PL * tanL, LINES.tx.R, LINES.tx.X), rd = rho(PL, PL * tanL, LINES.dx.R, LINES.dx.X); return '<h3>A/B：配電系統では有効電力も電圧を動かす</h3><div class="eq curr">送電（X/R=10）：ρ = <b class="res">' + f3(rt) + '</b>　／　配電（X/R=1）：ρ = <b class="res">' + f3(rd) + '</b>　→ <b class="res">' + (rd / rt).toFixed(1) + ' 倍</b><span class="read">読み：同じ負荷でも、R が X と同じくらいある配電系統では P の効きが Q に迫る。教科書 6.2 節末尾の注意点。</span></div><div class="desc">右下のセレクタで線路を切り替えてください。<b>配電系統（6.6 kV）では R ≈ X なので ρ ≈ ' + f2(rd) + '</b>、つまり有効電力も無視できません。これが、力率 1（Q = 0）で運転する太陽光が<b>有効電力の逆潮流だけで配電線の電圧を上げる</b>理由で、Ⅳ 章で実演します。</div>'; },
+    draw() { drawRhoBars(true); caption('R≈X → P も電圧を動かす → 太陽光の電圧上昇'); } },
+
+  { legend: '線路を流れる電流 I が生む損失：無効電力損失 I²X（紫）≫ 有効電力損失 I²R（橙）',
+    html() { const { R, X } = cur(); const I = 0.6; return '<h3>なぜ Q は遠くへ運べないのか</h3><div class="eq curr">無効電力損失 <i>I</i>²<i>X</i> = ' + f3(I * I * X) + '　≫　有効電力損失 <i>I</i>²<i>R</i> = ' + f3(I * I * R) + '　（' + cur().name + ', <i>I</i> = ' + I + '）<span class="read">読み：電流が流れると、線路のリアクタンスで X の分だけ無効電力が「消費」される。高圧では X≫R なので、Q の目減りは P の目減りよりずっと大きい。</span></div><div class="desc">送電端から Q を送っても、途中の線路が <i>I</i>²<i>X</i> を食ってしまい、受電端には少ししか届きません。もっと送ろうと電流を増やせば <i>I</i>²<i>R</i> の有効損失も増える悪循環です。<b>だから無効電力は「量」より「場所」</b>で、電圧を直したい母線のすぐそばで供給するのが定石です（教科書 6.3 節）。</div>'; },
+    draw() { drawQloss(); caption('Q は運ぶ途中で消える → その場で作る'); } },
+  { legend: 'フェランチ効果：無負荷の長い線路で受電端電圧が送電端より高くなる（亘長スライダ）',
+    mini: () => '<div>' + LEN + ' km → V<sub>r</sub>/V<sub>s</sub> <b>' + f4(ferranti(LEN)) + '</b></div>',
+    html() { return '<h3>フェランチ効果：軽負荷の長距離線路は「電圧が上がる」</h3><div class="eq curr">無負荷：<i>V<sub>r</sub></i>/<i>V<sub>s</sub></i> = 1 / |1 + <i>ZY</i>/2|　→　' + LEN + ' km で <b class="res">' + f4(ferranti(LEN)) + '</b>（' + ((ferranti(LEN) - 1) * 100).toFixed(1) + '% 上昇）<span class="read">読み：線路の静電容量 Y が進み電流を流し、それがリアクタンス Z を通ると受電端が持ち上がる。長いほど ZY が大きく効果が増す。</span></div><div class="desc">教科書 例題6.1 は j0.2 の線路・対地 j0.1 で 2% 上昇でした。亘長スライダを動かすと、275 kV 架空線（0.35 Ω/km, 9 nF/km）で 200 km なら約 ' + ((ferranti(200) - 1) * 100).toFixed(1) + '%、400 km なら約 ' + ((ferranti(400) - 1) * 100).toFixed(1) + '% 上がります。「送るほど電圧は下がる」は重負荷のときだけで、<b>夜間の軽負荷では逆に上がる</b>。分路リアクトルで吸収します。</div>'; },
+    draw() { drawFerranti(); caption('線路自身の C が電圧を持ち上げる'); } },
+  { legend: '無効電力の供給源 5 つ（教科書 6.3 節）。(2)〜(4) が調相設備',
+    html() { return '<h3>無効電力の供給源：5 つの選択肢</h3><div class="eq curr">①発電機（AVR）　②コンデンサ SC / リアクトル ShR　③同期調相機　④SVC・STATCOM　⑤送電線の C（制御不可）<span class="read">読み：②〜④を調相設備と呼ぶ。連続か段階か、速いか遅いか、電圧に依存するかで使い分ける。</span></div><div class="desc">発電機は励磁を上げれば Q を出せますが限界があります（第5回の Q 限界）。<b>最も広く使われるのは安価な SC/ShR</b>で、変電所でスイッチ入切します。同期調相機は高価ですが連続制御でき、第7回で見た慣性も供給します。SVC・STATCOM は半導体でミリ秒応答、第9回のインバータ技術そのものです。</div>'; },
+    draw() { drawSources(); caption('速さ・連続性・電圧依存で選ぶ'); } },
+  { legend: 'コンデンサの出力 Q = B·V²。電圧が下がると 2 乗で効きが落ちる',
+    html() { return '<h3>コンデンサの弱点：一番苦しいときに効かない</h3><div class="eq curr"><i>Q</i><sub>SC</sub> = |<i>Y</i>| |<i>V</i>|²　→　V = 0.90 で出力は <b class="res">' + f2(.81) + ' 倍</b>、V = 0.80 で <b class="res">' + f2(.64) + ' 倍</b><span class="read">読み：コンデンサの無効電力は電圧の 2 乗に比例する。電圧が 10% 下がると出力は 19% 減る。</span></div><div class="desc">電圧が下がって無効電力が最も欲しいとき、コンデンサの供給力はちょうど落ちています。<b>電圧崩壊に近い状態でコンデンサだけに頼るのは危険</b>で、電圧によらず Q を出せる SVC・STATCOM・同期調相機が必要になります。安価で損失も少ないので普段は主役ですが、限界を知っておくことが要ります。</div>'; },
+    draw() { drawSCweak(); caption('V² 依存：下がるほど効かない'); } },
+  { legend: 'VQC の 4 象限（教科書 図6.5）：一次側・二次側の電圧偏差で操作を選ぶ',
+    html() { return '<h3>VQC：タップと調相設備を自動で使い分ける</h3><div class="eq curr">(Δ<i>V</i><sub>1</sub>, Δ<i>V</i><sub>2</sub>) が　第1象限 → SC 切 / ShR 入　第3象限 → SC 入 / ShR 切　第2 → タップ上げ　第4 → タップ下げ<span class="read">読み：両方高ければ無効電力が過剰、両方低ければ不足。片方だけずれていれば変圧比の問題なのでタップで直す。中央の不感帯では何もしない。</span></div><div class="desc">無効電力の入切（調相設備）と変圧比の変更（LTC タップ）は役割が違います。<b>両方の電圧が同じ向きにずれたら Q、逆向きならタップ</b>。不感帯を設けるのは、わずかな変動でスイッチやタップを頻繁に動かすと機器の寿命を縮めるからです。第9回では、この判断を太陽光インバータ自身が分散して行う Volt-Var 制御を見ます。</div>'; },
+    draw() { drawVQC(); caption('同じ向き → Q、逆向き → タップ、中央 → 何もしない'); } },
+
+  { legend: 'A/B：太陽光の逆潮流（配電線）。力率 1（赤）vs 0.95 進み（緑）で受電端電圧が変わる',
+    enter() { LT = 'dx'; document.getElementById('lineSel').value = 'dx'; },
+    mini: () => { const { R, X } = cur(); const v1 = vrPV(PPV, 1.0, R, X), v2 = vrPV(PPV, .95, R, X); return '<div>力率1 <b>' + (v1 === null ? '—' : f4(v1)) + '</b></div><div>0.95進み <b>' + (v2 === null ? '—' : f4(v2)) + '</b></div>'; },
+    html() { const { R, X } = cur(); const v1 = vrPV(PPV, 1.0, R, X), v2 = vrPV(PPV, .95, R, X); return '<h3>A/B：太陽光 ' + f2(PPV) + ' p.u. の逆潮流 — 力率 1 なら ' + (v1 === null ? '—' : f4(v1)) + '、0.95 進みなら ' + (v2 === null ? '—' : f4(v2)) + '</h3><div class="eq curr">力率 1：<i>P</i> = −' + f2(PPV) + ', <i>Q</i> = 0 → <i>V<sub>r</sub></i> = <b class="res">' + (v1 === null ? '—' : f4(v1)) + '</b>　／　0.95 進み：<i>Q</i> = −' + f3(PPV * tan95) + ' → <i>V<sub>r</sub></i> = <b class="res">' + (v2 === null ? '—' : f4(v2)) + '</b><span class="read">読み：逆潮流は P を負にして同じ式に入れる。Q = 0 でも R·P の項で電圧が上がる。インバータが Q を吸収（負）すれば X·Q の項が打ち消す。</span></div><div class="desc">' + cur().name + ' に太陽光を ' + f2(PPV) + ' p.u. つないだとき、<b>力率 1 でも電圧が ' + (v1 === null ? '—' : ((v1 - 1) * 100).toFixed(1)) + '% 上がります</b>（ρ が大きい配電系統だから）。インバータの力率を 0.95 進みにして無効電力を吸わせるだけで、上昇は ' + (v2 === null ? '—' : ((v2 - 1) * 100).toFixed(1)) + '% に抑えられます。設備を 1 つも増やさない対策です。</div>'; },
+    draw() { drawPVinj(); caption('Q を吸わせる → 逆潮流の電圧上昇を打ち消す'); } },
+  { legend: '連系可能量：V_r ≤ 1.05 を守れる最大の太陽光（配電線・走査で実計算）',
+    enter() { LT = 'dx'; document.getElementById('lineSel').value = 'dx'; },
+    mini: () => { const { R, X } = cur(); return '<div>力率1 <b>' + f3(hosting(1.0, R, X)) + '</b></div><div>0.95進み <b>' + f3(hosting(.95, R, X)) + '</b></div>'; },
+    html() { const { R, X } = cur(); const h1 = hosting(1.0, R, X), h2 = hosting(.95, R, X); return '<h3>連系可能量：力率を変えるだけで ' + (h2 / h1).toFixed(2) + ' 倍</h3><div class="eq curr">max <i>P</i><sub>PV</sub> s.t. <i>V<sub>r</sub></i> ≤ 1.05　→　力率 1：<b class="res">' + f3(h1) + '</b>　／　0.95 進み：<b class="res">' + f3(h2) + '</b>（' + cur().name + '）<span class="read">読み：電圧上限 1.05 を超えない最大の太陽光容量を二分探索で求めた。これが電圧制約による連系可能量。</span></div><div class="desc">' + cur().name + 'では、インバータに無効電力を吸収させるだけで<b>受け入れられる太陽光が ' + (h2 / h1).toFixed(2) + ' 倍</b>になります。第6回の Python 実習（IEEE 14 母線）でも同じ結論を確かめます。増強工事の前に、まず制御で稼ぐ。第9回でこの制御（Volt-Var）の中身を扱います。</div>'; },
+    draw() { drawHosting(); caption('増強の前に制御。力率 0.95 で連系量が伸びる'); } },
+  { legend: '第6回の要点：電圧は局所 → Q は運べない → その場で供給 → 配電では P も効く',
+    html() { return '<h3>まとめ：電圧は「その場所」で稼ぐ</h3><div class="eq curr">高圧：ρ ≪ 1（Q で制御）　／　配電：ρ ≈ 1（P も効く）　／　Q は <i>I</i>²<i>X</i> で目減りして運べない<span class="read">読み：この 3 行が、変電所の VQC・太陽光の力率制御・連系可能量のすべてを説明する。</span></div><div class="desc">受電端電圧の式から δ が消え、電圧は P と Q だけの関数になりました。感度比 ρ が「どちらで電圧を動かすか」を決め、<i>I</i>²<i>X</i> の損失が「どこで供給するか」を決めます。次回は電圧ではなく<b>相差角 δ の時間変化</b>、つまり事故直後の数秒間に発電機が同期を保てるか（第7回 安定度）へ進みます。</div>'; },
+    draw() { drawSummary(); caption('局所 → 運べない → その場で → 配電は P も'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawLocal() { axes(40, 50, 330, 300, '母線', 'V [p.u.]'); const vs = [1.02, 0.99, 1.04, 0.97, 1.06, 1.01, 0.94, 1.00]; vs.forEach((v, i) => { const x = 52 + i * 35, h = (v - .9) / .2 * 250; rect(x, 300 - h, 24, h, getCSS(v > 1.05 || v < .95 ? '--neg' : '--accent'), .8); txt(v.toFixed(2), x + 12, 300 - h - 6, { align: 'center', size: 8.5, mono: true }); }); [1.05, .95].forEach(v => { const y = 300 - (v - .9) / .2 * 250; line([[40, y], [330, y]], getCSS('--neg'), 1, [4, 3]); txt(v, 44, y - 4, { size: 9, mono: true, color: getCSS('--neg') }); }); txt('1 か所でも外れれば NG', CW / 2, 340, { align: 'center', size: 11 }); }
+function drawTwoBus() { const { R, X } = cur(); const c = getCSS('--text'); const y = 170; line([[30, y - 30], [30, y + 30]], c, 4); line([[30, y], [110, y]], c, 2); rect(110, y - 9, 50, 18, getCSS('--panel')); line([[110, y - 9], [160, y - 9], [160, y + 9], [110, y + 9], [110, y - 9]], c, 1.5); txt('R=' + R, 135, y + 4, { align: 'center', size: 9.5, mono: true }); line([[160, y], [180, y]], c, 2); ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); for (let k = 0; k < 4; k++) ctx.arc(186 + k * 12, y, 6, Math.PI, 0, false); ctx.stroke(); ctx.restore(); txt('X=' + X, 204, y - 12, { align: 'center', size: 9.5, mono: true }); line([[228, y], [300, y]], c, 2); dot(300, y, 5, c); ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(300, y); ctx.lineTo(300, y + 30); ctx.moveTo(288, y + 30); ctx.lineTo(312, y + 30); ctx.lineTo(300, y + 48); ctx.closePath(); ctx.stroke(); ctx.restore(); txt('Vs = 1.0', 30, y - 42, { align: 'center', size: 10.5, mono: true, bold: true }); txt('無限大母線', 30, y + 50, { align: 'center', size: 9, color: getCSS('--muted') }); const v = vr(PL, PL * tanL, R, X); txt('Vr = ' + (v === null ? '解なし' : f4(v)), 300, y - 42, { align: 'center', size: 10.5, mono: true, bold: true, color: getCSS(v === null ? '--neg' : '--accent') }); txt('P=' + f2(PL) + ' Q=' + f2(PL * tanL), 300, y + 68, { align: 'center', size: 9.5, mono: true, color: getCSS('--warm') }); const L = 40, T = 260, Rr = 330, B = 340; axes(L, T, Rr, B, 'P', 'Vr'); const pn = nose(R, X); const xOf = p => L + p / (pn * 1.1) * (Rr - L), yOf = vv => B - (vv - .3) / .8 * (B - T); const pts = []; for (let p = 0; p <= pn; p += pn / 150) { const vv = vr(p, p * tanL, R, X); if (vv !== null) pts.push([xOf(p), yOf(vv)]); } line(pts, getCSS('--upd'), 2); if (v !== null) dot(xOf(PL), yOf(v), 6, getCSS('--accent')); }
+function drawPV() { const { R, X } = cur(); const L = 50, T = 40, Rr = 335, B = 300; axes(L, T, Rr, B, 'P [p.u.]', 'Vr'); const pn = nose(R, X); const xOf = p => L + p / (pn * 1.15) * (Rr - L), yOf = v => B - v / 1.1 * (B - T); const up = [], lo = []; for (let p = 0; p <= pn; p += pn / 200) { const a = R * p + X * p * tanL, b = R * p * tanL - X * p, B2 = 2 * a - 1, Cc = a * a + b * b, disc = B2 * B2 - 4 * Cc; if (disc < 0) continue; up.push([xOf(p), yOf(Math.sqrt((-B2 + Math.sqrt(disc)) / 2))]); const u2 = (-B2 - Math.sqrt(disc)) / 2; if (u2 > 0) lo.push([xOf(p), yOf(Math.sqrt(u2))]); } line(up, getCSS('--upd'), 2.5); line(lo, getCSS('--faint'), 1.5, [4, 3]); line([[L, yOf(.95)], [Rr, yOf(.95)]], getCSS('--neg'), 1, [4, 3]); txt('0.95', L + 3, yOf(.95) - 4, { size: 9, mono: true, color: getCSS('--neg') }); const vN = vr(pn, pn * tanL, R, X); if (vN) { dot(xOf(pn), yOf(vN), 7, getCSS('--neg')); txt('鼻先 P=' + f3(pn), xOf(pn) - 8, yOf(vN) - 12, { align: 'right', size: 10.5, bold: true, color: getCSS('--neg') }); } const v = vr(PL, PL * tanL, R, X); if (v !== null) { dot(xOf(PL), yOf(v), 6, getCSS('--accent')); txt('P=' + f2(PL) + ' → ' + f4(v), xOf(PL) + 8, yOf(v) + 16, { size: 10, mono: true, color: getCSS('--accent'), bold: true }); } else txt('P=' + f2(PL) + '：解なし', CW / 2, 150, { align: 'center', size: 12, bold: true, color: getCSS('--neg') }); [0, .25, .5, .75, 1].forEach(f => txt(f3(pn * 1.15 * f).replace(/\.?0+$/, ''), xOf(pn * 1.15 * f), B + 14, { align: 'center', size: 9, mono: true })); [.25, .5, .75, 1].forEach(vv => txt(vv, L - 4, yOf(vv) + 4, { align: 'right', size: 9, mono: true })); txt('上の枝=通常運転 / 点線=下の不安定解', L, 335, { size: 9.5, color: getCSS('--muted') }); }
+function drawSens() { const { R, X } = cur(); const Q0 = PL * tanL; const L = 50, T = 40, Rr = 335, B = 300; axes(L, T, Rr, B, 'ΔP または ΔQ', 'Vr'); const xOf = d => L + (d + .3) / .6 * (Rr - L), yOf = v => B - (v - .7) / .4 * (B - T); const pp = [], qq = []; for (let d = -.3; d <= .3; d += .01) { const a = vr(PL + d, Q0, R, X), b = vr(PL, Q0 + d, R, X); if (a !== null) pp.push([xOf(d), yOf(a)]); if (b !== null) qq.push([xOf(d), yOf(b)]); } line(pp, getCSS('--accent'), 2.5); line(qq, getCSS('--upd'), 2.5); const v0 = vr(PL, Q0, R, X); if (v0 !== null) dot(xOf(0), yOf(v0), 6, getCSS('--text')); txt('P を動かす', xOf(.2), (pp.length ? pp[pp.length - 1][1] : 100) - 10, { align: 'center', size: 10.5, color: getCSS('--accent'), bold: true }); txt('Q を動かす', xOf(.22), (qq.length ? qq[qq.length - 1][1] : 200) + 18, { align: 'center', size: 10.5, color: getCSS('--upd'), bold: true }); [-.3, -.15, 0, .15, .3].forEach(d => txt(d, xOf(d), B + 14, { align: 'center', size: 9, mono: true })); [.7, .8, .9, 1.0, 1.1].forEach(v => txt(v.toFixed(1), L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); }
+function drawRhoBars(both) { const L = 90, T = 60, Rr = 335, B = 300; axes(L, T, Rr, B, '', 'ρ = ΔV_P / ΔV_Q'); const items = both ? [['送電 X/R=10', rho(PL, PL * tanL, LINES.tx.R, LINES.tx.X), '--upd'], ['配電 X/R=1', rho(PL, PL * tanL, LINES.dx.R, LINES.dx.X), '--neg']] : [[cur().name.slice(0, 2), rho(PL, PL * tanL, cur().R, cur().X), '--upd']]; const yOf = r => B - Math.min(r, 1.2) / 1.2 * (B - T); items.forEach(([n, r, c], i) => { const x = L + 30 + i * 120; rect(x, yOf(r), 70, B - yOf(r), getCSS(c), .85); txt(n, x + 35, B + 16, { align: 'center', size: 10.5 }); txt(f3(r), x + 35, yOf(r) - 6, { align: 'center', size: 11, mono: true, bold: true }); }); line([[L, yOf(1)], [Rr, yOf(1)]], getCSS('--faint'), 1, [4, 3]); txt('ρ=1（P と Q が同等）', Rr, yOf(1) - 5, { align: 'right', size: 9.5, color: getCSS('--muted') }); [0, .5, 1].forEach(r => txt(r, L - 4, yOf(r) + 4, { align: 'right', size: 9, mono: true })); txt('負荷 P=' + f2(PL) + ', 力率 0.9', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawQloss() { const { R, X } = cur(); const I = 0.6; const L = 90, T = 60, Rr = 335, B = 280; axes(L, T, Rr, B, '', '損失 [p.u.]'); const m = Math.max(I * I * X, I * I * R) * 1.3; const yOf = v => B - v / m * (B - T); [['I²R 有効損失', I * I * R, '--warm'], ['I²X 無効損失', I * I * X, '--upd']].forEach(([n, v, c], i) => { const x = L + 30 + i * 120; rect(x, yOf(v), 70, B - yOf(v), getCSS(c), .85); txt(n, x + 35, B + 16, { align: 'center', size: 10 }); txt(f4(v), x + 35, yOf(v) - 6, { align: 'center', size: 10.5, mono: true, bold: true }); }); txt(cur().name + '  I=' + I, CW / 2, 320, { align: 'center', size: 10, color: getCSS('--muted') }); txt('比 X/R = ' + (X / R).toFixed(0) + ' → Q は ' + (X / R).toFixed(0) + ' 倍速く消える', CW / 2, 345, { align: 'center', size: 10.5, bold: true }); }
+function drawFerranti() { const L = 50, T = 40, Rr = 335, B = 300; axes(L, T, Rr, B, '亘長 [km]', 'Vr/Vs'); const xOf = l => L + l / 400 * (Rr - L), yOf = v => B - (v - .98) / .14 * (B - T); const pts = []; for (let l = 0; l <= 400; l += 5) pts.push([xOf(l), yOf(ferranti(l))]); line(pts, getCSS('--upd'), 2.5); line([[L, yOf(1)], [Rr, yOf(1)]], getCSS('--faint'), 1, [4, 3]); line([[L, yOf(1.05)], [Rr, yOf(1.05)]], getCSS('--neg'), 1, [4, 3]); txt('1.05', L + 3, yOf(1.05) - 4, { size: 9, mono: true, color: getCSS('--neg') }); dot(xOf(LEN), yOf(ferranti(LEN)), 7, getCSS('--accent')); txt(LEN + ' km → ' + f4(ferranti(LEN)), xOf(LEN) + (LEN > 250 ? -10 : 10), yOf(ferranti(LEN)) - 12, { align: LEN > 250 ? 'right' : 'left', size: 10.5, bold: true, color: getCSS('--accent') }); [0, 100, 200, 300, 400].forEach(l => txt(l, xOf(l), B + 14, { align: 'center', size: 9, mono: true })); [1.0, 1.04, 1.08, 1.12].forEach(v => txt(v.toFixed(2), L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); txt('275 kV 架空線・無負荷（0.35 Ω/km, 9 nF/km）', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawSources() { const rows = [['① 発電機 (AVR)', '連続・速', '限界あり', '--warm'], ['② SC / ShR', '段階・入切', '安価・V²依存', '--accent'], ['③ 同期調相機', '連続・速', '高価・慣性も', '--upd'], ['④ SVC/STATCOM', '連続・超速', '半導体', '--upd'], ['⑤ 送電線の C', '制御不可', 'フェランチ', '--faint']]; txt('供給源', 30, 55, { size: 10, color: getCSS('--muted') }); txt('制御性', 170, 55, { size: 10, color: getCSS('--muted') }); txt('特徴', 260, 55, { size: 10, color: getCSS('--muted') }); rows.forEach(([a, b, c, col], i) => { const y = 85 + i * 50; rect(20, y - 20, 325, 40, getCSS(col), i >= 1 && i <= 3 ? .18 : .06); txt(a, 30, y + 4, { size: 10.5, bold: true }); txt(b, 170, y + 4, { size: 9.5 }); txt(c, 260, y + 4, { size: 9.5, color: getCSS('--muted') }); }); txt('②〜④ = 調相設備', CW / 2, 340, { align: 'center', size: 11, bold: true, color: getCSS('--upd') }); }
+function drawSCweak() { const L = 50, T = 40, Rr = 335, B = 300; axes(L, T, Rr, B, 'V [p.u.]', 'Q_SC / Q_定格'); const xOf = v => L + (v - .7) / .4 * (Rr - L), yOf = q => B - q / 1.25 * (B - T); const pts = []; for (let v = .7; v <= 1.1; v += .01) pts.push([xOf(v), yOf(v * v)]); line(pts, getCSS('--upd'), 2.5); line([[L, yOf(1)], [Rr, yOf(1)]], getCSS('--faint'), 1, [4, 3]); [[.9, '--warm'], [.8, '--neg']].forEach(([v, c]) => { dot(xOf(v), yOf(v * v), 6, getCSS(c)); txt('V=' + v + ' → ' + f2(v * v) + '倍', xOf(v) + 8, yOf(v * v) - 8, { size: 10, mono: true, color: getCSS(c), bold: true }); }); [.7, .8, .9, 1.0, 1.1].forEach(v => txt(v.toFixed(1), xOf(v), B + 14, { align: 'center', size: 9, mono: true })); [0, .5, 1].forEach(q => txt(q, L - 4, yOf(q) + 4, { align: 'right', size: 9, mono: true })); rect(L, T, xOf(.9) - L, B - T, getCSS('--neg'), .08); txt('無効電力が最も欲しい領域', xOf(.78), T + 14, { align: 'center', size: 9.5, color: getCSS('--neg') }); }
+function drawVQC() { const cx = 180, cy = 175, s = 120; rect(cx - s, cy - s, s, s, getCSS('--upd'), .12); rect(cx, cy - s, s, s, getCSS('--neg'), .12); rect(cx - s, cy, s, s, getCSS('--accent'), .12); rect(cx, cy, s, s, getCSS('--warm'), .12); line([[cx - s, cy], [cx + s, cy]], getCSS('--text'), 1.5); line([[cx, cy - s], [cx, cy + s]], getCSS('--text'), 1.5); rect(cx - 25, cy - 25, 50, 50, getCSS('--text'), .18); txt('不感帯', cx, cy + 4, { align: 'center', size: 10, bold: true }); txt('SC 切 / ShR 入', cx + s / 2, cy - s / 2, { align: 'center', size: 10, bold: true, color: getCSS('--neg') }); txt('（Q 過剰）', cx + s / 2, cy - s / 2 + 16, { align: 'center', size: 9, color: getCSS('--muted') }); txt('SC 入 / ShR 切', cx - s / 2, cy + s / 2, { align: 'center', size: 10, bold: true, color: getCSS('--accent') }); txt('（Q 不足）', cx - s / 2, cy + s / 2 + 16, { align: 'center', size: 9, color: getCSS('--muted') }); txt('タップ上げ', cx - s / 2, cy - s / 2, { align: 'center', size: 10, bold: true, color: getCSS('--upd') }); txt('タップ下げ', cx + s / 2, cy + s / 2, { align: 'center', size: 10, bold: true, color: getCSS('--warm') }); txt('ΔV₁', cx + s + 4, cy + 4, { size: 10, mono: true }); txt('ΔV₂', cx + 4, cy - s - 6, { size: 10, mono: true }); txt('教科書 図6.5', CW / 2, 335, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawPVinj() { const { R, X } = cur(); const L = 50, T = 40, Rr = 335, B = 300; axes(L, T, Rr, B, '太陽光 P_pv [p.u.]', 'Vr'); const xOf = p => L + p / 1.5 * (Rr - L), yOf = v => B - (v - .95) / .25 * (B - T); const p1 = [], p2 = []; for (let p = 0; p <= 1.5; p += .02) { const a = vrPV(p, 1.0, R, X), b = vrPV(p, .95, R, X); if (a !== null) p1.push([xOf(p), yOf(a)]); if (b !== null) p2.push([xOf(p), yOf(b)]); } line(p1, getCSS('--neg'), 2.5); line(p2, getCSS('--accent'), 2.5); line([[L, yOf(1.05)], [Rr, yOf(1.05)]], getCSS('--neg'), 1.5, [4, 3]); txt('上限 1.05', L + 3, yOf(1.05) - 4, { size: 9.5, mono: true, color: getCSS('--neg') }); const v1 = vrPV(PPV, 1.0, R, X), v2 = vrPV(PPV, .95, R, X); if (v1 !== null) dot(xOf(PPV), yOf(v1), 6, getCSS('--neg')); if (v2 !== null) dot(xOf(PPV), yOf(v2), 6, getCSS('--accent')); txt('力率 1', xOf(1.3), (p1.length ? p1[p1.length - 1][1] : 60) - 8, { align: 'center', size: 10.5, color: getCSS('--neg'), bold: true }); txt('0.95 進み', xOf(1.3), (p2.length ? p2[p2.length - 1][1] : 200) + 16, { align: 'center', size: 10.5, color: getCSS('--accent'), bold: true }); [0, .5, 1, 1.5].forEach(p => txt(p, xOf(p), B + 14, { align: 'center', size: 9, mono: true })); [.95, 1.0, 1.05, 1.1, 1.15].forEach(v => txt(v.toFixed(2), L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); txt(cur().name, CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawHosting() { const { R, X } = cur(); const h1 = hosting(1.0, R, X), h2 = hosting(.95, R, X); const L = 90, T = 60, Rr = 335, B = 300; axes(L, T, Rr, B, '', '連系可能量 [p.u.]'); const m = Math.max(h1, h2) * 1.25; const yOf = v => B - v / m * (B - T); [['力率 1', h1, '--neg'], ['力率 0.95 進み', h2, '--accent']].forEach(([n, v, c], i) => { const x = L + 30 + i * 120; rect(x, yOf(v), 70, B - yOf(v), getCSS(c), .85); txt(n, x + 35, B + 16, { align: 'center', size: 10.5 }); txt(f3(v), x + 35, yOf(v) - 6, { align: 'center', size: 11, mono: true, bold: true }); }); txt('×' + (h2 / h1).toFixed(2), L + 235, (yOf(h1) + yOf(h2)) / 2, { align: 'center', size: 14, bold: true, color: getCSS('--accent') }); txt(cur().name + '・上限 1.05・二分探索', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawSummary() { const c = getCSS('--text'); const items = [['電圧は局所量', '母線ごとに違う', '--neg'], ['Q は運べない', 'I²X で目減り', '--upd'], ['その場で供給', '調相設備・VQC', '--loss'], ['配電は P も効く', 'ρ≈1 → 太陽光の電圧上昇', '--accent']]; items.forEach(([a, b, col], i) => { const y = 70 + i * 68; rect(40, y - 22, 280, 52, getCSS(col), .15); line([[40, y - 22], [320, y - 22], [320, y + 30], [40, y + 30], [40, y - 22]], c, 1); txt(a, 180, y - 2, { align: 'center', size: 12, bold: true }); txt(b, 180, y + 18, { align: 'center', size: 10, color: getCSS('--muted') }); if (i < 3) txt('▼', 180, y + 44, { align: 'center', size: 10, color: getCSS('--faint') }); }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur2 = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur2 ? 'active' : (i < cur2 ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur2 ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+function sync() { document.getElementById('pVal').textContent = PL.toFixed(2); document.getElementById('pvVal').textContent = PPV.toFixed(2); document.getElementById('lenVal').textContent = LEN; }
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; LT = 'tx'; PL = .6; PPV = .6; LEN = 200; document.getElementById('lineSel').value = 'tx'; document.getElementById('pRange').value = .6; document.getElementById('pvRange').value = .6; document.getElementById('lenRange').value = 200; sync(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('lineSel').onchange = e => { LT = e.target.value; renderAll(); draw_(); };
+document.getElementById('pRange').oninput = e => { PL = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('pvRange').oninput = e => { PPV = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('lenRange').oninput = e => { LEN = +e.target.value; sync(); renderAll(); draw_(); };
+sync(); goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

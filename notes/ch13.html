@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第13回: AI を用いた電力系統解析 — 講義ノート</title>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="notes.css">
+</head>
+<body>
+<header class="top">
+  <a class="home" href="../index.html">▲ 地図（トップ）</a>
+  <nav class="days"><span class="">Day 1 基礎と潮流計算入門</span><span class="">Day 2 潮流とダイナミクス</span><span class="">Day 3 インバータと予測</span><span class="on">Day 4 AI と統合演習</span></nav>
+  <nav class="rounds"><a href="ch01.html" class="" title="第1回 エネルギー変換">1</a><a href="ch02.html" class="" title="第2回 電力システムの構成">2</a><a href="ch03.html" class="" title="第3回 P と Q の分離">3</a><a href="ch04.html" class="" title="第4回 Y行列と直流法潮流">4</a><a href="ch05.html" class="" title="第5回 ニュートン・ラフソン法">5</a><a href="ch06.html" class="" title="第6回 電圧と無効電力">6</a><a href="ch07.html" class="" title="第7回 等面積法と安定度">7</a><a href="ch08.html" class="" title="第8回 周波数と需給バランス">8</a><a href="ch09.html" class="" title="第9回 インバータと系統連系">9</a><a href="ch10.html" class="" title="第10回 気象と再エネ出力">10</a><a href="ch11.html" class="" title="第11回 電力需要予測">11</a><a href="ch12.html" class="" title="第12回 機械学習で予測する">12</a><a href="ch13.html" class="on" title="第13回 AI × 系統解析">13</a><a href="ch14.html" class="" title="第14回 経済負荷配分と OPF">14</a><a href="ch15.html" class="" title="第15回 沖縄系統・統合演習">15</a></nav>
+</header>
+<div class="wrap">
+  <main class="doc">
+    <div class="chips"><span class="chip day">Day 4 AI と統合演習</span><a class="chip viz" href="../viz/ai.html">🖥 動く図で見る</a><a class="chip ex" href="../ex/ch13.html">✍ 演習で確かめる</a><a class="chip" href="symbols.html">記号表</a></div>
+    <h1>第13回: AI を用いた電力系統解析</h1>
+<p><strong>Day 4 / コマ13</strong> ｜ 電力エネルギーシステム解析の基礎と応用</p>
+<blockquote class="callout textbook">
+<p><strong>教科書対応</strong>: 本講義の独自部分（教科書の範囲外）。
+ただし内容は第4〜7回（潮流計算・安定度計算）を土台にしている。
+<strong>AI は物理を置き換えるのではなく、物理計算を高速化・補完する</strong>という視点で扱う。</p>
+</blockquote>
+<blockquote class="callout viz">
+<p><strong>🖥 動くインフォグラフ</strong>：<a href="../viz/ai.html"><code>viz/ai.html</code></a> — PCA 異常検知と Q 学習による電圧制御。
+ブラウザで「次へ ▶」を押しながら、この回の核心を実計算で追えます（<code>index.html</code> から全回に飛べます）。</p>
+</blockquote>
+<!-- intuition:start（tools/sync-intuition.mjs が スライド/ch13.md から生成。直接編集せずスライドを直す）-->
+<blockquote class="callout ex">
+<p><strong>✍ 演習</strong>：<a href="../ex/ch13.html"><code>ex/ch13.html</code></a> — 学籍番号ごとに数値が変わる問題。採点・途中式つき。
+<strong>📊 スライド</strong>：<code>スライド/ch13.pptx</code>（講義用）</p>
+</blockquote>
+<hr>
+<h2 id="s1">まず直感で（3 分でつかむ）</h2>
+<blockquote class="callout key">
+<p><strong>📌 一言でいうと</strong>：電力系統は母線と線路のグラフ。AI は隣の情報を集めて学び、普段からの距離で異常を測る。ただし物理は捨てない。</p>
+</blockquote>
+<blockquote class="callout analogy">
+<p><strong>🪄 たとえ話：噂・健康診断・自転車</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">日常</th>
+<th align="left">AI × 系統</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>噂</strong>：隣人の話を聞いて考えを更新</td>
+<td align="left"><strong>GNN</strong>：隣接母線の特徴を集約</td>
+</tr>
+<tr>
+<td align="left">1 回で隣、2 回で隣の隣まで届く</td>
+<td align="left">1 層 = 1 ホップ。層数がホップ数</td>
+</tr>
+<tr>
+<td align="left"><strong>健康診断</strong>：普段の範囲から外れたら警告</td>
+<td align="left"><strong>異常検知</strong>：正常だけ学び、距離で検出</td>
+</tr>
+<tr>
+<td align="left"><strong>自転車</strong>：転んで（罰）バランスを覚える</td>
+<td align="left"><strong>強化学習</strong>：報酬で制御則を学ぶ</td>
+</tr>
+<tr>
+<td align="left">物理の先生がいれば早く上達</td>
+<td align="left"><strong>PINN</strong>：損失に潮流方程式を入れる</td>
+</tr>
+</tbody></table></div>
+<p>崩れる点：噂は誇張されるが、GNN の集約は平均化して薄まる。層を重ねすぎると全ノードが同じ値になる。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：2015年12月 ウクライナ送電網へのサイバー攻撃</strong>
+遠隔操作で変電所の遮断器が次々に開かれ、約 22 万戸が停電した。操作そのものは「正規の手順」に見えた。<strong>普段と違う</strong> 操作の並びを早く見つける監視が要る、と世界が認識した事件である。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：2019年 風力予測への機械学習の適用</strong>
+Google と DeepMind は風力発電の出力を 36 時間先まで機械学習で予測し、電力の価値を約 2 割高めたと報告した。一方、状態推定は 1970 年代から EMS の中核であり、AI はその上に載る道具である。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 この回の式で読むと</strong>：「AI で何ができるか」より「系統のどの仕事に、どう嵌めるか」を今日は見る。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ「正常」を学ぶのか</strong>
+事故のデータは希少で、未知の故障は学習できない。正常だけを学び、そこからの距離で検出すれば、見たことのない異常も拾える。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ物理を捨てないのか</strong>
+電力系統には確立した物理モデルがある。PINN は損失に方程式の残差を足し、データが薄い領域でも物理に沿った答えを出す。純データ駆動は学習範囲の外で崩れる。</p>
+</blockquote>
+<blockquote class="callout warn">
+<p><strong>⚠ 実務の型</strong>
+AI でスクリーニング → 厳密計算で確認。AI 単独で遮断器は操作しない。</p>
+</blockquote>
+<p><strong>この回の地図</strong>：Ⅰ 系統はグラフ — GNN の集約と、その限界 → Ⅱ 状態推定 — 今どうなっているかを計測から復元する → Ⅲ 異常検知 — 正常を学び、距離で測る → Ⅳ 強化学習と PINN、そして実務での使いどころ</p>
+<!-- intuition:end -->
+<hr>
+<h2 id="s2">13.1 導入</h2>
+<h3 id="s3">学習目標</h3>
+<ol>
+<li>電力系統が<strong>グラフ構造</strong>であることを踏まえ、<strong>GNN</strong> の枠組みを説明できる。</li>
+<li><strong>状態推定</strong>の定式化を理解し、AI による高速化の意義を説明できる。</li>
+<li>深層学習による<strong>異常検知・故障診断</strong>の手法を説明できる。</li>
+<li><strong>強化学習</strong>の枠組みを電力系統制御に対応づけられる。</li>
+<li><strong>物理法則を組み込んだ学習</strong>（PINN・物理制約付き学習）の必要性を論じられる。</li>
+<li>AI を系統運用に適用する際の<strong>信頼性・説明性の要求</strong>を論じられる。</li>
+</ol>
+<h3 id="s4">前提知識（第4〜7回・第12回との接続）</h3>
+<p>第12回まで、AI は<strong>予測</strong>（時系列の外挿）に使ってきた。
+本回では<strong>系統解析そのもの</strong>に適用する。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">従来手法</th>
+<th align="left">課題</th>
+<th align="left">AI による解決</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">潮流計算（第5回、NR 法）</td>
+<td align="left">反復計算。大量ケースだと重い</td>
+<td align="left"><strong>学習済みモデルで一発推論</strong></td>
+</tr>
+<tr>
+<td align="left">状態推定（本回）</td>
+<td align="left">反復・計測欠損に弱い</td>
+<td align="left">GNN で頑健化</td>
+</tr>
+<tr>
+<td align="left">安定度計算（第7回、時間積分）</td>
+<td align="left">数値積分が非常に重い</td>
+<td align="left">分類器で安定/不安定を判定</td>
+</tr>
+<tr>
+<td align="left">保護・診断</td>
+<td align="left">ルールベースで網羅が難しい</td>
+<td align="left">異常検知で未知の故障も検出</td>
+</tr>
+<tr>
+<td align="left">電圧無効電力制御（第6回 VQC）</td>
+<td align="left">ルールと最適化の設計が難しい</td>
+<td align="left">強化学習で方策を獲得</td>
+</tr>
+</tbody></table></div>
+<p><strong>重要な前提</strong>: これらはすべて<strong>物理モデルが既にある</strong>問題である。
+AI の役割は物理を置き換えることではなく、<strong>物理計算のコストを下げる</strong>ことにある。</p>
+<hr>
+<h2 id="s5">13.2 理論</h2>
+<h3 id="s6">13.2.1 なぜ電力系統に GNN なのか</h3>
+<p>第2回・第4回で見たとおり、電力系統は</p>
+<ul>
+<li><strong>ノード</strong>（母線）= 発電機・負荷・変電所</li>
+<li><strong>エッジ</strong>（ブランチ）= 送電線・変圧器</li>
+</ul>
+<p>からなる<strong>グラフ</strong>である。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">Y</mi><mtext>bus</mtext></msub></mrow><annotation encoding="application/x-tex">\mathbf{Y}_\text{bus}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.0288em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0288em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">bus</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> はまさにグラフの隣接構造そのものだった。</p>
+<p><strong>通常のニューラルネット（MLP）の問題</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">問題</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">入力の順序に依存</td>
+<td align="left">母線に番号を振り直すと別の入力になってしまう</td>
+</tr>
+<tr>
+<td align="left">トポロジー変化に対応できない</td>
+<td align="left">線路 1 本が開放されただけで再学習が必要</td>
+</tr>
+<tr>
+<td align="left">系統規模が変わると使えない</td>
+<td align="left">14 母線で学習したモデルは 118 母線に使えない</td>
+</tr>
+</tbody></table></div>
+<p><strong>GNN（Graph Neural Network）の考え方</strong>: 各ノードが<strong>近傍のノードと情報をやり取り</strong>しながら
+自分の状態表現を更新する（<strong>メッセージパッシング</strong>）。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><msubsup><mi mathvariant="bold">h</mi><mi>i</mi><mrow><mo stretchy="false">(</mo><mi>l</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow></msubsup><mo>=</mo><mi>σ</mi><mrow><mo fence="true">(</mo><msub><mi mathvariant="bold">W</mi><mtext>self</mtext></msub><msubsup><mi mathvariant="bold">h</mi><mi>i</mi><mrow><mo stretchy="false">(</mo><mi>l</mi><mo stretchy="false">)</mo></mrow></msubsup><mo>+</mo><munder><mo>∑</mo><mrow><mi>j</mi><mo>∈</mo><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></munder><msub><mi mathvariant="bold">W</mi><mtext>nb</mtext></msub><mtext> </mtext><msubsup><mi mathvariant="bold">h</mi><mi>j</mi><mrow><mo stretchy="false">(</mo><mi>l</mi><mo stretchy="false">)</mo></mrow></msubsup><mtext> </mtext><msub><mi>e</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo fence="true">)</mo></mrow></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\mathbf{h}_i^{(l+1)} = \sigma\left(\mathbf{W}_\text{self}\mathbf{h}_i^{(l)}
++ \sum_{j\in\mathcal{N}(i)}\mathbf{W}_\text{nb}\,\mathbf{h}_j^{(l)}\,e_{ij}\right)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:4.28em;vertical-align:-1.89em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.39em;"><span style="top:-6.28em;"><span class="pstrut" style="height:6.28em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord"><span class="mord mathbf">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4231em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2769em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.875em;height:3.6em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.875em" height="3.6em" viewBox="0 0 875 3600"><path d="M863,9c0,-2,-2,-5,-6,-9c0,0,-17,0,-17,0c-12.7,0,-19.3,0.3,-20,1
+c-5.3,5.3,-10.3,11,-15,17c-242.7,294.7,-395.3,682,-458,1162c-21.3,163.3,-33.3,349,
+-36,557 l0,84c0.2,6,0,26,0,60c2,159.3,10,310.7,24,454c53.3,528,210,
+949.7,470,1265c4.7,6,9.7,11.7,15,17c0.7,0.7,7,1,19,1c0,0,18,0,18,0c4,-4,6,-7,6,-9
+c0,-2.7,-3.3,-8.7,-10,-18c-135.3,-192.7,-235.5,-414.3,-300.5,-665c-65,-250.7,-102.5,
+-544.7,-112.5,-882c-2,-104,-3,-167,-3,-189
+l0,-92c0,-162.7,5.7,-314,17,-454c20.7,-272,63.7,-513,129,-723c65.3,
+-210,155.3,-396.3,270,-559c6.7,-9.3,10,-15.3,10,-18z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">self</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4231em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2769em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.809em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span><span class="mrel mtight">∈</span><span class="mord mathcal mtight" style="margin-right:0.1474em;">N</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">i</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.516em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">nb</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathbf">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4231em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.413em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.875em;height:3.6em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.875em" height="3.6em" viewBox="0 0 875 3600"><path d="M76,0c-16.7,0,-25,3,-25,9c0,2,2,6.3,6,13c21.3,28.7,42.3,60.3,
+63,95c96.7,156.7,172.8,332.5,228.5,527.5c55.7,195,92.8,416.5,111.5,664.5
+c11.3,139.3,17,290.7,17,454c0,28,1.7,43,3.3,45l0,9
+c-3,4,-3.3,16.7,-3.3,38c0,162,-5.7,313.7,-17,455c-18.7,248,-55.8,469.3,-111.5,664
+c-55.7,194.7,-131.8,370.3,-228.5,527c-20.7,34.7,-41.7,66.3,-63,95c-2,3.3,-4,7,-6,11
+c0,7.3,5.7,11,17,11c0,0,11,0,11,0c9.3,0,14.3,-0.3,15,-1c5.3,-5.3,10.3,-11,15,-17
+c242.7,-294.7,395.3,-681.7,458,-1161c21.3,-164.7,33.3,-350.7,36,-558
+l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
+-470,-1265c-4.7,-6,-9.7,-11.7,-15,-17c-0.7,-0.7,-6.7,-1,-18,-1z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-4.39em;"><span class="pstrut" style="height:6.28em;"></span><span class="stretchy fbox" style="height:4.28em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.89em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathcal{N}(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathcal" style="margin-right:0.1474em;">N</span><span class="mopen">(</span><span class="mord mathnormal">i</span><span class="mclose">)</span></span></span></span> は母線 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span> に隣接する母線の集合、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>e</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">e_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> はエッジの特徴（線路アドミタンス）。</p>
+<p><strong>この式が潮流計算に似ていることに注目せよ</strong>。第4回の電力方程式は</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>P</mi><mi>i</mi></msub><mo>=</mo><msub><mi>V</mi><mi>i</mi></msub><munder><mo>∑</mo><mrow><mi>j</mi><mo>∈</mo><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></munder><msub><mi>V</mi><mi>j</mi></msub><mo stretchy="false">(</mo><msub><mi>G</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi>cos</mi><mo>⁡</mo><msub><mi>θ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>B</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi>sin</mi><mo>⁡</mo><msub><mi>θ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">P_i = V_i\sum_{j\in\mathcal{N}(i)} V_j(G_{ij}\cos\theta_{ij}+B_{ij}\sin\theta_{ij})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.566em;vertical-align:-1.516em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.809em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span><span class="mrel mtight">∈</span><span class="mord mathcal mtight" style="margin-right:0.1474em;">N</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">i</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.516em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0502em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">sin</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span></p>
+<p><strong>どちらも「自分の量は隣接ノードからの寄与の和で決まる」という構造</strong>を持つ。
+GNN が電力系統に適合する根本的な理由がこれである。</p>
+<p><strong>GNN の利点</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">利点</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>順序不変性</strong></td>
+<td align="left">母線の番号付けによらない</td>
+</tr>
+<tr>
+<td align="left"><strong>トポロジーを入力にできる</strong></td>
+<td align="left">線路開放（N-1）を自然に扱える</td>
+</tr>
+<tr>
+<td align="left"><strong>規模への汎化</strong></td>
+<td align="left">小さい系統で学習し大きい系統に適用できる（部分的に）</td>
+</tr>
+<tr>
+<td align="left"><strong>パラメータ共有</strong></td>
+<td align="left">全ノードで同じ重みを使うので効率的</td>
+</tr>
+</tbody></table></div>
+<p><strong>層数の意味</strong>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi></mrow><annotation encoding="application/x-tex">L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span></span></span></span> 層の GNN では、各ノードは<strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi></mrow><annotation encoding="application/x-tex">L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span></span></span></span> ホップ先まで</strong>の情報を集める。
+電力系統では 2〜4 層程度が適切とされる。深すぎると
+<strong>過平滑化（over-smoothing）</strong>で全ノードの表現が似てしまう。</p>
+<!-- fig:ch13_graph.png -->
+<p><img src="../%E5%9B%B3/ch13_graph.png" alt="図 13.1">
+<em>図 13.1　IEEE 14 母線をグラフとして描いたもの（左、色は電圧）と隣接行列（右）。14 母線・20 枝で隣接行列の非零は 20.4%。第4回で組んだ Y_bus と同じ疎なパターンになる。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch13_gnn.png -->
+<p><img src="../%E5%9B%B3/ch13_gnn.png" alt="図 13.2">
+<em>図 13.2　GNN の集約を 4 母線の直線グラフで実際に計算したもの。1 層で隣、2 層で隣の隣まで情報が届く。層数がそのまま情報の到達ホップ数になる。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch13_oversmooth.png -->
+<p><img src="../%E5%9B%B3/ch13_oversmooth.png" alt="図 13.3">
+<em>図 13.3　過平滑化。層を重ねるほど全ノードの値が近づき、4 層でノード間のばらつきは 43% に減る。GNN では「深いほど良い」が成り立たず、実用は 2〜4 層である。</em></p>
+<!-- /fig -->
+
+<h3 id="s7">13.2.2 状態推定と AI</h3>
+<p><strong>状態推定（State Estimation）</strong>とは、
+計測値（電力・電流・電圧の測定値、ノイズを含む）から
+<strong>系統の真の状態</strong>（各母線の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>V</mi><mi>i</mi></msub><mo separator="true">,</mo><msub><mi>θ</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">V_i, \theta_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>）を推定する問題である。</p>
+<p>第4〜6回の潮流計算との違い:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left"></th>
+<th align="left">潮流計算</th>
+<th align="left">状態推定</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">入力</td>
+<td align="left">指定値（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>P</mi><mtext>sch</mtext></msup><mo separator="true">,</mo><msup><mi>Q</mi><mtext>sch</mtext></msup><mo separator="true">,</mo><mi>V</mi></mrow><annotation encoding="application/x-tex">P^\text{sch}, Q^\text{sch}, V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0435em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sch</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sch</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span></span></span></span>）</td>
+<td align="left"><strong>ノイズを含む計測値</strong>（冗長）</td>
+</tr>
+<tr>
+<td align="left">方程式の数</td>
+<td align="left">未知数と同数</td>
+<td align="left"><strong>未知数より多い</strong>（過決定）</td>
+</tr>
+<tr>
+<td align="left">解き方</td>
+<td align="left">非線形連立方程式</td>
+<td align="left"><strong>重み付き最小二乗（WLS）</strong></td>
+</tr>
+<tr>
+<td align="left">目的</td>
+<td align="left">「こう運転したらどうなるか」</td>
+<td align="left">「<strong>今どうなっているか</strong>」</td>
+</tr>
+</tbody></table></div>
+<p><strong>WLS の定式化</strong>:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><munder><mrow><mi>min</mi><mo>⁡</mo></mrow><mi mathvariant="bold">x</mi></munder><mtext> </mtext><mi>J</mi><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo>=</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>m</mi></munderover><mfrac><mrow><mo stretchy="false">[</mo><msub><mi>z</mi><mi>k</mi></msub><mo>−</mo><msub><mi>h</mi><mi>k</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><msup><mo stretchy="false">]</mo><mn>2</mn></msup></mrow><msubsup><mi>σ</mi><mi>k</mi><mn>2</mn></msubsup></mfrac><mo>=</mo><mo stretchy="false">[</mo><mi mathvariant="bold">z</mi><mo>−</mo><mi mathvariant="bold">h</mi><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><msup><mo stretchy="false">]</mo><mi>T</mi></msup><msup><mi mathvariant="bold">R</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo stretchy="false">[</mo><mi mathvariant="bold">z</mi><mo>−</mo><mi mathvariant="bold">h</mi><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">\min_{\mathbf{x}}\ J(\mathbf{x}) = \sum_{k=1}^{m}\frac{[z_k - h_k(\mathbf{x})]^2}{\sigma_k^2}
+= [\mathbf{z}-\mathbf{h}(\mathbf{x})]^T\mathbf{R}^{-1}[\mathbf{z}-\mathbf{h}(\mathbf{x})]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.45em;vertical-align:-0.7em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-2.4em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathbf mtight">x</span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7em;"><span></span></span></span></span></span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0962em;">J</span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.9535em;vertical-align:-1.3021em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.6514em;"><span style="top:-1.8479em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">m</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.3021em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.4911em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7959em;"><span style="top:-2.3987em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span><span style="top:-3.0448em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3013em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mopen">[</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mclose"><span class="mclose">]</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9873em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord mathbf">z</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1413em;vertical-align:-0.25em;"></span><span class="mord mathbf">h</span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mclose"><span class="mclose">]</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord mathbf">z</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathbf">h</span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)]</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">z</mi></mrow><annotation encoding="application/x-tex">\mathbf{z}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4444em;"></span><span class="mord mathbf">z</span></span></span></span> は計測ベクトル、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">h</mi></mrow><annotation encoding="application/x-tex">\mathbf{h}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathbf">h</span></span></span></span> は計測関数（潮流方程式）、
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">R</mi></mrow><annotation encoding="application/x-tex">\mathbf{R}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em;"></span><span class="mord mathbf">R</span></span></span></span> は計測誤差の共分散行列。</p>
+<p>反復解法（ガウス・ニュートン法）:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msup><mi mathvariant="bold">x</mi><mrow><mo stretchy="false">(</mo><mi>ν</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow></msup><mo>=</mo><msup><mi mathvariant="bold">x</mi><mrow><mo stretchy="false">(</mo><mi>ν</mi><mo stretchy="false">)</mo></mrow></msup><mo>+</mo><mo stretchy="false">(</mo><msup><mi mathvariant="bold">H</mi><mi>T</mi></msup><msup><mi mathvariant="bold">R</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mi mathvariant="bold">H</mi><msup><mo stretchy="false">)</mo><mrow><mo>−</mo><mn>1</mn></mrow></msup><msup><mi mathvariant="bold">H</mi><mi>T</mi></msup><msup><mi mathvariant="bold">R</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo stretchy="false">[</mo><mi mathvariant="bold">z</mi><mo>−</mo><mi mathvariant="bold">h</mi><mo stretchy="false">(</mo><msup><mi mathvariant="bold">x</mi><mrow><mo stretchy="false">(</mo><mi>ν</mi><mo stretchy="false">)</mo></mrow></msup><mo stretchy="false">)</mo><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">\mathbf{x}^{(\nu+1)} = \mathbf{x}^{(\nu)}
++ (\mathbf{H}^T\mathbf{R}^{-1}\mathbf{H})^{-1}\mathbf{H}^T\mathbf{R}^{-1}[\mathbf{z}-\mathbf{h}(\mathbf{x}^{(\nu)})]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.938em;"></span><span class="mord"><span class="mord mathbf">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.938em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0637em;">ν</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0213em;vertical-align:-0.0833em;"></span><span class="mord"><span class="mord mathbf">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.938em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0637em;">ν</span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1413em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathbf">H</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mord mathbf">H</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">H</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord mathbf">z</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.188em;vertical-align:-0.25em;"></span><span class="mord mathbf">h</span><span class="mopen">(</span><span class="mord"><span class="mord mathbf">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.938em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0637em;">ν</span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span><span class="mclose">)]</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">H</mi><mo>=</mo><mi mathvariant="normal">∂</mi><mi mathvariant="bold">h</mi><mi mathvariant="normal">/</mi><mi mathvariant="normal">∂</mi><mi mathvariant="bold">x</mi></mrow><annotation encoding="application/x-tex">\mathbf{H} = \partial\mathbf{h}/\partial\mathbf{x}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6861em;"></span><span class="mord mathbf">H</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord" style="margin-right:0.0556em;">∂</span><span class="mord mathbf">h</span><span class="mord">/</span><span class="mord" style="margin-right:0.0556em;">∂</span><span class="mord mathbf">x</span></span></span></span> は第5回のヤコビアンと同じ構造である。</p>
+<p><strong>不良データ検出</strong>: 残差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>r</mi><mi>k</mi></msub><mo>=</mo><msub><mi>z</mi><mi>k</mi></msub><mo>−</mo><msub><mi>h</mi><mi>k</mi></msub><mo stretchy="false">(</mo><mover accent="true"><mi mathvariant="bold">x</mi><mo>^</mo></mover><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">r_k = z_k - h_k(\hat{\mathbf{x}})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7079em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathbf">x</span></span><span style="top:-3.0134em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> が大きい計測は
+故障したセンサの可能性がある。正規化残差で検定する。</p>
+<p><strong>AI を使う動機</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">課題</th>
+<th align="left">AI による対応</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">反復計算が遅い（リアルタイム性）</td>
+<td align="left">学習済み GNN で<strong>一発推論</strong>（ミリ秒）</td>
+</tr>
+<tr>
+<td align="left">計測が欠損すると解けないことがある</td>
+<td align="left">学習により<strong>欠損に頑健</strong></td>
+</tr>
+<tr>
+<td align="left">不良データの識別が難しい</td>
+<td align="left">異常検知と統合</td>
+</tr>
+<tr>
+<td align="left">配電系統は計測点が極端に少ない</td>
+<td align="left">少数計測からの推定（<strong>擬似計測の生成</strong>）</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>PMU（Phasor Measurement Unit）</strong>: GPS 同期により<strong>位相角を直接測定</strong>できる装置。
+従来の SCADA（数秒周期）に対し、PMU は 1 秒間に 30〜60 回サンプリングする。
+PMU が普及すると状態推定が線形問題になり、
+<strong>広域監視（WAMS）</strong>による動的な系統監視が可能になる。
+AI との相性も良い（データ量が多い）。</p>
+</blockquote>
+<!-- fig:ch13_state_estimation.png -->
+<p><img src="../%E5%9B%B3/ch13_state_estimation.png" alt="図 13.4">
+<em>図 13.4　加重最小二乗（WLS）の考え方。精度の良い計測（σ = 0.01）を重く扱うことで、単純平均 0.9545 に対して推定値 0.9509 と、真値 0.95 への誤差が約 4 分の 1 になる。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch13_bad_data.png -->
+<p><img src="../%E5%9B%B3/ch13_bad_data.png" alt="図 13.5">
+<em>図 13.5　不良データの検出。冗長な計測があるため推定値との残差が計算でき、3σ を超えた計測を除いて再推定できる。状態推定は「推定」だけでなく「計測の検品」も担う。</em></p>
+<!-- /fig -->
+
+<h3 id="s8">13.2.3 深層学習による異常検知・故障診断</h3>
+<p><strong>異常検知の 3 つのアプローチ</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">方式</th>
+<th align="left">学習データ</th>
+<th align="left">原理</th>
+<th align="left">適する場面</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>教師あり分類</strong></td>
+<td align="left">正常＋異常（ラベル付き）</td>
+<td align="left">分類器を学習</td>
+<td align="left">既知の故障種別の判別</td>
+</tr>
+<tr>
+<td align="left"><strong>オートエンコーダ</strong></td>
+<td align="left"><strong>正常のみ</strong></td>
+<td align="left">再構成誤差が大きい＝異常</td>
+<td align="left"><strong>未知の異常の検出</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>予測残差</strong></td>
+<td align="left">正常のみ</td>
+<td align="left">予測と実測の乖離を見る</td>
+<td align="left">時系列の異常</td>
+</tr>
+</tbody></table></div>
+<p><strong>なぜオートエンコーダが有効か</strong>: 電力系統では</p>
+<ul>
+<li><strong>異常（事故）のデータが圧倒的に少ない</strong>（不均衡データ）</li>
+<li><strong>未知の故障モード</strong>が起こりうる</li>
+</ul>
+<p>そこで<strong>正常データだけ</strong>で「正常とはどういうものか」を学習し、
+それから外れたものを異常とする。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>異常スコア</mtext><mo>=</mo><mi mathvariant="normal">∥</mi><mi mathvariant="bold">x</mi><mo>−</mo><mtext>Decoder</mtext><mo stretchy="false">(</mo><mtext>Encoder</mtext><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo><msup><mi mathvariant="normal">∥</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">\text{異常スコア} = \|\mathbf{x} - \text{Decoder}(\text{Encoder}(\mathbf{x}))\|^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">異常スコア</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∥</span><span class="mord mathbf">x</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1141em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">Decoder</span></span><span class="mopen">(</span><span class="mord text"><span class="mord">Encoder</span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">))</span><span class="mord"><span class="mord">∥</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>故障診断のタスク</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">タスク</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>故障検出</strong></td>
+<td align="left">事故が起きたか（0/1）</td>
+</tr>
+<tr>
+<td align="left"><strong>故障分類</strong></td>
+<td align="left">三相短絡・二相短絡・一線地絡・断線のどれか</td>
+</tr>
+<tr>
+<td align="left"><strong>故障標定</strong></td>
+<td align="left">どの線路の、どの地点か</td>
+</tr>
+<tr>
+<td align="left"><strong>故障除去の判断</strong></td>
+<td align="left">どの遮断器を開くべきか</td>
+</tr>
+</tbody></table></div>
+<p><strong>必要な速さ</strong>: 第7回で見たとおり、臨界故障除去時間 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>t</mi><mtext>cr</mtext></msub></mrow><annotation encoding="application/x-tex">t_\text{cr}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7651em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cr</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> は 0.15〜0.4 秒。
+再エネ導入で <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi></mrow><annotation encoding="application/x-tex">H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0813em;">H</span></span></span></span> が下がるとさらに短くなる。
+したがって<strong>検出から判断まで数十ミリ秒</strong>で行う必要がある。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mtext>AI の推論速度が保護リレーの要求に応えられるかが実用化の鍵</mtext></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\text{AI の推論速度が保護リレーの要求に応えられるかが実用化の鍵}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord text"><span class="mord">AI </span><span class="mord cjk_fallback">の推論速度が保護リレーの要求に応えられるかが実用化の鍵</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<!-- fig:ch13_pca.png -->
+<p><img src="../%E5%9B%B3/ch13_pca.png" alt="図 13.6">
+<em>図 13.6　PCA による異常検知。正常時の潮流パターンだけを学習し、再構成誤差で線路故障を検出する。検出率 99%、誤検出 1%。事故データを 1 つも学習していない点が重要である。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch13_autoencoder.png -->
+<p><img src="../%E5%9B%B3/ch13_autoencoder.png" alt="図 13.7">
+<em>図 13.7　オートエンコーダによる異常検知。中央の層で情報を絞り、復元した結果との差（再構成誤差）を測る。正常データだけで学習するため、未知の異常も検出できる。</em></p>
+<!-- /fig -->
+
+<h3 id="s9">13.2.4 強化学習による系統制御</h3>
+<p><strong>強化学習（RL）の枠組み</strong>を電力系統に対応づける。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">RL の要素</th>
+<th align="left">電力系統での対応</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>状態</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">s_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">母線電圧、線路潮流、発電機出力、需要、再エネ出力</td>
+</tr>
+<tr>
+<td align="left"><strong>行動</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>a</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">a_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">発電機出力の変更、調相設備の入切、タップ変更、線路の開閉</td>
+</tr>
+<tr>
+<td align="left"><strong>報酬</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>r</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">r_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">−（運転コスト＋電圧逸脱ペナルティ＋過負荷ペナルティ）</td>
+</tr>
+<tr>
+<td align="left"><strong>方策</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>π</mi><mo stretchy="false">(</mo><mi>a</mi><mi mathvariant="normal">∣</mi><mi>s</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\pi(a|s)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">π</span><span class="mopen">(</span><span class="mord mathnormal">a</span><span class="mord">∣</span><span class="mord mathnormal">s</span><span class="mclose">)</span></span></span></span></td>
+<td align="left">制御ルール（学習で獲得する）</td>
+</tr>
+<tr>
+<td align="left"><strong>環境</strong></td>
+<td align="left"><strong>潮流計算（第6回の pandapower）</strong></td>
+</tr>
+</tbody></table></div>
+<p>目的は累積報酬の最大化である。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><munder><mrow><mi>max</mi><mo>⁡</mo></mrow><mi>π</mi></munder><mtext> </mtext><mi mathvariant="double-struck">E</mi><mrow><mo fence="true">[</mo><munderover><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mn>0</mn></mrow><mi mathvariant="normal">∞</mi></munderover><msup><mi>γ</mi><mi>t</mi></msup><msub><mi>r</mi><mi>t</mi></msub><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">\max_{\pi}\ \mathbb{E}\left[\sum_{t=0}^{\infty}\gamma^t r_t\right]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:3.0171em;vertical-align:-1.2671em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.4306em;"><span style="top:-2.4em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">π</span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">max</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7em;"><span></span></span></span></span></span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathbb">E</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size4">[</span></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.6514em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mrel mtight">=</span><span class="mord mtight">0</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">∞</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2671em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8436em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size4">]</span></span></span></span></span></span></span></p>
+<p><strong>適用例</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">問題</th>
+<th align="left">内容</th>
+<th align="left">従来手法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>電圧無効電力制御（VQC）</strong></td>
+<td align="left">調相設備・タップの操作</td>
+<td align="left">ルールベース（第6回 6.2.6 節）</td>
+</tr>
+<tr>
+<td align="left"><strong>系統復旧</strong></td>
+<td align="left">停電後の復旧手順の決定</td>
+<td align="left">運用員の経験</td>
+</tr>
+<tr>
+<td align="left"><strong>混雑管理</strong></td>
+<td align="left">過負荷回避のための出力調整</td>
+<td align="left">最適化（第14回）</td>
+</tr>
+<tr>
+<td align="left"><strong>需給運用</strong></td>
+<td align="left">蓄電池の充放電計画</td>
+<td align="left">動的計画法</td>
+</tr>
+</tbody></table></div>
+<p><strong>強化学習の利点と課題</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">利点</th>
+<th align="left">課題</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">明示的なモデルなしに方策を獲得できる</td>
+<td align="left"><strong>学習に膨大な試行が必要</strong></td>
+</tr>
+<tr>
+<td align="left">非線形・離散的な行動を扱える</td>
+<td align="left"><strong>安全性の保証がない</strong>（学習中に危険な行動を取る）</td>
+</tr>
+<tr>
+<td align="left">逐次的な意思決定に適する</td>
+<td align="left">報酬設計が難しい</td>
+</tr>
+<tr>
+<td align="left">リアルタイムで判断できる</td>
+<td align="left">学習した状況以外での挙動が不明</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>安全性が決定的な障害</strong>: 実系統で試行錯誤することは<strong>絶対にできない</strong>。
+停電させながら学習するわけにはいかない。
+したがって</p>
+<ol>
+<li><strong>シミュレータ上で学習</strong>する（pandapower 等）</li>
+<li><strong>安全層（safety layer）</strong>を設け、制約違反する行動を実行前に却下する</li>
+<li>実運用は<strong>推薦にとどめ、最終判断は人間</strong>が行う</li>
+</ol>
+<p>という段階的な適用が現実的である。</p>
+</blockquote>
+<!-- fig:ch13_rl.png -->
+<p><img src="../%E5%9B%B3/ch13_rl.png" alt="図 13.8">
+<em>図 13.8　Q 学習による電圧制御。状態を電圧、行動を無効電力の増減、報酬を範囲内かどうかで与えると、学習によって電圧逸脱の割合が 9% から 1.2% に下がり、「電圧が高いなら Q を減らす」方策が獲得される。</em></p>
+<!-- /fig -->
+
+<h3 id="s10">13.2.5 物理を組み込んだ学習</h3>
+<p>純粋なデータ駆動には次の弱点がある。</p>
+<ul>
+<li>学習範囲外で<strong>物理法則を破る</strong>予測を出す（第12回の外挿問題）</li>
+<li>学習データが大量に必要</li>
+<li>予測の妥当性を検証しにくい</li>
+</ul>
+<p><strong>物理情報ニューラルネットワーク（PINN）</strong>: 損失関数に<strong>物理方程式の残差</strong>を加える。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="script">L</mi><mo>=</mo><munder><munder><msub><mi mathvariant="script">L</mi><mtext>data</mtext></msub><mo stretchy="true">⏟</mo></munder><mtext>データとの誤差</mtext></munder><mo>+</mo><mi>λ</mi><munder><munder><msub><mi mathvariant="script">L</mi><mtext>physics</mtext></msub><mo stretchy="true">⏟</mo></munder><mtext>物理方程式の残差</mtext></munder></mrow><annotation encoding="application/x-tex">\mathcal{L} = \underbrace{\mathcal{L}_\text{data}}_{\text{データとの誤差}}
++ \lambda\underbrace{\mathcal{L}_\text{physics}}_{\text{物理方程式の残差}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathcal">L</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.1597em;vertical-align:-1.4763em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6833em;"><span style="top:-1.5237em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">データとの誤差</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6833em;"><span class="svg-align" style="top:-2.202em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMinYMin slice"><path d="M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z"/></svg></span><span class="brace-center" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMidYMin slice"><path d="M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z"/></svg></span><span class="brace-right" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMaxYMin slice"><path d="M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z"/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathcal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">data</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.798em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4763em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.3069em;vertical-align:-1.6124em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6833em;"><span style="top:-1.3876em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">物理方程式の残差</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="minner munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6833em;"><span class="svg-align" style="top:-2.0659em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMinYMin slice"><path d="M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z"/></svg></span><span class="brace-center" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMidYMin slice"><path d="M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z"/></svg></span><span class="brace-right" style="height:0.548em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="0.548em" viewBox="0 0 400000 548" preserveAspectRatio="xMaxYMin slice"><path d="M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z"/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathcal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">physics</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9341em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.6124em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>潮流問題なら、第4回の電力方程式の残差そのものを使える。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi mathvariant="script">L</mi><mtext>physics</mtext></msub><mo>=</mo><munder><mo>∑</mo><mi>i</mi></munder><mrow><mo fence="true">[</mo><msup><mrow><mo fence="true">(</mo><msubsup><mi>P</mi><mi>i</mi><mtext>sch</mtext></msubsup><mo>−</mo><msub><mi>P</mi><mi>i</mi></msub><mo stretchy="false">(</mo><mover accent="true"><mi mathvariant="bold">V</mi><mo>^</mo></mover><mo separator="true">,</mo><mover accent="true"><mi mathvariant="bold-italic">θ</mi><mo>^</mo></mover><mo stretchy="false">)</mo><mo fence="true">)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo fence="true">(</mo><msubsup><mi>Q</mi><mi>i</mi><mtext>sch</mtext></msubsup><mo>−</mo><msub><mi>Q</mi><mi>i</mi></msub><mo stretchy="false">(</mo><mover accent="true"><mi mathvariant="bold">V</mi><mo>^</mo></mover><mo separator="true">,</mo><mover accent="true"><mi mathvariant="bold-italic">θ</mi><mo>^</mo></mover><mo stretchy="false">)</mo><mo fence="true">)</mo></mrow><mn>2</mn></msup><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">\mathcal{L}_\text{physics} = \sum_i\left[\left(P_i^\text{sch} - P_i(\hat{\mathbf{V}},\hat{\boldsymbol\theta})\right)^2
++ \left(Q_i^\text{sch} - Q_i(\hat{\mathbf{V}},\hat{\boldsymbol\theta})\right)^2\right]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathcal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">physics</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.7277em;vertical-align:-1.2777em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2777em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">[</span></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-2.453em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sch</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9495em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathbf" style="margin-right:0.016em;">V</span></span><span style="top:-3.2551em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9579em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord boldsymbol" style="margin-right:0.0319em;">θ</span></span></span></span><span style="top:-3.2634em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span><span class="mclose">)</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.354em;"><span style="top:-3.6029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sch</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9495em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathbf" style="margin-right:0.016em;">V</span></span><span style="top:-3.2551em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9579em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord boldsymbol" style="margin-right:0.0319em;">θ</span></span></span></span><span style="top:-3.2634em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span><span class="mclose">)</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.354em;"><span style="top:-3.6029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">]</span></span></span></span></span></span></span></p>
+<p><strong>効果</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">効果</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>物理的に妥当な解</strong></td>
+<td align="left">キルヒホッフ則を（近似的に）満たす</td>
+</tr>
+<tr>
+<td align="left"><strong>少ないデータで学習可能</strong></td>
+<td align="left">物理が正則化として働く</td>
+</tr>
+<tr>
+<td align="left"><strong>汎化性能の向上</strong></td>
+<td align="left">学習範囲外でも大きく外れにくい</td>
+</tr>
+<tr>
+<td align="left"><strong>検証可能性</strong></td>
+<td align="left">物理残差を見れば信頼度が分かる</td>
+</tr>
+</tbody></table></div>
+<p><strong>その他の物理組み込み手法</strong>:</p>
+<ul>
+<li><strong>ハード制約</strong>: ネットワークの出力層で制約を強制（例: 出力を <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msup><mi>V</mi><mtext>min</mtext></msup><mo separator="true">,</mo><msup><mi>V</mi><mtext>max</mtext></msup><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[V^\text{min}, V^\text{max}]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0805em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8305em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">min</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6644em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">max</span></span></span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span> に写像）</li>
+<li><strong>物理層の埋め込み</strong>: 微分可能な潮流計算をネットワークの一部に組み込む</li>
+<li><strong>残差学習</strong>: 物理モデルの誤差だけを AI が学習する（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo>=</mo><msub><mi>f</mi><mtext>physics</mtext></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>+</mo><msub><mi>f</mi><mtext>NN</mtext></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">y = f_\text{physics}(x) + f_\text{NN}(x)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">physics</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">NN</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span></span></span></span>）</li>
+</ul>
+<blockquote>
+<p><strong>本講義の立場</strong>: 電力系統には<strong>確立された物理モデル</strong>がある。
+画像認識や自然言語と違い、ゼロから学ぶ必要はない。
+<strong>物理を捨ててデータだけで学ぶのは、持っている情報を捨てる愚行</strong>である。
+AI は物理の代替ではなく、<strong>物理計算の高速化と、物理でモデル化しきれない部分の補完</strong>に使うべきである。</p>
+</blockquote>
+<!-- fig:ch13_pinn.png -->
+<p><img src="../%E5%9B%B3/ch13_pinn.png" alt="図 13.9">
+<em>図 13.9　物理を損失に組み込んだ学習（PINN）。観測が δ &lt; 0.6 の範囲にしかないとき、データのみで学習したモデルは外側で大きく外れる（平均誤差 2.13）が、潮流の式を損失に足すとほぼ真値どおりになる。</em></p>
+<!-- /fig -->
+
+<h3 id="s11">13.2.6 再エネ大量導入時代における AI の役割</h3>
+<p>第7〜9回で見たとおり、再エネ導入により系統は次のように変化する。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">変化</th>
+<th align="left">AI への要求</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">慣性低下（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>H</mi><mtext>sys</mtext></msub></mrow><annotation encoding="application/x-tex">H_\text{sys}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>↓）→ 現象が速い</td>
+<td align="left"><strong>より高速な判断</strong>（ミリ秒）</td>
+</tr>
+<tr>
+<td align="left">変動性の増大</td>
+<td align="left">不確実性を扱う（確率予測、第12回）</td>
+</tr>
+<tr>
+<td align="left">潮流方向が双方向に</td>
+<td align="left">従来の運用ルールが通用しない → 学習で対応</td>
+</tr>
+<tr>
+<td align="left">分散電源が多数</td>
+<td align="left"><strong>分散制御</strong>（マルチエージェント）</td>
+</tr>
+<tr>
+<td align="left">状態が刻々と変わる</td>
+<td align="left">オンライン適応</td>
+</tr>
+</tbody></table></div>
+<p><strong>沖縄のような独立系統では特に切実</strong>である。
+本土なら連系線で応援を受けられるが（第8回）、沖縄にはそれがない。
+<strong>限られた設備で最大限の再エネを受け入れる</strong>ために、
+高度な予測と制御が求められる。</p>
+<!-- fig:ch13_pipeline.png -->
+<p><img src="../%E5%9B%B3/ch13_pipeline.png" alt="図 13.10">
+<em>図 13.10　実務での AI の使いどころ。計測 → 状態推定 → AI によるスクリーニング → 厳密計算という 2 段構えで、速さは AI が、正しさは物理が担う。AI 単独で遮断器を操作することはない。</em></p>
+<!-- /fig -->
+
+<hr>
+<h2 id="s12">13.3 シミュレーション</h2>
+<h3 id="s13">13.3.1 GNN による潮流計算の代理モデル</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第13回 デモ1: GNN で潮流計算を高速化する&quot;&quot;&quot;
+import numpy as np
+import torch
+import torch.nn as nn
+import pandapower as pp
+import pandapower.networks as pn
+import time
+
+torch.manual_seed(42)
+np.random.seed(42)
+DEVICE = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+
+# ============ 学習データの生成（潮流計算を大量に実行）============
+def generate_dataset(n_samples=3000):
+    base = pn.case14()
+    p0, q0 = base.load.p_mw.values.copy(), base.load.q_mvar.values.copy()
+    X_list, Y_list, ok = [], [], 0
+    for _ in range(n_samples):
+        net = pn.case14()
+        scale = np.random.uniform(0.6, 1.35, len(p0))    # 負荷をランダムに変動
+        net.load.p_mw   = p0*scale
+        net.load.q_mvar = q0*scale
+        try:
+            pp.runpp(net)
+        except pp.LoadflowNotConverged:
+            continue
+        # 入力: 各母線の注入電力（P, Q）
+        n_bus = len(net.bus)
+        P = np.zeros(n_bus); Q = np.zeros(n_bus)
+        for _, r in net.load.iterrows():
+            P[int(r.bus)] -= r.p_mw;  Q[int(r.bus)] -= r.q_mvar
+        for _, r in net.gen.iterrows():
+            P[int(r.bus)] += r.p_mw
+        X_list.append(np.c_[P/100, Q/100])
+        # 出力: 各母線の電圧と位相角
+        Y_list.append(np.c_[net.res_bus.vm_pu.values,
+                            np.deg2rad(net.res_bus.va_degree.values)])
+        ok += 1
+    print(f&quot;生成成功: {ok}/{n_samples} ケース&quot;)
+    return np.array(X_list, dtype=np.float32), np.array(Y_list, dtype=np.float32)
+
+print(&quot;学習データ生成中（潮流計算を大量実行）...&quot;)
+t0 = time.time()
+X, Y = generate_dataset(3000)
+print(f&quot;生成時間: {time.time()-t0:.1f} 秒, 形状 X={X.shape}, Y={Y.shape}&quot;)
+
+# ============ 隣接行列（グラフ構造）============
+net0 = pn.case14()
+n_bus = len(net0.bus)
+A = np.zeros((n_bus, n_bus), dtype=np.float32)
+for _, r in net0.line.iterrows():
+    i, j = int(r.from_bus), int(r.to_bus); A[i,j] = A[j,i] = 1
+for _, r in net0.trafo.iterrows():
+    i, j = int(r.hv_bus), int(r.lv_bus);   A[i,j] = A[j,i] = 1
+A = A + np.eye(n_bus, dtype=np.float32)          # 自己ループ
+D = np.diag(1.0/np.sqrt(A.sum(1)))
+A_hat = torch.tensor(D @ A @ D).to(DEVICE)       # 対称正規化
+print(f&quot;グラフ: {n_bus} ノード, 平均次数 {A.sum(1).mean()-1:.2f}&quot;)
+
+# ============ GNN モデル ============
+class GCNLayer(nn.Module):
+    def __init__(self, din, dout):
+        super().__init__()
+        self.lin = nn.Linear(din, dout)
+    def forward(self, x, A_hat):
+        return self.lin(A_hat @ x)               # メッセージパッシング
+
+class PowerFlowGNN(nn.Module):
+    def __init__(self, din=2, hid=96, dout=2, layers=4):
+        super().__init__()
+        self.inp = nn.Linear(din, hid)
+        self.gcn = nn.ModuleList([GCNLayer(hid, hid) for _ in range(layers)])
+        self.norm = nn.ModuleList([nn.LayerNorm(hid) for _ in range(layers)])
+        self.out = nn.Sequential(nn.Linear(hid, 64), nn.ReLU(), nn.Linear(64, dout))
+    def forward(self, x, A_hat):
+        h = torch.relu(self.inp(x))
+        for gcn, norm in zip(self.gcn, self.norm):
+            h = h + torch.relu(norm(gcn(h, A_hat)))   # 残差接続
+        return self.out(h)
+
+# ============ 学習 ============
+n_tr = int(len(X)*0.8)
+Xtr = torch.tensor(X[:n_tr]).to(DEVICE); Ytr = torch.tensor(Y[:n_tr]).to(DEVICE)
+Xte = torch.tensor(X[n_tr:]).to(DEVICE); Yte = torch.tensor(Y[n_tr:]).to(DEVICE)
+
+model = PowerFlowGNN().to(DEVICE)
+opt = torch.optim.Adam(model.parameters(), lr=2e-3)
+sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=300)
+lossf = nn.MSELoss()
+
+print(&quot;\nGNN 学習中...&quot;)
+for ep in range(300):
+    model.train(); perm = torch.randperm(len(Xtr))
+    tot = 0.0
+    for i in range(0, len(Xtr), 64):
+        idx = perm[i:i+64]
+        opt.zero_grad()
+        loss = lossf(model(Xtr[idx], A_hat), Ytr[idx])
+        loss.backward(); opt.step()
+        tot += loss.item()*len(idx)
+    sched.step()
+    if (ep+1) % 50 == 0:
+        model.eval()
+        with torch.no_grad():
+            te = lossf(model(Xte, A_hat), Yte).item()
+        print(f&quot;  epoch {ep+1:3d}  train={tot/len(Xtr):.6f}  test={te:.6f}&quot;)
+
+# ============ 精度と速度の評価 ============
+model.eval()
+with torch.no_grad():
+    pred = model(Xte, A_hat).cpu().numpy()
+true = Yte.cpu().numpy()
+
+print(&quot;\n=== 精度 ===&quot;)
+v_mae = np.mean(np.abs(pred[:,:,0]-true[:,:,0]))
+v_max = np.max(np.abs(pred[:,:,0]-true[:,:,0]))
+a_mae = np.mean(np.abs(np.rad2deg(pred[:,:,1]-true[:,:,1])))
+print(f&quot;電圧 |V|  : MAE = {v_mae:.5f} p.u.,  最大誤差 = {v_max:.5f} p.u.&quot;)
+print(f&quot;位相角 θ  : MAE = {a_mae:.4f} deg&quot;)
+
+print(&quot;\n=== 速度比較 ===&quot;)
+t0 = time.time()
+for _ in range(50):
+    net = pn.case14(); pp.runpp(net)
+t_pp = (time.time()-t0)/50*1000
+
+with torch.no_grad():
+    t0 = time.time()
+    for _ in range(50):
+        _ = model(Xte[:1], A_hat)
+    t_gnn = (time.time()-t0)/50*1000
+
+print(f&quot;pandapower（NR法）: {t_pp:8.3f} ms/ケース&quot;)
+print(f&quot;GNN 推論          : {t_gnn:8.3f} ms/ケース&quot;)
+print(f&quot;高速化倍率        : {t_pp/t_gnn:8.1f} 倍&quot;)
+print(&quot;\n→ 大量ケース（N-1解析、モンテカルロ）で威力を発揮する&quot;)
+</code></pre>
+<h3 id="s14">13.3.2 物理制約を加えた学習（PINN 的手法）</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第13回 デモ2: 電力方程式の残差を損失に加える&quot;&quot;&quot;
+import numpy as np
+import torch
+import torch.nn as nn
+
+# Y_bus を取得
+net0 = pn.case14()
+pp.runpp(net0)
+Ybus = np.array(net0._ppc[&quot;internal&quot;][&quot;Ybus&quot;].todense())
+G = torch.tensor(Ybus.real, dtype=torch.float32).to(DEVICE)
+B = torch.tensor(Ybus.imag, dtype=torch.float32).to(DEVICE)
+
+def power_mismatch(V, theta, P_sch, Q_sch):
+    &quot;&quot;&quot;第4回の電力方程式の残差（微分可能）&quot;&quot;&quot;
+    th = theta.unsqueeze(-1) - theta.unsqueeze(-2)     # theta_ij
+    Vi = V.unsqueeze(-1); Vj = V.unsqueeze(-2)
+    P = (Vi*Vj*(G*torch.cos(th) + B*torch.sin(th))).sum(-1)
+    Q = (Vi*Vj*(G*torch.sin(th) - B*torch.cos(th))).sum(-1)
+    return P - P_sch, Q - Q_sch
+
+class PhysicsInformedGNN(PowerFlowGNN):
+    pass
+
+model_pi = PhysicsInformedGNN().to(DEVICE)
+opt = torch.optim.Adam(model_pi.parameters(), lr=2e-3)
+LAMBDA = 0.15          # 物理項の重み
+
+print(&quot;物理制約付き GNN 学習中...&quot;)
+for ep in range(300):
+    model_pi.train(); perm = torch.randperm(len(Xtr)); tot_d = tot_p = 0.0
+    for i in range(0, len(Xtr), 64):
+        idx = perm[i:i+64]
+        opt.zero_grad()
+        out = model_pi(Xtr[idx], A_hat)
+        V, theta = out[:,:,0], out[:,:,1]
+        loss_data = nn.functional.mse_loss(out, Ytr[idx])
+        dP, dQ = power_mismatch(V, theta, Xtr[idx][:,:,0], Xtr[idx][:,:,1])
+        loss_phys = (dP**2).mean() + (dQ**2).mean()
+        (loss_data + LAMBDA*loss_phys).backward()
+        opt.step()
+        tot_d += loss_data.item()*len(idx); tot_p += loss_phys.item()*len(idx)
+    if (ep+1) % 100 == 0:
+        print(f&quot;  epoch {ep+1:3d}  data={tot_d/len(Xtr):.6f}  physics={tot_p/len(Xtr):.6f}&quot;)
+
+# --- 物理法則の充足度を比較 ---
+print(&quot;\n=== 電力方程式の残差（物理法則をどれだけ満たすか）===&quot;)
+for name, m in [(&quot;通常の GNN&quot;, model), (&quot;物理制約付き GNN&quot;, model_pi)]:
+    m.eval()
+    with torch.no_grad():
+        out = m(Xte, A_hat)
+        dP, dQ = power_mismatch(out[:,:,0], out[:,:,1], Xte[:,:,0], Xte[:,:,1])
+        resid = (dP.abs().mean() + dQ.abs().mean()).item()/2
+        mae = nn.functional.l1_loss(out, Yte).item()
+    print(f&quot;{name:&lt;20}: 予測誤差 MAE={mae:.5f}, 物理残差={resid:.5f} p.u.&quot;)
+print(&quot;\n→ 物理制約を入れると、物理的に整合した解を出すようになる&quot;)
+</code></pre>
+<h3 id="s15">13.3.3 オートエンコーダによる異常検知</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第13回 デモ3: 正常データのみで学習し未知の異常を検出する&quot;&quot;&quot;
+import numpy as np
+import torch
+import torch.nn as nn
+import matplotlib.pyplot as plt
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+
+def make_measurements(n_normal=2500, n_anomaly=300):
+    &quot;&quot;&quot;正常運転と異常（線路開放・過負荷・計測異常）のデータを作る&quot;&quot;&quot;
+    base = pn.case14()
+    p0, q0 = base.load.p_mw.values.copy(), base.load.q_mvar.values.copy()
+    normal, anomaly, labels = [], [], []
+
+    for _ in range(n_normal):
+        net = pn.case14()
+        s = np.random.uniform(0.80, 1.15, len(p0))
+        net.load.p_mw, net.load.q_mvar = p0*s, q0*s
+        try: pp.runpp(net)
+        except pp.LoadflowNotConverged: continue
+        normal.append(np.r_[net.res_bus.vm_pu.values,
+                            net.res_bus.va_degree.values/50,
+                            net.res_line.loading_percent.values/100])
+
+    for k in range(n_anomaly):
+        net = pn.case14()
+        kind = k % 3
+        if kind == 0:      # 線路開放（N-1 事故）
+            s = np.random.uniform(0.85, 1.10, len(p0))
+            net.load.p_mw, net.load.q_mvar = p0*s, q0*s
+            net.line.at[np.random.randint(len(net.line)), &quot;in_service&quot;] = False
+        elif kind == 1:    # 局所的な過負荷
+            s = np.random.uniform(0.85, 1.05, len(p0))
+            s[np.random.randint(len(p0))] *= np.random.uniform(2.2, 3.2)
+            net.load.p_mw, net.load.q_mvar = p0*s, q0*s
+        else:              # 計測異常はあとでノイズ注入
+            s = np.random.uniform(0.85, 1.10, len(p0))
+            net.load.p_mw, net.load.q_mvar = p0*s, q0*s
+        try: pp.runpp(net)
+        except pp.LoadflowNotConverged: continue
+        v = np.r_[net.res_bus.vm_pu.values,
+                  net.res_bus.va_degree.values/50,
+                  net.res_line.loading_percent.values/100]
+        if kind == 2:
+            v[np.random.randint(len(v))] += np.random.choice([-1, 1])*0.35
+        anomaly.append(v); labels.append(kind)
+    return (np.array(normal, dtype=np.float32),
+            np.array(anomaly, dtype=np.float32), np.array(labels))
+
+print(&quot;計測データ生成中...&quot;)
+Xn, Xa, lab = make_measurements()
+print(f&quot;正常 {len(Xn)} 件, 異常 {len(Xa)} 件, 次元 {Xn.shape[1]}&quot;)
+
+mu, sd = Xn[:2000].mean(0), Xn[:2000].std(0) + 1e-8   # 学習データのみで正規化
+Xn_s, Xa_s = (Xn-mu)/sd, (Xa-mu)/sd
+
+class AutoEncoder(nn.Module):
+    def __init__(self, d, latent=8):
+        super().__init__()
+        self.enc = nn.Sequential(nn.Linear(d,64), nn.ReLU(),
+                                 nn.Linear(64,24), nn.ReLU(), nn.Linear(24,latent))
+        self.dec = nn.Sequential(nn.Linear(latent,24), nn.ReLU(),
+                                 nn.Linear(24,64), nn.ReLU(), nn.Linear(64,d))
+    def forward(self, x): return self.dec(self.enc(x))
+
+ae = AutoEncoder(Xn.shape[1]).to(DEVICE)
+opt = torch.optim.Adam(ae.parameters(), lr=1e-3)
+Xtr_ae = torch.tensor(Xn_s[:2000]).to(DEVICE)
+
+print(&quot;オートエンコーダ学習中（正常データのみ）...&quot;)
+for ep in range(400):
+    ae.train(); opt.zero_grad()
+    loss = nn.functional.mse_loss(ae(Xtr_ae), Xtr_ae)
+    loss.backward(); opt.step()
+    if (ep+1) % 100 == 0:
+        print(f&quot;  epoch {ep+1:3d}  loss={loss.item():.6f}&quot;)
+
+ae.eval()
+with torch.no_grad():
+    def score(X):
+        t = torch.tensor(X).to(DEVICE)
+        return ((ae(t)-t)**2).mean(1).cpu().numpy()
+    s_norm = score(Xn_s[2000:])       # 学習に使っていない正常データ
+    s_anom = score(Xa_s)
+
+thr = np.percentile(s_norm, 99)       # 正常データの99パーセンタイルを閾値に
+tpr = (s_anom &gt; thr).mean()*100
+fpr = (s_norm &gt; thr).mean()*100
+print(f&quot;\n=== 異常検知の性能 ===&quot;)
+print(f&quot;閾値               : {thr:.5f}&quot;)
+print(f&quot;検出率（TPR）      : {tpr:.1f} %&quot;)
+print(f&quot;誤警報率（FPR）    : {fpr:.1f} %&quot;)
+print(&quot;\n異常種別ごとの検出率:&quot;)
+for k, name in enumerate([&quot;線路開放（N-1）&quot;, &quot;局所過負荷&quot;, &quot;計測異常&quot;]):
+    m = lab == k
+    print(f&quot;  {name:&lt;16}: {(s_anom[m] &gt; thr).mean()*100:5.1f} %&quot;)
+
+fig, axes = plt.subplots(1, 2, figsize=(13, 4.8))
+axes[0].hist(s_norm, bins=60, alpha=0.7, label=&quot;正常&quot;, density=True)
+axes[0].hist(s_anom, bins=60, alpha=0.7, label=&quot;異常&quot;, density=True)
+axes[0].axvline(thr, color=&quot;k&quot;, ls=&quot;--&quot;, label=f&quot;閾値&quot;)
+axes[0].set_xlabel(&quot;再構成誤差（異常スコア）&quot;); axes[0].set_ylabel(&quot;密度&quot;)
+axes[0].set_title(&quot;異常スコアの分布&quot;); axes[0].legend(); axes[0].set_yscale(&quot;log&quot;)
+
+from sklearn.metrics import roc_curve, auc
+y_true = np.r_[np.zeros(len(s_norm)), np.ones(len(s_anom))]
+fpr_c, tpr_c, _ = roc_curve(y_true, np.r_[s_norm, s_anom])
+axes[1].plot(fpr_c, tpr_c, lw=2, label=f&quot;AUC = {auc(fpr_c,tpr_c):.4f}&quot;)
+axes[1].plot([0,1],[0,1],&quot;k--&quot;, alpha=0.5)
+axes[1].set_xlabel(&quot;誤警報率 FPR&quot;); axes[1].set_ylabel(&quot;検出率 TPR&quot;)
+axes[1].set_title(&quot;ROC 曲線&quot;); axes[1].legend(); axes[1].grid(alpha=0.3)
+plt.tight_layout(); plt.savefig(&quot;../図/ch13_anomaly.png&quot;, dpi=150)
+</code></pre>
+<h3 id="s16">13.3.4 強化学習による電圧制御</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第13回 デモ4: Q学習で調相設備の運用ルールを獲得する&quot;&quot;&quot;
+import numpy as np
+import pandapower as pp
+import pandapower.networks as pn
+import matplotlib.pyplot as plt
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+rng = np.random.default_rng(0)
+
+class VoltageControlEnv:
+    &quot;&quot;&quot;調相設備の入切で電圧を維持する環境（第6回 VQC の RL 版）&quot;&quot;&quot;
+    ACTIONS = [-20.0, -10.0, 0.0, 10.0, 20.0]      # 無効電力の変更量 [Mvar]
+
+    def __init__(self, bus=13):
+        self.bus = bus
+        self.reset()
+
+    def reset(self):
+        self.net = pn.case14()
+        s = rng.uniform(0.75, 1.30, len(self.net.load))
+        self.net.load.p_mw   *= s
+        self.net.net_scale = s
+        self.net.load.q_mvar *= s
+        self.q = 0.0
+        self.shunt_idx = pp.create_shunt(self.net, bus=self.bus, q_mvar=0.0)
+        return self._state()
+
+    def _solve(self):
+        try:
+            pp.runpp(self.net); return True
+        except pp.LoadflowNotConverged:
+            return False
+
+    def _state(self):
+        if not self._solve(): return None
+        v = self.net.res_bus.vm_pu[self.bus]
+        # 状態を離散化（電圧5区分 × 現在のQ 5区分）
+        vb = int(np.clip((v - 0.94)/0.03, 0, 4))
+        qb = int(np.clip((self.q + 40)/20, 0, 4))
+        return vb*5 + qb
+
+    def step(self, a):
+        self.q = float(np.clip(self.q + self.ACTIONS[a], -40, 40))
+        self.net.shunt.at[self.shunt_idx, &quot;q_mvar&quot;] = -self.q   # 符号: +で供給
+        s = self._state()
+        if s is None:
+            return None, -100.0, True
+        v = self.net.res_bus.vm_pu[self.bus]
+        # 報酬: 電圧偏差＋逸脱ペナルティ＋設備使用コスト
+        r = -abs(v - 1.0)*100
+        if v &lt; 0.95 or v &gt; 1.05: r -= 40
+        r -= abs(self.q)*0.04
+        return s, r, False
+
+env = VoltageControlEnv()
+Q = np.zeros((25, len(env.ACTIONS)))
+alpha, gamma, eps = 0.15, 0.92, 1.0
+history = []
+
+print(&quot;Q学習中...&quot;)
+for ep in range(3000):
+    s = env.reset()
+    if s is None: continue
+    total = 0.0
+    for _ in range(6):
+        a = rng.integers(len(env.ACTIONS)) if rng.random() &lt; eps else int(np.argmax(Q[s]))
+        s2, r, done = env.step(a)
+        if s2 is None:
+            Q[s,a] += alpha*(r - Q[s,a]); total += r; break
+        Q[s,a] += alpha*(r + gamma*Q[s2].max() - Q[s,a])
+        s, total = s2, total + r
+        if done: break
+    history.append(total)
+    eps = max(0.03, eps*0.9985)
+
+print(f&quot;学習完了。最終 ε = {eps:.3f}&quot;)
+
+# --- 学習した方策 vs 無制御 ---
+def evaluate(policy, n=250):
+    devs, viol = [], 0
+    for _ in range(n):
+        s = env.reset()
+        if s is None: continue
+        if policy == &quot;rl&quot;:
+            for _ in range(5):
+                a = int(np.argmax(Q[s]))
+                s2, _, done = env.step(a)
+                if s2 is None or done: break
+                s = s2
+        v = env.net.res_bus.vm_pu[env.bus]
+        devs.append(abs(v-1.0))
+        if v &lt; 0.95 or v &gt; 1.05: viol += 1
+    return np.mean(devs), viol/len(devs)*100
+
+d0, v0 = evaluate(&quot;none&quot;)
+d1, v1 = evaluate(&quot;rl&quot;)
+print(f&quot;\n{&#39;方式&#39;:&lt;16} {&#39;平均電圧偏差&#39;:&gt;14} {&#39;逸脱率&#39;:&gt;10}&quot;)
+print(f&quot;{&#39;無制御&#39;:&lt;16} {d0:14.5f} {v0:9.1f}%&quot;)
+print(f&quot;{&#39;強化学習&#39;:&lt;16} {d1:14.5f} {v1:9.1f}%&quot;)
+print(f&quot;改善: 偏差 {(1-d1/d0)*100:.1f}% 減, 逸脱率 {v0-v1:.1f} ポイント減&quot;)
+
+fig, ax = plt.subplots(figsize=(9, 4.5))
+w = 100
+ax.plot(np.convolve(history, np.ones(w)/w, mode=&quot;valid&quot;), lw=1.5)
+ax.set_xlabel(&quot;エピソード&quot;); ax.set_ylabel(f&quot;累積報酬（{w}件移動平均）&quot;)
+ax.set_title(&quot;強化学習による電圧制御の学習曲線&quot;); ax.grid(alpha=0.3)
+plt.tight_layout(); plt.savefig(&quot;../図/ch13_rl.png&quot;, dpi=150)
+</code></pre>
+<hr>
+<h2 id="s17">13.4 例題</h2>
+<h3 id="s18">例題 13-1（GNN の適合性）</h3>
+<p>電力系統の解析に MLP（全結合ニューラルネット）ではなく GNN を使う理由を、
+3 つ挙げて説明せよ。</p>
+<p><strong>解答</strong></p>
+<p><strong>(1) 順序不変性</strong>
+MLP は入力ベクトルの順序に依存する。母線に番号を振り直すと別の入力になり、
+学習した知識が使えない。GNN はグラフ構造に基づくため<strong>番号付けによらない</strong>。</p>
+<p><strong>(2) トポロジー変化への対応</strong>
+第15回で扱う N-1 解析では線路を 1 本ずつ開放する。
+MLP では系統構成が変わるたびに再学習が必要だが、
+GNN は<strong>隣接行列を変えるだけ</strong>で対応できる。</p>
+<p><strong>(3) 物理構造との整合</strong>
+第4回の電力方程式
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mi>i</mi></msub><mo>=</mo><msub><mi>V</mi><mi>i</mi></msub><msub><mo>∑</mo><mrow><mi>j</mi><mo>∈</mo><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></msub><msub><mi>V</mi><mi>j</mi></msub><mo stretchy="false">(</mo><msub><mi>G</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi>cos</mi><mo>⁡</mo><msub><mi>θ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>B</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi>sin</mi><mo>⁡</mo><msub><mi>θ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">P_i = V_i\sum_{j\in\mathcal{N}(i)}V_j(G_{ij}\cos\theta_{ij}+B_{ij}\sin\theta_{ij})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2247em;vertical-align:-0.4747em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2253em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span><span class="mrel mtight">∈</span><span class="mord mathcal mtight" style="margin-right:0.1474em;">N</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">i</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4747em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0502em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">sin</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>
+は「自ノードの量は<strong>隣接ノードからの寄与の和</strong>」という形をしている。
+GNN のメッセージパッシング
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi mathvariant="bold">h</mi><mi>i</mi><mrow><mo stretchy="false">(</mo><mi>l</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow></msubsup><mo>=</mo><mi>σ</mi><mo stretchy="false">(</mo><msub><mi mathvariant="bold">W</mi><mi>s</mi></msub><msubsup><mi mathvariant="bold">h</mi><mi>i</mi><mrow><mo stretchy="false">(</mo><mi>l</mi><mo stretchy="false">)</mo></mrow></msubsup><mo>+</mo><msub><mo>∑</mo><mrow><mi>j</mi><mo>∈</mo><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></msub><msub><mi mathvariant="bold">W</mi><mi>n</mi></msub><msubsup><mi mathvariant="bold">h</mi><mi>j</mi><mrow><mo stretchy="false">(</mo><mi>l</mi><mo stretchy="false">)</mo></mrow></msubsup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathbf{h}_i^{(l+1)} = \sigma(\mathbf{W}_s\mathbf{h}_i^{(l)}+\sum_{j\in\mathcal{N}(i)}\mathbf{W}_n\mathbf{h}_j^{(l)})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3217em;vertical-align:-0.2769em;"></span><span class="mord"><span class="mord mathbf">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4231em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2769em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3217em;vertical-align:-0.2769em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mopen">(</span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4231em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2769em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.5195em;vertical-align:-0.4747em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2253em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span><span class="mrel mtight">∈</span><span class="mord mathcal mtight" style="margin-right:0.1474em;">N</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">i</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4747em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4231em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.413em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>
+と<strong>構造が一致する</strong>。物理と整合した帰納バイアスを持つ。</p>
+<h3 id="s19">例題 13-2（AI 潮流計算の使いどころ）</h3>
+<p>GNN による潮流計算の代理モデルが、
+NR 法の 200 倍高速で、電圧の最大誤差が 0.003 p.u. であった。</p>
+<ol>
+<li>この誤差は実用上許容できるか。</li>
+<li>この代理モデルを使うべき場面と、使うべきでない場面を挙げよ。</li>
+</ol>
+<p><strong>解答</strong></p>
+<p><strong>(1)</strong> 場面による。</p>
+<p>電圧の運用範囲は 0.95〜1.05 p.u.（幅 0.10）である。
+誤差 0.003 p.u. は幅の <strong>3%</strong> にあたる。</p>
+<ul>
+<li><strong>スクリーニング用途</strong>: 十分許容できる。多数ケースから危険なケースを絞り込む目的なら問題ない</li>
+<li><strong>最終的な判断</strong>: 電圧が 1.048 p.u. と予測されたとき、真値は 1.045〜1.051 で、
+<strong>上限 1.05 を超えるかどうかが判定できない</strong>。この用途では不十分</li>
+</ul>
+<p><strong>(2)</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">使うべき場面</th>
+<th align="left">理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>N-1 事故解析の一次スクリーニング</strong>（第15回）</td>
+<td align="left">数千ケースから危険な数十ケースに絞る</td>
+</tr>
+<tr>
+<td align="left">モンテカルロ・確率的解析</td>
+<td align="left">数万回の試行が必要</td>
+</tr>
+<tr>
+<td align="left">最適化の内部ループ（第14回）</td>
+<td align="left">繰り返し潮流計算を呼ぶ</td>
+</tr>
+<tr>
+<td align="left">リアルタイム監視の概況把握</td>
+<td align="left">速度が最優先</td>
+</tr>
+</tbody></table></div>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">使うべきでない場面</th>
+<th align="left">理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>最終的な設備計画の判断</strong></td>
+<td align="left">誤差が投資判断を左右する</td>
+</tr>
+<tr>
+<td align="left">保護整定の決定</td>
+<td align="left">安全に直結する</td>
+</tr>
+<tr>
+<td align="left">学習範囲外の運転状態</td>
+<td align="left">外挿の危険（第12回）</td>
+</tr>
+<tr>
+<td align="left">説明責任が問われる判断</td>
+<td align="left">根拠を示せない</td>
+</tr>
+</tbody></table></div>
+<p><strong>実務的な使い方</strong>: <strong>GNN でスクリーニング → 危険なケースだけ NR 法で厳密計算</strong>
+という 2 段階が合理的である。速度と精度の両立ができる。</p>
+<h3 id="s20">例題 13-3（強化学習の安全性）</h3>
+<p>強化学習で系統復旧の手順を学習させたい。実系統で学習してよいか論じよ。</p>
+<p><strong>解答</strong></p>
+<p><strong>絶対に実系統で学習してはならない。</strong></p>
+<p><strong>理由</strong>:</p>
+<ol>
+<li><strong>試行錯誤が本質</strong>である。強化学習は「まず行動し、結果から学ぶ」。
+初期の方策はランダムに近く、<strong>遮断器を無作為に操作する</strong>ことになる。</li>
+<li><strong>失敗のコストが極大</strong>。停電の拡大、機器の損傷、最悪は人命に関わる。</li>
+<li><strong>学習に必要な試行回数が膨大</strong>。数万〜数百万エピソードが必要だが、
+系統復旧という事象はそもそも滅多に起きない。</li>
+</ol>
+<p><strong>現実的なアプローチ</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">段階</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">1. シミュレータで学習</td>
+<td align="left">pandapower 等の上で数百万回試行する</td>
+</tr>
+<tr>
+<td align="left">2. <strong>安全層の付加</strong></td>
+<td align="left">実行前に制約（電圧・過負荷・N-1）をチェックし、違反する行動を却下</td>
+</tr>
+<tr>
+<td align="left">3. <strong>オフライン検証</strong></td>
+<td align="left">過去の実事故データで方策を検証</td>
+</tr>
+<tr>
+<td align="left">4. <strong>推薦モードでの運用</strong></td>
+<td align="left">AI は候補を提示するのみ。<strong>実行判断は運用員</strong></td>
+</tr>
+<tr>
+<td align="left">5. 限定的な自動化</td>
+<td align="left">十分な実績を積んだ範囲でのみ自動実行</td>
+</tr>
+</tbody></table></div>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mtext>シミュレータと現実のギャップ（sim-to-real gap）をどう埋めるかが最大の課題</mtext></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\text{シミュレータと現実のギャップ（sim-to-real gap）をどう埋めるかが最大の課題}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.5689em;vertical-align:-0.5344em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0344em;"><span style="top:-3.5689em;"><span class="pstrut" style="height:3.5689em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord text"><span class="mord cjk_fallback">シミュレータと現実のギャップ（</span><span class="mord">sim-to-real gap</span><span class="mord cjk_fallback">）をどう埋めるかが最大の課題</span></span></span></span></span></span><span style="top:-3.0344em;"><span class="pstrut" style="height:3.5689em;"></span><span class="stretchy fbox" style="height:1.5689em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.5344em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>シミュレータが現実を完全に再現できない以上、
+<strong>最終的な責任を人間が持つ設計</strong>が現時点では必須である。</p>
+<hr>
+<h2 id="s21">13.5 演習問題</h2>
+<h3 id="s22">基礎問題</h3>
+<p><strong>問 13-1</strong> 電力系統がグラフ構造であることを、
+ノード・エッジが何に対応するかを明示して説明せよ。
+また <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">Y</mi><mtext>bus</mtext></msub></mrow><annotation encoding="application/x-tex">\mathbf{Y}_\text{bus}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.0288em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0288em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">bus</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> とグラフの隣接行列の関係を述べよ。</p>
+<p><strong>問 13-2</strong> 潮流計算と状態推定の違いを、
+入力・方程式の数・解法・目的の 4 点で表にまとめよ。</p>
+<p><strong>問 13-3</strong> 異常検知にオートエンコーダを使う利点を、
+電力系統の事故データの性質と関連づけて説明せよ。</p>
+<p><strong>問 13-4</strong> 強化学習の 5 要素（状態・行動・報酬・方策・環境）を、
+電圧無効電力制御（第6回 VQC）の問題に対応づけて説明せよ。</p>
+<p><strong>問 13-5</strong> PINN（物理情報ニューラルネットワーク）の損失関数の構成を述べ、
+純粋なデータ駆動学習に比べた利点を 3 つ挙げよ。</p>
+<h3 id="s23">応用問題</h3>
+<p><strong>問 13-6</strong> 13.3.1 節の GNN 潮流計算を実装し、以下を評価せよ。</p>
+<p>(a) 学習データ数を 500 / 1500 / 3000 と変えたときの精度を比較せよ。
+(b) GNN の層数を 1 / 2 / 4 / 8 と変えたときの精度を比較し、
+   最適な層数を求めよ。層を増やしすぎると悪化する理由（過平滑化）を説明せよ。
+(c) 学習時の負荷変動範囲を 0.6〜1.35 倍としたが、
+   <strong>範囲外</strong>（0.4 倍、1.6 倍）を入力するとどうなるか。第12回の外挿問題と関連づけて論じよ。
+(d) 13.3.2 節の物理制約を加えた場合、(c) の外挿性能は改善するか検証せよ。</p>
+<p><strong>問 13-7</strong> 沖縄本島系統（第6回 問6-5 で構築したモデル）を用いて、
+AI による系統解析を検討せよ。</p>
+<p>(a) 需要と太陽光出力をランダムに変動させた潮流計算データを 2000 ケース生成せよ。
+(b) GNN で代理モデルを構築し、精度と速度を評価せよ。
+(c) 太陽光出力が急変（雲による 50% 減）したケースを異常として、
+   オートエンコーダで検出できるか検証せよ。
+(d) 強化学習で、太陽光インバータの無効電力制御（第9回 Volt-Var）を学習させよ。
+   報酬は「電圧偏差 + 出力抑制量」とせよ。
+(e) 学習した方策を、第9回で設計した固定の Volt-Var カーブと比較せよ。
+   どちらが優れているか、また実運用ではどちらを選ぶべきか論じよ。</p>
+<p><strong>問 13-8</strong> AI を電力系統の実運用に適用する際の課題を論じよ。</p>
+<p>(a) 説明責任（explainability）が求められる理由を、
+   電力が社会インフラであることと関連づけて述べよ。
+(b) 学習範囲外の入力に対する挙動を保証する方法を 3 つ提案せよ。
+(c) AI の判断が誤った場合の責任の所在について、あなたの考えを述べよ。
+(d) 「AI は物理モデルを置き換えるべきか、補完すべきか」について、
+   本講義で学んだ内容を踏まえて 400 字程度で論じよ。</p>
+<hr>
+<h2 id="s24">13.6 まとめ</h2>
+<h3 id="s25">キーポイント</h3>
+<ul>
+<li>電力系統は<strong>グラフ</strong>（ノード＝母線、エッジ＝ブランチ）であり、
+GNN のメッセージパッシング
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi mathvariant="bold">h</mi><mi>i</mi><mrow><mo stretchy="false">(</mo><mi>l</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow></msubsup><mo>=</mo><mi>σ</mi><mo stretchy="false">(</mo><msub><mi mathvariant="bold">W</mi><mi>s</mi></msub><msubsup><mi mathvariant="bold">h</mi><mi>i</mi><mrow><mo stretchy="false">(</mo><mi>l</mi><mo stretchy="false">)</mo></mrow></msubsup><mo>+</mo><msub><mo>∑</mo><mrow><mi>j</mi><mo>∈</mo><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></msub><msub><mi mathvariant="bold">W</mi><mi>n</mi></msub><msubsup><mi mathvariant="bold">h</mi><mi>j</mi><mrow><mo stretchy="false">(</mo><mi>l</mi><mo stretchy="false">)</mo></mrow></msubsup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathbf{h}_i^{(l+1)}=\sigma(\mathbf{W}_s\mathbf{h}_i^{(l)}+\sum_{j\in\mathcal{N}(i)}\mathbf{W}_n\mathbf{h}_j^{(l)})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3217em;vertical-align:-0.2769em;"></span><span class="mord"><span class="mord mathbf">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4231em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2769em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3217em;vertical-align:-0.2769em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mopen">(</span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4231em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2769em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.5195em;vertical-align:-0.4747em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2253em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span><span class="mrel mtight">∈</span><span class="mord mathcal mtight" style="margin-right:0.1474em;">N</span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">i</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4747em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.016em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.016em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4231em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.0197em;">l</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.413em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>
+は<strong>第4回の電力方程式と同じ構造</strong>を持つ。これが GNN が適合する根本理由である。</li>
+<li>GNN の利点は<strong>順序不変性・トポロジー変化への対応・規模への汎化</strong>。
+層数は 2〜4 が適切（深すぎると<strong>過平滑化</strong>）。</li>
+<li><strong>状態推定</strong>は「今どうなっているか」を冗長な計測から推定する WLS 問題。
+潮流計算（「こうしたらどうなるか」）とは目的が異なる。</li>
+<li><strong>異常検知はオートエンコーダ</strong>が有効。事故データは希少で未知の故障もあるため、
+<strong>正常データだけで学習</strong>し、再構成誤差で異常を判定する。</li>
+<li><strong>強化学習</strong>は VQC・系統復旧・混雑管理に適用できるが、
+<strong>実系統での学習は絶対に不可</strong>。シミュレータ学習＋安全層＋人間の最終判断が必須。</li>
+<li><strong>物理を捨ててはいけない</strong>。電力系統には確立された物理モデルがある。
+PINN のように<strong>物理方程式の残差を損失に加える</strong>ことで、
+少ないデータで、物理的に妥当で、外挿にも強いモデルが得られる。</li>
+<li>実務的には <strong>AI でスクリーニング → 厳密計算で確認</strong>という 2 段階が合理的。
+AI は物理の<strong>代替ではなく高速化と補完</strong>である。</li>
+</ul>
+<h3 id="s26">次回への橋渡し</h3>
+<p>第13回では AI による系統の<strong>解析</strong>（状態を知る）を扱った。
+第14回では<strong>最適化</strong>（どう動かすべきかを決める）を扱う。</p>
+<p>第4〜6回の潮流計算に「目的関数」と「制約」を加えたものが
+<strong>最適潮流計算（OPF）</strong>である。これは電力系統工学の集大成であり、
+経済性（第8回の ELD）と安全性（第6回の電圧、第7回の安定度）を
+同時に満たす運転点を求める問題である。</p>
+<p>そこでも AI は、OPF の高速化という形で役割を持つ。</p>
+
+    <div class="pn"><a class="pn-prev" href="ch12.html">← 第12回 機械学習で予測する</a><a class="pn-next" href="ch14.html">第14回 経済負荷配分と OPF →</a></div>
+  </main>
+  <aside class="side"><nav class="toc" aria-label="目次"><div class="toc-h">この回の目次</div><a class="lv2" href="#s1">まず直感で（3 分でつかむ）</a><a class="lv2" href="#s2">13.1 導入</a><a class="lv3" href="#s3">学習目標</a><a class="lv3" href="#s4">前提知識（第4〜7回・第12回との接続）</a><a class="lv2" href="#s5">13.2 理論</a><a class="lv3" href="#s6">13.2.1 なぜ電力系統に GNN なのか</a><a class="lv3" href="#s7">13.2.2 状態推定と AI</a><a class="lv3" href="#s8">13.2.3 深層学習による異常検知・故障診断</a><a class="lv3" href="#s9">13.2.4 強化学習による系統制御</a><a class="lv3" href="#s10">13.2.5 物理を組み込んだ学習</a><a class="lv3" href="#s11">13.2.6 再エネ大量導入時代における AI の役割</a><a class="lv2" href="#s12">13.3 シミュレーション</a><a class="lv3" href="#s13">13.3.1 GNN による潮流計算の代理モデル</a><a class="lv3" href="#s14">13.3.2 物理制約を加えた学習（PINN 的手法）</a><a class="lv3" href="#s15">13.3.3 オートエンコーダによる異常検知</a><a class="lv3" href="#s16">13.3.4 強化学習による電圧制御</a><a class="lv2" href="#s17">13.4 例題</a><a class="lv3" href="#s18">例題 13-1（GNN の適合性）</a><a class="lv3" href="#s19">例題 13-2（AI 潮流計算の使いどころ）</a><a class="lv3" href="#s20">例題 13-3（強化学習の安全性）</a><a class="lv2" href="#s21">13.5 演習問題</a><a class="lv3" href="#s22">基礎問題</a><a class="lv3" href="#s23">応用問題</a><a class="lv2" href="#s24">13.6 まとめ</a><a class="lv3" href="#s25">キーポイント</a><a class="lv3" href="#s26">次回への橋渡し</a></nav></aside>
+</div>
+<footer class="bottom">教科書：加藤・田岡『電力システム工学の基礎』 ／ 電力エネルギーシステム解析の基礎と応用 ／ 数式描画：KaTeX（同梱・MIT）</footer>
+<script>
+// 目次の現在位置ハイライト（外部依存なし・file:// で動く）
+(function(){
+  var links=[].slice.call(document.querySelectorAll('.toc a')); if(!links.length) return;
+  var heads=links.map(function(a){return document.getElementById(a.getAttribute('href').slice(1));});
+  function upd(){ var y=window.scrollY+120, i=0; for(var k=0;k<heads.length;k++){ if(heads[k]&&heads[k].offsetTop<=y) i=k; }
+    links.forEach(function(a,k){ a.classList.toggle('on',k===i); }); }
+  window.addEventListener('scroll',upd,{passive:true}); upd();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第13回 演習 — AI × 系統解析</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第13回: GNN の 1 層集約・WLS 状態推定・PCA 再構成誤差・z スコア・Q 学習の 1 ステップ・PINN の損失。
+// ノート 13.2 節の式と記号に合わせる（h_i^(l): ノード表現、z/h(x)/σ_k: 計測・計測関数・標準偏差、
+// Q(s,a)/α/γ: 行動価値・学習率・割引率、L = L_data + λ L_physics）。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+const hv = (i, l) => 'h<sub>' + i + '</sub><sup>(' + l + ')</sup>';
+
+EX.page({
+  ch: 13,
+  intro: 'AI を系統解析に使うとき、中身は「隣の寄与を足す」「残差を二乗して重みを掛ける」「報酬で更新する」という小さな算術の積み重ねです。GNN の 1 層、WLS 状態推定、PCA の再構成誤差、z スコア、Q 学習の 1 ステップ、PINN の損失を、電卓で追える大きさで確かめます。',
+  problems: [
+    {
+      id: 'gnn-layer', title: 'GNN の 1 層（メッセージパッシング）', tags: ['13.2.1', '例題 13-1'],
+      gen(rng) {
+        const HV = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6];
+        const h = [pick(rng, HV), pick(rng, HV), pick(rng, HV), pick(rng, HV)];
+        const ws = pick(rng, [0.5, 0.6, 0.8, 1.0]);
+        const wn = pick(rng, [0.3, 0.4, 0.5, 0.6]);
+        // 4 母線: 1-2, 2-3, 3-4, 2-4 の 4 線路
+        const NB = [[1], [0, 2, 3], [1, 3], [1, 2]];
+        const mean = i => NB[i].reduce((s, j) => s + h[j], 0) / NB[i].length;
+        const h1 = [0, 1, 2, 3].map(i => Math.max(0, ws * h[i] + wn * mean(i)));
+        const h1_2 = Math.max(0, ws * h1[0] + wn * h1[1]);
+        return {
+          given: [
+            ['系統', '母線 1—2—3—4 を直列につなぎ、さらに 2—4 を結ぶ 4 線路（N(1)={2}, N(2)={1,3,4}, N(3)={2,4}, N(4)={2,3}）'],
+            ['入力特徴 ' + hv('i', 0) + '（母線の注入電力 p.u.）', '母線 1: ' + h[0] + ', 母線 2: ' + h[1] + ', 母線 3: ' + h[2] + ', 母線 4: ' + h[3]],
+            ['重み', 'W<sub>self</sub> = ' + ws + ',  W<sub>nb</sub> = ' + wn + '（スカラー）'],
+            ['エッジ特徴 e<sub>ij</sub>', '1 / |N(i)|（隣接ノードの<b>平均</b>を取る集約）'],
+            ['活性化 σ', 'ReLU（負なら 0、正ならそのまま）'],
+          ],
+          q: 'ノート 13.2.1 の更新式 ' + eq(hv('i', 'l+1') + ' = σ(W<sub>self</sub> ' + hv('i', 'l') + ' + Σ<sub>j∈N(i)</sub> W<sub>nb</sub> ' + hv('j', 'l') + ' e<sub>ij</sub>)') + ' を 1 層分計算せよ。<br>(a) 母線 2 の ' + hv(2, 1) + '　(b) 母線 1 の ' + hv(1, 1) + '<br>(c) 同じ重みでもう 1 層かけたときの母線 1 の ' + hv(1, 2),
+          answers: [
+            { key: 'h2', label: '(a) ' + hv(2, 1), unit: '', value: h1[1], abs: 0.01 },
+            { key: 'h1', label: '(b) ' + hv(1, 1), unit: '', value: h1[0], abs: 0.01 },
+            { key: 'h1b', label: '(c) ' + hv(1, 2), unit: '', value: h1_2, abs: 0.01 },
+          ],
+          steps: [
+            'e<sub>ij</sub> = 1/|N(i)| なので、隣接項は「隣の特徴の平均 × W<sub>nb</sub>」になる。母線 2 の隣は 1, 3, 4 の 3 つ、母線 1 の隣は 2 だけ。',
+            '(a) ' + eq(hv(2, 1) + ' = σ(' + ws + ' × ' + h[1] + ' + ' + wn + ' × (' + h[0] + ' + ' + h[2] + ' + ' + h[3] + ')/3) = σ(' + fmt(ws * h[1]) + ' + ' + fmt(wn * mean(1)) + ') = ' + fmt(h1[1])) + '。',
+            '(b) ' + eq(hv(1, 1) + ' = σ(' + ws + ' × ' + h[0] + ' + ' + wn + ' × ' + h[1] + ') = ' + fmt(h1[0])) + '。母線 1 は 1 層では母線 2 の情報しか受け取れない。',
+            '(c) 2 層目は 1 層目の出力を入力にする: ' + eq(hv(1, 2) + ' = σ(' + ws + ' × ' + fmt(h1[0]) + ' + ' + wn + ' × ' + fmt(h1[1]) + ') = ' + fmt(h1_2)) + '。' + hv(2, 1) + ' の中に母線 3, 4 の情報が入っているので、母線 1 は 2 層で 2 ホップ先まで「聞こえる」。',
+          ],
+          insight: '1 層 = 1 ホップ。第4回の電力方程式 P<sub>i</sub> = Σ<sub>j∈N(i)</sub>(…) と同じ「隣の寄与の和」の形なので、GNN は潮流の構造をそのまま学べる。',
+        };
+      },
+    },
+    {
+      id: 'wls', title: '重み付き最小二乗（WLS）による状態推定', tags: ['13.2.2'],
+      gen(rng) {
+        const z1 = pick(rng, [1.010, 1.020, 1.030, 1.040, 1.050]);
+        const d = pick(rng, [0.010, 0.015, 0.020, 0.030]) * pick(rng, [-1, 1]);
+        const z2 = +(z1 + d).toFixed(3);
+        const s1 = pick(rng, [0.005, 0.010]);
+        const s2 = pick(rng, [0.015, 0.020, 0.030]);
+        const w1 = 1 / (s1 * s1), w2 = 1 / (s2 * s2);
+        const xh = (w1 * z1 + w2 * z2) / (w1 + w2);
+        const r1 = z1 - xh, r2 = z2 - xh;
+        const J = w1 * r1 * r1 + w2 * r2 * r2;
+        const xbar = (z1 + z2) / 2;
+        return {
+          given: [
+            ['未知の状態 x', 'ある母線の電圧の大きさ V（1 変数）'],
+            ['計測 1: z<sub>1</sub>（h<sub>1</sub>(x) = x）', z1.toFixed(3) + ' p.u.、標準偏差 σ<sub>1</sub> = ' + s1 + ' p.u.（高精度 PMU）'],
+            ['計測 2: z<sub>2</sub>（h<sub>2</sub>(x) = x）', z2.toFixed(3) + ' p.u.、標準偏差 σ<sub>2</sub> = ' + s2 + ' p.u.（従来 SCADA）'],
+          ],
+          q: '同じ電圧を精度の違う 2 つの計器で測った。ノート 13.2.2 の WLS ' + eq('min J(x) = Σ<sub>k</sub> [z<sub>k</sub> − h<sub>k</sub>(x)]² / σ<sub>k</sub>²') + ' を解け。<br>(a) 推定値 <b>x̂</b>　(b) 最小値 <b>J(x̂)</b>　(c) 計測 2 の残差 <b>r<sub>2</sub> = z<sub>2</sub> − x̂</b>',
+          answers: [
+            { key: 'xh', label: '(a) x̂', unit: 'p.u.', value: xh, tol: 0, abs: 0.001 },
+            { key: 'J', label: '(b) J(x̂)', unit: '', value: J, abs: 0.02 },
+            { key: 'r2', label: '(c) r₂', unit: 'p.u.', value: r2, tol: 0, abs: 0.0005 },
+          ],
+          steps: [
+            'h<sub>k</sub>(x) = x なので J は x の 2 次式。dJ/dx = 0 より ' + eq('x̂ = (z<sub>1</sub>/σ<sub>1</sub>² + z<sub>2</sub>/σ<sub>2</sub>²) / (1/σ<sub>1</sub>² + 1/σ<sub>2</sub>²)') + '。重み 1/σ² は ' + fmt(w1, 0) + ' と ' + fmt(w2, 0) + '。',
+            '(a) ' + eq('x̂ = (' + fmt(w1, 0) + ' × ' + z1.toFixed(3) + ' + ' + fmt(w2, 0) + ' × ' + z2.toFixed(3) + ') / ' + fmt(w1 + w2, 0) + ' = ' + xh.toFixed(4) + ' p.u.') + '。単純平均 ' + xbar.toFixed(4) + ' より精度の良い計測 1 側に寄る。',
+            '残差は ' + eq('r<sub>1</sub> = ' + z1.toFixed(3) + ' − ' + xh.toFixed(4) + ' = ' + r1.toFixed(4) + ',  r<sub>2</sub> = ' + z2.toFixed(3) + ' − ' + xh.toFixed(4) + ' = ' + r2.toFixed(4)) + '。精度の悪い計測 2 に大きな残差が割り当てられる。',
+            '(b) ' + eq('J(x̂) = ' + fmt(w1, 0) + ' × (' + r1.toFixed(4) + ')² + ' + fmt(w2, 0) + ' × (' + r2.toFixed(4) + ')² = ' + fmt(J)) + '。計測が 2 個・未知数 1 個の過決定問題なので J は 0 にならない。',
+          ],
+          insight: '状態推定は「計測を信じる度合い 1/σ² で加重平均する」こと。残差が σ の数倍を超える計測は不良データの疑いがあり、次の問の z スコアと同じ発想で検定する。',
+        };
+      },
+    },
+    {
+      id: 'pca', title: 'PCA（線形オートエンコーダ）の再構成誤差', tags: ['13.2.3', 'viz/ai.html'],
+      gen(rng) {
+        const XV = [-2, -1.5, -1, -0.5, 0.5, 1, 1.5, 2, 2.5, 3];
+        const x1 = pick(rng, XV), x2 = pick(rng, XV);
+        const u = pick(rng, [[0.8, 0.6], [0.6, 0.8], [0.96, 0.28], [0.28, 0.96], [0.8, -0.6], [0.6, -0.8]]);
+        const z = x1 * u[0] + x2 * u[1];
+        const xh1 = z * u[0], xh2 = z * u[1];
+        const e = (x1 - xh1) ** 2 + (x2 - xh2) ** 2;
+        return {
+          given: [
+            ['標準化済みの計測ベクトル x', '(x<sub>1</sub>, x<sub>2</sub>) = (' + x1 + ', ' + x2 + ')'],
+            ['第 1 主成分（単位ベクトル）u', '(' + u[0] + ', ' + u[1] + ')'],
+            ['潜在次元', '1（第 1 主成分だけを残す）'],
+          ],
+          q: 'PCA は「エンコーダ = u との内積、デコーダ = u 方向へ戻す」線形オートエンコーダである。<br>(a) 潜在変数 <b>z = x·u</b>　(b) 再構成 x̂ = z u の第 1 成分 <b>x̂<sub>1</sub></b><br>(c) 異常スコア ' + eq('‖x − x̂‖²') + '（ノート 13.2.3 の再構成誤差）',
+          answers: [
+            { key: 'z', label: '(a) z', unit: '', value: z, abs: 0.02 },
+            { key: 'xh1', label: '(b) x̂₁', unit: '', value: xh1, abs: 0.02 },
+            { key: 'e', label: '(c) ‖x − x̂‖²', unit: '', value: e, abs: 0.02 },
+          ],
+          steps: [
+            '(a) エンコード: ' + eq('z = ' + x1 + ' × ' + u[0] + ' + (' + x2 + ') × (' + u[1] + ') = ' + fmt(z)) + '。u が単位ベクトルなので z は「u 方向への射影の長さ」。',
+            '(b) デコード: ' + eq('x̂ = z u = (' + fmt(xh1) + ', ' + fmt(xh2) + ')') + '。主成分の直線上に落ちた点が「正常ならこう見えるはず」という再構成。',
+            '(c) ' + eq('‖x − x̂‖² = (' + x1 + ' − ' + fmt(xh1) + ')² + (' + x2 + ' − ' + fmt(xh2) + ')² = ' + fmt(e)) + '。‖x‖² − z² = ' + fmt(x1 * x1 + x2 * x2) + ' − ' + fmt(z * z) + ' = ' + fmt(x1 * x1 + x2 * x2 - z * z) + ' でも同じ（ピタゴラス）。',
+          ],
+          insight: '正常データは主成分の直線に沿って散らばるので再構成誤差が小さい。直線から外れた点ほど誤差が大きく、それを「異常スコア」と呼ぶ。深層オートエンコーダは、この直線を曲面に置き換えたもの。',
+        };
+      },
+    },
+    {
+      id: 'zscore', title: '異常スコアの z 値と閾値判定', tags: ['13.2.3', '13.3.3'],
+      gen(rng) {
+        const mu = pick(rng, [0.010, 0.012, 0.015, 0.020]);
+        const sd = pick(rng, [0.002, 0.003, 0.004, 0.005]);
+        const k = pick(rng, [2.5, 3]);
+        const m = pick(rng, [-1, 0.5, 1.5, 2, 2.8, 3.5, 4, 5, 6]);
+        const s = +(mu + m * sd).toFixed(4);
+        const z = (s - mu) / sd;
+        const th = mu + k * sd;
+        const flag = z > k ? 1 : 0;
+        return {
+          given: [
+            ['正常データの再構成誤差の平均 μ', mu.toFixed(3)],
+            ['正常データの再構成誤差の標準偏差 σ', sd.toFixed(3)],
+            ['閾値の係数 k', k + '（z &gt; k を異常とする）'],
+            ['新しい計測の再構成誤差 s', s.toFixed(4)],
+          ],
+          q: 'オートエンコーダを正常データだけで学習し、再構成誤差の分布（μ, σ）を得た。新しい計測について<br>(a) z スコア ' + eq('z = (s − μ) / σ') + '　(b) 誤差そのものの閾値 ' + eq('s<sub>th</sub> = μ + kσ') + '<br>(c) 判定（<b>異常なら 1、正常なら 0</b> を入力）',
+          answers: [
+            { key: 'z', label: '(a) z', unit: '', value: z, abs: 0.05 },
+            { key: 'th', label: '(b) s_th', unit: '', value: th, tol: 0, abs: 0.0005 },
+            { key: 'flag', label: '(c) 判定（1=異常, 0=正常）', unit: '', value: flag, tol: 0, abs: 0.1 },
+          ],
+          steps: [
+            '(a) ' + eq('z = (' + s.toFixed(4) + ' − ' + mu.toFixed(3) + ') / ' + sd.toFixed(3) + ' = ' + fmt(z)) + '。「正常の平均から σ 何個分外れているか」。',
+            '(b) ' + eq('s<sub>th</sub> = ' + mu.toFixed(3) + ' + ' + k + ' × ' + sd.toFixed(3) + ' = ' + th.toFixed(4)) + '。z で判定しても s で判定しても同じこと。',
+            '(c) z = ' + fmt(z) + ' は k = ' + k + ' を' + (flag ? '<b>超える</b> → 異常（1）' : '<b>超えない</b> → 正常（0）') + '。' + (m < 0 ? '平均より小さい側（再構成が良すぎる）は異常ではない。' : (flag ? '線路開放や計測異常の疑い。運用員に通知する。' : '正常のばらつきの範囲内。')),
+          ],
+          insight: 'k を大きくすると誤警報（FPR）は減るが見逃し（TPR 低下）が増える。13.3.3 のデモは正常データの 99 パーセンタイルを閾値にしたが、考え方は同じ「正常の外れ方」を測ること。',
+        };
+      },
+    },
+    {
+      id: 'qlearn', title: 'Q 学習の 1 ステップ更新（電圧制御）', tags: ['13.2.4', '13.3.4'],
+      gen(rng) {
+        const v = pick(rng, [0.93, 0.94, 0.96, 0.97, 0.98, 1.02, 1.03, 1.04, 1.06, 1.07]);
+        const q = pick(rng, [-40, -20, -10, 0, 10, 20, 40]);
+        const rDev = -Math.abs(v - 1) * 100;
+        const rPen = (v < 0.95 || v > 1.05) ? -40 : 0;
+        const rQ = -Math.abs(q) * 0.04;
+        const r = rDev + rPen + rQ;
+        const Qsa = pick(rng, [-30, -25, -20, -15, -10, -8, -5]);
+        const base = [pick(rng, [-40, -30, -25, -20]), pick(rng, [-15, -12, -10, -8]), pick(rng, [-6, -5, -4, -3, -2])];
+        const rot = pick(rng, [0, 1, 2]);
+        const Qn = [base[rot % 3], base[(rot + 1) % 3], base[(rot + 2) % 3]];
+        const alpha = pick(rng, [0.1, 0.15, 0.2, 0.3]);
+        const gamma = pick(rng, [0.9, 0.92, 0.95]);
+        const maxQ = Math.max(...Qn);
+        const y = r + gamma * maxQ;
+        const Qnew = Qsa + alpha * (y - Qsa);
+        return {
+          given: [
+            ['行動後の母線電圧 v', v.toFixed(2) + ' p.u.'],
+            ['行動後の調相設備の無効電力 q', q + ' Mvar'],
+            ['報酬の定義（13.3.4 のデモ）', 'r = −|v − 1.0| × 100 − 40（v が 0.95〜1.05 を外れたとき）− 0.04 |q|'],
+            ['更新前の Q(s, a)', Qsa + ''],
+            ['次状態 s′ の Q 値（行動 −10 / 0 / +10 Mvar）', Qn.join(' / ')],
+            ['学習率 α、割引率 γ', 'α = ' + alpha + ',  γ = ' + gamma],
+          ],
+          q: 'Q 学習の更新式 ' + eq('Q(s,a) ← Q(s,a) + α [ r + γ max<sub>a′</sub> Q(s′,a′) − Q(s,a) ]') + ' を 1 回適用する。<br>(a) 報酬 <b>r</b>　(b) TD 目標 <b>y = r + γ max Q(s′, ·)</b>　(c) 更新後の <b>Q(s, a)</b>',
+          answers: [
+            { key: 'r', label: '(a) r', unit: '', value: r, abs: 0.1 },
+            { key: 'y', label: '(b) y', unit: '', value: y, abs: 0.1 },
+            { key: 'Q', label: '(c) 更新後 Q(s,a)', unit: '', value: Qnew, abs: 0.1 },
+          ],
+          steps: [
+            '(a) 電圧偏差の項 ' + eq('−|' + v.toFixed(2) + ' − 1.0| × 100 = ' + fmt(rDev)) + '、逸脱ペナルティ ' + (rPen ? '<b>−40</b>（0.95〜1.05 の外）' : '0（範囲内）') + '、設備使用コスト ' + eq('−0.04 × |' + q + '| = ' + fmt(rQ)) + '。合計 ' + eq('r = ' + fmt(r)) + '。',
+            '(b) 次状態で最も良い行動の価値は ' + eq('max Q(s′,·) = ' + maxQ) + '。' + eq('y = ' + fmt(r) + ' + ' + gamma + ' × (' + maxQ + ') = ' + fmt(y)) + '。「今の報酬 + 割り引いた将来の見込み」。',
+            '(c) ' + eq('Q(s,a) ← ' + Qsa + ' + ' + alpha + ' × (' + fmt(y) + ' − (' + Qsa + ')) = ' + fmt(Qnew)) + '。TD 誤差 ' + fmt(y - Qsa) + ' の α 倍だけ動く。',
+          ],
+          insight: '報酬の設計がそのまま「何を良しとするか」になる。逸脱ペナルティ −40 を外すと、AI は電圧を少し外しても設備を動かさない方策を覚える。実系統で試行錯誤はできないので、この更新は必ずシミュレータ上で回す。',
+        };
+      },
+    },
+    {
+      id: 'pinn', title: 'PINN の損失 L = L_data + λ L_physics', tags: ['13.2.5', '13.3.2'],
+      gen(rng) {
+        const Ld = pick(rng, [0.0002, 0.0003, 0.0005, 0.0008, 0.0010]);
+        const DV = [0.01, 0.02, 0.03, 0.04, 0.05, -0.02, -0.03, -0.01];
+        const dP = [pick(rng, DV), pick(rng, DV), pick(rng, DV)];
+        const dQ = [pick(rng, DV), pick(rng, DV), pick(rng, DV)];
+        const lam = pick(rng, [0.1, 0.15, 0.2, 0.5, 1.0]);
+        const Lp = dP.reduce((s, v, i) => s + v * v + dQ[i] * dQ[i], 0);
+        const L = Ld + lam * Lp;
+        const lamStar = Ld / Lp;
+        return {
+          given: [
+            ['データ項 L<sub>data</sub>（電圧・位相角の MSE）', Ld.toFixed(4)],
+            ['電力方程式の残差 ΔP<sub>i</sub> = P<sub>i</sub><sup>sch</sup> − P<sub>i</sub>(V̂, θ̂)（母線 1〜3、p.u.）', dP.join(', ')],
+            ['同 ΔQ<sub>i</sub>（母線 1〜3、p.u.）', dQ.join(', ')],
+            ['物理項の重み λ', lam + ''],
+          ],
+          q: 'ノート 13.2.5 の ' + eq('L = L<sub>data</sub> + λ L<sub>physics</sub>,  L<sub>physics</sub> = Σ<sub>i</sub>[(ΔP<sub>i</sub>)² + (ΔQ<sub>i</sub>)²]') + ' について<br>(a) <b>L<sub>physics</sub></b>　(b) 損失 <b>L</b>　(c) 物理項の寄与 λ L<sub>physics</sub> がデータ項と同じ大きさになる <b>λ*</b>',
+          answers: [
+            { key: 'Lp', label: '(a) L_physics', unit: '', value: Lp },
+            { key: 'L', label: '(b) L', unit: '', value: L },
+            { key: 'lam', label: '(c) λ*', unit: '', value: lamStar },
+          ],
+          steps: [
+            '(a) 残差を二乗して母線について足す: ' + eq('L<sub>physics</sub> = (' + dP.map(v => '(' + v + ')²').join(' + ') + ') + (' + dQ.map(v => '(' + v + ')²').join(' + ') + ') = ' + fmt(Lp)) + '。符号は消えるので、ずれの向きは問わない。',
+            '(b) ' + eq('L = ' + Ld.toFixed(4) + ' + ' + lam + ' × ' + fmt(Lp) + ' = ' + fmt(L)) + '。学習はこの L を小さくする方向に重みを動かすので、物理残差も同時に減っていく。',
+            '(c) ' + eq('λ* = L<sub>data</sub> / L<sub>physics</sub> = ' + Ld.toFixed(4) + ' / ' + fmt(Lp) + ' = ' + fmt(lamStar)) + '。λ がこれより' + (lam > lamStar ? '大きい今の設定（' + lam + '）では物理項が支配的' : '小さい今の設定（' + lam + '）ではデータ項が支配的') + '。',
+          ],
+          insight: 'λ は「データを信じるか、キルヒホッフ則を信じるか」の配分。データが少ない・ノイズが多いほど λ を大きくする。13.3.2 のデモの λ = 0.15 は、残差の大きさがデータ MSE と同程度になるよう選んだ値。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

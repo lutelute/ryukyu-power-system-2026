@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第1回 演習 — エネルギー変換の基礎</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第1回: 水力・風力・カルノー効率・燃料と CO2・設備利用率・単位換算。ノート ch01 の式と単位に合わせる。
+// 単位の約束: 水力 P = 9.8 Q H η [kW]（Q [m³/s], H [m]）。風力 P = ½ ρ A u_w³ C_p [W]。効率・設備利用率は % で答える。
+// 1 kWh = 3.6 MJ、1 toe = 41.868 GJ（ノート 1.2.8）。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+
+EX.page({
+  ch: 1,
+  intro: 'エネルギーは形を変えても総量は保存されますが、電気に変えるときには必ず「取り出せる上限」があります。水（落差×流量）、風（風速の 3 乗）、熱（カルノー効率）の出力式を、燃料・CO2・設備利用率・単位換算まで含めて、手を動かして確かめます。',
+  problems: [
+    {
+      id: 'hydro', title: '水力発電の出力と年間発電量', tags: ['1.2.4', '例題 1-1'],
+      gen(rng) {
+        const H = pick(rng, [45, 60, 85, 120, 150, 200]);
+        const Q = pick(rng, [4, 6, 8, 12, 15, 20, 30]);
+        const etaT = pick(rng, [0.86, 0.88, 0.90, 0.92]);
+        const etaG = pick(rng, [0.96, 0.97, 0.98]);
+        const cf = pick(rng, [40, 45, 50, 55, 60]);
+        const eta = etaT * etaG;
+        const PkW = 9.8 * Q * H * eta;
+        const PMW = PkW / 1000;
+        const E = PMW * 8760 * cf / 100;
+        return {
+          given: [['有効落差 H', H + ' m'], ['使用水量 Q', Q + ' m³/s'], ['水車効率', String(etaT)], ['発電機効率', String(etaG)], ['設備利用率', cf + ' %']],
+          q: '(a) 発電端出力 <b>P</b> を MW で求めよ。<br>(b) 設備利用率 ' + cf + '% として年間発電電力量 <b>E</b> を MWh で求めよ。',
+          answers: [
+            { key: 'P', label: '(a) P', unit: 'MW', value: PMW },
+            { key: 'E', label: '(b) E', unit: 'MWh', value: E },
+          ],
+          steps: [
+            '総合効率は各段の効率の<b>積</b>: ' + eq('η = ' + etaT + ' × ' + etaG + ' = ' + fmt(eta, 4)) + '。',
+            '(a) 単位時間に落ちる水の位置エネルギーは ρgQH。ρ = 1000 kg/m³、g = 9.8 m/s² を入れて kW に直すと係数 9.8 が出る: ' + eq('P = 9.8 Q H η = 9.8 × ' + Q + ' × ' + H + ' × ' + fmt(eta, 4) + ' = ' + fmt(PkW) + ' kW = ' + fmt(PMW) + ' MW') + '。',
+            '(b) 1 年は 365 × 24 = 8760 h。定格で 8760 h 回ったときの ' + cf + '% しか発電しないので ' + eq('E = P × 8760 × ' + (cf / 100) + ' = ' + fmt(PMW) + ' × 8760 × ' + (cf / 100) + ' = ' + fmt(E) + ' MWh') + '。',
+          ],
+          insight: '水力の kW は「落差 × 流量」で、kWh は「それが何時間続くか」。ダムの水位管理（H）と河川流量の予測（Q）が、そのまま発電計画の数字になります。',
+        };
+      },
+    },
+    {
+      id: 'wind', title: '風力の 3 乗則とベッツの限界', tags: ['1.2.5', '例題 1-3'],
+      gen(rng) {
+        const D = pick(rng, [60, 80, 90, 100, 120, 130]);
+        const u = pick(rng, [6, 7, 8, 9, 10, 11]);
+        const Cp = pick(rng, [0.35, 0.40, 0.42, 0.45, 0.48]);
+        const u2 = u + pick(rng, [1, 2, 3]);
+        const rho = 1.225;
+        const A = Math.PI * (D / 2) ** 2;
+        const Pwind = 0.5 * rho * A * u ** 3 / 1e6;
+        const P = Pwind * Cp;
+        const Pbetz = Pwind * 16 / 27;
+        const ratio = (u2 / u) ** 3;
+        const P2 = P * ratio;
+        return {
+          given: [['ロータ直径 D', D + ' m'], ['風速 u<sub>w</sub>', u + ' m/s'], ['パワー係数 C<sub>p</sub>', String(Cp)], ['空気密度 ρ', rho + ' kg/m³'], ['風速が上がった後', u2 + ' m/s']],
+          q: '(a) 風速 ' + u + ' m/s のときの風車出力 <b>P</b> を MW で求めよ。<br>(b) もしベッツの限界（C<sub>p</sub> = 16/27）まで取り出せたとしたら出力は何 MW か。<br>(c) 風速が ' + u2 + ' m/s に上がったときの出力を求めよ（定格による頭打ちは無視する）。',
+          answers: [
+            { key: 'P', label: '(a) P', unit: 'MW', value: P },
+            { key: 'Pbetz', label: '(b) P（ベッツ限界）', unit: 'MW', value: Pbetz },
+            { key: 'P2', label: '(c) P（' + u2 + ' m/s）', unit: 'MW', value: P2 },
+          ],
+          steps: [
+            '受風面積 ' + eq('A = π(D/2)² = π × ' + (D / 2) + '² = ' + fmt(A) + ' m²') + '。',
+            '風が持つパワー: ' + eq('P<sub>wind</sub> = ½ ρ A u<sub>w</sub>³ = 0.5 × ' + rho + ' × ' + fmt(A) + ' × ' + u + '³ = ' + fmt(Pwind * 1e6) + ' W = ' + fmt(Pwind) + ' MW') + '。',
+            '(a) 実機はその C<sub>p</sub> 倍しか取り出せない: ' + eq('P = ' + fmt(Pwind) + ' × ' + Cp + ' = ' + fmt(P) + ' MW') + '。',
+            '(b) 理論上限は 16/27 ≈ 0.593: ' + eq('P<sub>Betz</sub> = ' + fmt(Pwind) + ' × 0.593 = ' + fmt(Pbetz) + ' MW') + '。この風車はベッツ限界の ' + fmt(Cp / (16 / 27) * 100, 0) + '% まで迫っている。',
+            '(c) 出力は u<sub>w</sub>³ に比例: ' + eq('(' + u2 + '/' + u + ')³ = ' + fmt(ratio, 3)) + ' 倍 → ' + eq('P = ' + fmt(P) + ' × ' + fmt(ratio, 3) + ' = ' + fmt(P2) + ' MW') + '。風速 ' + fmt((u2 / u - 1) * 100, 0) + '% 増で出力は ' + fmt((ratio - 1) * 100, 0) + '% 増える。',
+          ],
+          insight: '風速予測が 10% 外れると出力予測は約 30% 外れる（3 乗則）。第10回で風力予測を扱うとき、この増幅率が「予測誤差の壁」として現れます。',
+        };
+      },
+    },
+    {
+      id: 'carnot', title: 'カルノー効率・達成率・廃熱', tags: ['1.2.2', '例題 1-2'],
+      gen(rng) {
+        const cc = pick(rng, [false, false, true]);
+        const tH = cc ? pick(rng, [1100, 1300, 1400, 1500, 1600]) : pick(rng, [538, 566, 600, 620, 650]);
+        const tL = pick(rng, [20, 25, 30, 33, 35]);
+        const etaAct = cc ? pick(rng, [0.55, 0.58, 0.60, 0.62]) : pick(rng, [0.38, 0.40, 0.42, 0.43, 0.45]);
+        const P = pick(rng, [300, 500, 600, 800, 1000]);
+        const TH = tH + 273.15, TL = tL + 273.15;
+        const etaC = 1 - TL / TH;
+        const ach = etaAct / etaC;
+        const Qin = P / etaAct;
+        const QL = Qin - P;
+        return {
+          given: [['方式', cc ? 'コンバインドサイクル（ガスタービン入口温度が T<sub>H</sub>）' : '汽力（主蒸気温度が T<sub>H</sub>）'], ['高温側 T<sub>H</sub>', tH + ' °C'], ['低温側（復水器）T<sub>L</sub>', tL + ' °C'], ['実機の総合効率', fmt(etaAct * 100, 0) + ' %'], ['発電出力 P', P + ' MW']],
+          q: '(a) カルノー効率 <b>η<sub>Carnot</sub></b> を % で求めよ。<br>(b) 実機効率のカルノー効率に対する<b>達成率</b>を % で求めよ。<br>(c) 出力 ' + P + ' MW で運転しているとき、復水器から環境へ捨てている<b>廃熱 Q<sub>L</sub></b> を MW で求めよ（機械損・所内動力は無視し、投入熱量 = 出力 ÷ 総合効率とする）。',
+          answers: [
+            { key: 'etaC', label: '(a) η_Carnot', unit: '%', value: etaC * 100 },
+            { key: 'ach', label: '(b) 達成率', unit: '%', value: ach * 100 },
+            { key: 'QL', label: '(c) Q_L', unit: 'MW', value: QL },
+          ],
+          steps: [
+            '温度は<b>絶対温度</b>に直す: ' + eq('T<sub>H</sub> = ' + tH + ' + 273.15 = ' + fmt(TH, 2) + ' K,  T<sub>L</sub> = ' + fmt(TL, 2) + ' K') + '。摂氏のまま割るのが最頻出の誤り。',
+            '(a) ' + eq('η<sub>Carnot</sub> = 1 − T<sub>L</sub>/T<sub>H</sub> = 1 − ' + fmt(TL, 2) + '/' + fmt(TH, 2) + ' = ' + fmt(etaC, 4) + ' = ' + fmt(etaC * 100) + ' %') + '。',
+            '(b) ' + eq('達成率 = ' + fmt(etaAct, 2) + ' / ' + fmt(etaC, 4) + ' = ' + fmt(ach * 100) + ' %') + '。方式によらず 60〜70% 程度に落ち着く（ノート 1.3.1）。',
+            '(c) 投入熱量 ' + eq('Q<sub>in</sub> = P / η = ' + P + ' / ' + fmt(etaAct, 2) + ' = ' + fmt(Qin) + ' MW') + '、廃熱は ' + eq('Q<sub>L</sub> = Q<sub>in</sub> − P = ' + fmt(QL) + ' MW') + '。出力より' + (QL > P ? '多い' : '少ない') + '熱を海や大気に捨てている。',
+          ],
+          insight: '火力発電所が海沿いに建つのは、この Q_L を冷却水（温排水）で捨てるため。効率 1 ポイントの改善は、燃料と同時に温排水も減らします。',
+        };
+      },
+    },
+    {
+      id: 'fuel-co2', title: '燃料消費量と CO2 排出原単位', tags: ['1.2.1', '1.2.8', '例題 1-2'],
+      gen(rng) {
+        const fuel = pick(rng, [
+          { name: '石炭（汽力）', h: 26, c: 2.4, etas: [0.39, 0.41, 0.42, 0.43] },
+          { name: 'LNG（コンバインドサイクル）', h: 54, c: 2.75, etas: [0.52, 0.55, 0.58, 0.60] },
+          { name: '重油（汽力）', h: 41, c: 3.1, etas: [0.38, 0.40, 0.42] },
+        ]);
+        const P = pick(rng, [250, 350, 500, 600, 700, 1000]);
+        const eta = pick(rng, fuel.etas);
+        const heatMJh = P * 3600 / eta;
+        const fuelTh = heatMJh / fuel.h / 1000;
+        const co2Th = fuelTh * fuel.c;
+        const intensity = fuel.c * 3.6 / (eta * fuel.h);
+        return {
+          given: [['燃料・方式', fuel.name], ['発電端出力 P', P + ' MW'], ['発電端効率 η', fmt(eta * 100, 0) + ' %'], ['燃料の発熱量', fuel.h + ' MJ/kg'], ['CO2 排出係数', fuel.c + ' kg-CO2/kg-燃料']],
+          q: '定格 ' + P + ' MW で 1 時間運転する。<br>(a) 1 時間あたりの<b>燃料消費量</b> を t/h で求めよ。<br>(b) 1 時間あたりの <b>CO2 排出量</b> を t-CO2/h で求めよ。<br>(c) 発電電力量 1 kWh あたりの <b>CO2 排出原単位</b> を kg-CO2/kWh で求めよ。',
+          answers: [
+            { key: 'fuel', label: '(a) 燃料消費量', unit: 't/h', value: fuelTh },
+            { key: 'co2', label: '(b) CO2 排出量', unit: 't-CO2/h', value: co2Th },
+            { key: 'int', label: '(c) 原単位', unit: 'kg-CO2/kWh', value: intensity },
+          ],
+          steps: [
+            '1 h の発電電力量は ' + P + ' MWh。1 MW = 1 MJ/s なので ' + eq(P + ' MW × 3600 s = ' + fmt(P * 3600) + ' MJ') + '。これを効率で割ると投入熱量 ' + eq('Q<sub>in</sub> = ' + fmt(P * 3600) + ' / ' + fmt(eta, 2) + ' = ' + fmt(heatMJh) + ' MJ/h') + '。',
+            '(a) 発熱量で割る: ' + eq(fmt(heatMJh) + ' MJ/h ÷ ' + fuel.h + ' MJ/kg = ' + fmt(heatMJh / fuel.h) + ' kg/h = ' + fmt(fuelTh) + ' t/h') + '。',
+            '(b) ' + eq('CO2 = ' + fmt(fuelTh) + ' t/h × ' + fuel.c + ' = ' + fmt(co2Th) + ' t-CO2/h') + '。',
+            '(c) 1 kWh = 3.6 MJ の電気を出すのに燃料は 3.6/(η h) kg 要る: ' + eq('原単位 = c × 3.6 / (η h) = ' + fuel.c + ' × 3.6 / (' + fmt(eta, 2) + ' × ' + fuel.h + ') = ' + fmt(intensity, 3) + ' kg-CO2/kWh') + '。(b)/(発電電力量) ＝ ' + fmt(co2Th) + ' t ÷ ' + P + ' MWh でも同じ値になる。',
+          ],
+          insight: '「効率を上げる」と「燃料を変える」が CO2 原単位を下げる 2 本の柱。沖縄のように火力比率が高い系統では、この原単位が地域の排出係数をほぼそのまま決めます。',
+        };
+      },
+    },
+    {
+      id: 'capacity-factor', title: '設備利用率と必要な設備容量', tags: ['1.2.8', '例題 1-1', '1.3.3'],
+      gen(rng) {
+        const kind = pick(rng, [
+          { name: '石炭火力', cf: [60, 70, 75, 80] },
+          { name: 'LNG 火力', cf: [45, 55, 65, 70] },
+          { name: '水力', cf: [40, 45, 50, 55] },
+          { name: '地熱', cf: [70, 75, 80, 85] },
+        ]);
+        const Pr = pick(rng, [50, 100, 200, 300, 500, 1000]);
+        const cf = pick(rng, kind.cf);
+        const Eg = Math.round(Pr * 8760 * cf / 100 / 1000 * 10) / 10;
+        const cfAns = Eg * 1000 / (Pr * 8760) * 100;
+        const cfPV = pick(rng, [12, 13, 14, 15]);
+        const PrPV = Eg * 1000 / (8760 * cfPV / 100);
+        return {
+          given: [['電源', kind.name], ['定格出力 P<sub>r</sub>', Pr + ' MW'], ['年間発電電力量 E', fmt(Eg, 1) + ' GWh'], ['比較する太陽光の設備利用率', cfPV + ' %']],
+          q: '(a) この電源の<b>設備利用率</b>を % で求めよ。<br>(b) 同じ年間発電電力量 E を、設備利用率 ' + cfPV + '% の太陽光で得るには<b>定格何 MW</b> の設備が必要か。',
+          answers: [
+            { key: 'cf', label: '(a) 設備利用率', unit: '%', value: cfAns },
+            { key: 'PrPV', label: '(b) 必要な太陽光定格', unit: 'MW', value: PrPV },
+          ],
+          steps: [
+            '設備利用率 ＝ 実際の発電電力量 ÷（定格で 1 年間フル運転したときの電力量）。分母は ' + eq('P<sub>r</sub> × 8760 = ' + Pr + ' × 8760 = ' + fmt(Pr * 8760) + ' MWh = ' + fmt(Pr * 8760 / 1000) + ' GWh') + '。',
+            '(a) ' + eq('設備利用率 = ' + fmt(Eg, 1) + ' / ' + fmt(Pr * 8760 / 1000) + ' = ' + fmt(cfAns) + ' %') + '。',
+            '(b) 逆算: ' + eq('P<sub>r</sub>′ = E / (8760 × ' + (cfPV / 100) + ') = ' + fmt(Eg * 1000) + ' MWh / ' + fmt(8760 * cfPV / 100) + ' h = ' + fmt(PrPV) + ' MW') + '。定格は ' + fmt(PrPV / Pr, 1) + ' 倍必要になる。',
+          ],
+          insight: '「〇〇 MW の太陽光を導入」というニュースの MW は定格。kWh に直すには設備利用率を掛ける。同じ kWh を得るのに必要な設備容量が数倍違うことが、電源計画の出発点です。',
+        };
+      },
+    },
+    {
+      id: 'units', title: 'kWh・MJ・石油換算の単位変換', tags: ['1.2.8', '例題 1-2'],
+      gen(rng) {
+        const E = pick(rng, [20, 40, 50, 80, 100, 150, 200, 300]);
+        const eta = pick(rng, [0.38, 0.40, 0.42, 0.45, 0.55, 0.60]);
+        const ETJ = E * 3.6;
+        const QinTJ = ETJ / eta;
+        const toe = QinTJ * 1000 / 41.868;
+        return {
+          given: [['年間発電電力量 E', E + ' GWh'], ['火力の送電端効率 η', fmt(eta * 100, 0) + ' %'], ['換算', '1 kWh = 3.6 MJ,  1 toe = 41.868 GJ']],
+          q: '(a) 発電電力量 E を <b>TJ</b>（テラジュール）に換算せよ。<br>(b) この電力量を効率 ' + fmt(eta * 100, 0) + '% の火力で発電するのに必要な<b>投入熱量 Q<sub>in</sub></b> を TJ で求めよ。<br>(c) (b) を<b>石油換算トン（toe）</b>で表せ。',
+          answers: [
+            { key: 'ETJ', label: '(a) E', unit: 'TJ', value: ETJ },
+            { key: 'Qin', label: '(b) Q_in', unit: 'TJ', value: QinTJ },
+            { key: 'toe', label: '(c) 石油換算', unit: 'toe', value: toe },
+          ],
+          steps: [
+            '接頭語を揃える: 1 GWh = 10<sup>6</sup> kWh、1 kWh = 3.6 MJ なので ' + eq('1 GWh = 3.6 × 10<sup>6</sup> MJ = 3.6 TJ') + '。',
+            '(a) ' + eq('E = ' + E + ' × 3.6 = ' + fmt(ETJ) + ' TJ') + '。',
+            '(b) 効率で割る: ' + eq('Q<sub>in</sub> = ' + fmt(ETJ) + ' / ' + fmt(eta, 2) + ' = ' + fmt(QinTJ) + ' TJ') + '。差の ' + fmt(QinTJ - ETJ) + ' TJ が廃熱。',
+            '(c) 1 TJ = 1000 GJ: ' + eq(fmt(QinTJ) + ' × 1000 / 41.868 = ' + fmt(toe) + ' toe') + '。',
+          ],
+          insight: 'エネルギー白書や企業の環境報告書は toe や TJ、電力会社の帳簿は kWh、物理の教科書は J。同じ量を 3 つの単位で言い換えられることが、部門をまたぐ会議で最初に試されます。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

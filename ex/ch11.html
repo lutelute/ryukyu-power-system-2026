@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第11回 演習 — 需要予測の統計</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第11回: 誤差指標、度日、不快指数 THI、重回帰の予測値、時系列分割、Skill Score。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+
+EX.page({
+  ch: 11,
+  intro: '需要予測の「作る・測る・比べる」を数値で通します。度日と THI で気温を需要の言葉に直し、重回帰で予測し、MAE/RMSE/MAPE で測り、前週同曜日に勝っているかを Skill Score で確かめます。',
+  problems: [
+    {
+      id: 'metrics', title: '予測誤差 — MAE・RMSE・MAPE', tags: ['11.2.5', '評価指標'],
+      gen(rng) {
+        const n = 6;
+        const y = Array.from({ length: n }, () => rint(rng, 900, 1500, 50));
+        const e = Array.from({ length: n }, () => rint(rng, -60, 60, 10));
+        const mae = e.reduce((s, v) => s + Math.abs(v), 0) / n;
+        const rmse = Math.sqrt(e.reduce((s, v) => s + v * v, 0) / n);
+        const mape = e.reduce((s, v, i) => s + Math.abs(v / y[i]), 0) / n * 100;
+        return {
+          given: [['実績 y', '[' + y.join(', ') + '] MW'], ['誤差 e = 実績 − 予測', '[' + e.join(', ') + '] MW']],
+          q: '(a) <b>MAE</b><br>(b) <b>RMSE</b><br>(c) <b>MAPE</b> [%]',
+          answers: [
+            { key: 'mae', label: '(a) MAE', unit: 'MW', value: mae },
+            { key: 'rmse', label: '(b) RMSE', unit: 'MW', value: rmse },
+            { key: 'mape', label: '(c) MAPE', unit: '%', value: mape },
+          ],
+          steps: [
+            eq('MAE = Σ|e|/n = ' + e.reduce((s, v) => s + Math.abs(v), 0) + '/6 = ' + fmt(mae) + ' MW') + '。',
+            eq('RMSE = √(Σe²/n) = √(' + e.reduce((s, v) => s + v * v, 0) + '/6) = ' + fmt(rmse) + ' MW') + '。大きな誤差を 2 乗で重く数える。',
+            eq('MAPE = (1/n) Σ|e/y| × 100 = ' + fmt(mape) + ' %') + '。規模が違う系統を比べるときに使う。',
+          ],
+          insight: '電力では RMSE を重く見る。予備力は「平均的な外れ」ではなく「大外れ」に備えて持つから。',
+        };
+      },
+    },
+    {
+      id: 'degree-days', title: '度日（CDD / HDD）', tags: ['11.2.2', '気温の非線形性'],
+      gen(rng) {
+        const T0 = pick(rng, [18, 20, 22]);
+        const temps = Array.from({ length: 5 }, () => rint(rng, 8, 34, 1));
+        const cdd = temps.reduce((s, t) => s + Math.max(t - T0, 0), 0);
+        const hdd = temps.reduce((s, t) => s + Math.max(T0 - t, 0), 0);
+        return {
+          given: [['基準温度 T₀', T0 + ' °C'], ['5 日間の日平均気温', '[' + temps.join(', ') + '] °C']],
+          q: '(a) 5 日間の冷房度日の合計 <b>ΣCDD = Σ max(T − T₀, 0)</b><br>(b) 暖房度日の合計 <b>ΣHDD = Σ max(T₀ − T, 0)</b>',
+          answers: [
+            { key: 'cdd', label: '(a) ΣCDD', unit: '°C·日', value: cdd, abs: 0.5 },
+            { key: 'hdd', label: '(b) ΣHDD', unit: '°C·日', value: hdd, abs: 0.5 },
+          ],
+          steps: [
+            '各日: CDD = [' + temps.map(t => Math.max(t - T0, 0)).join(', ') + ']、HDD = [' + temps.map(t => Math.max(T0 - t, 0)).join(', ') + ']。',
+            eq('ΣCDD = ' + cdd + ',  ΣHDD = ' + hdd) + '。',
+            '気温 1 本の直線では V 字を表せない。基準温度で 2 本に折ることで、冷房と暖房を別の係数で持てる。',
+          ],
+          insight: '基準温度は系統ごとにデータから推定する。冷房主体の沖縄は高め、暖房主体の北海道は低め。',
+        };
+      },
+    },
+    {
+      id: 'thi', title: '不快指数 THI', tags: ['11.2.2', '湿度の効果'],
+      gen(rng) {
+        const T = pick(rng, [26, 28, 30, 32, 34]);
+        const H = pick(rng, [50, 60, 70, 80, 90]);
+        const thi = 0.81 * T + 0.01 * H * (0.99 * T - 14.3) + 46.3;
+        const H2 = 50;
+        const thi2 = 0.81 * T + 0.01 * H2 * (0.99 * T - 14.3) + 46.3;
+        return {
+          given: [['気温 T', T + ' °C'], ['相対湿度 H', H + ' %']],
+          q: '(a) 不快指数 <b>THI = 0.81T + 0.01H(0.99T − 14.3) + 46.3</b><br>(b) 同じ気温で湿度 50% のときの THI との差 <b>ΔTHI</b>',
+          answers: [
+            { key: 'thi', label: '(a) THI', unit: '', value: thi },
+            { key: 'd', label: '(b) 湿度 50% との差', unit: '', value: thi - thi2, abs: 0.05 },
+          ],
+          steps: [
+            eq('THI = 0.81 × ' + T + ' + 0.01 × ' + H + ' × (0.99 × ' + T + ' − 14.3) + 46.3 = ' + fmt(thi)) + '。',
+            '湿度 50% なら ' + eq(fmt(thi2)) + '。差は ' + eq(fmt(thi - thi2)) + '。',
+            '同じ 30 °C でも湿度が高いほど暑く感じ、冷房需要が増える。沖縄では気温単独より THI の方が需要との相関が高い。',
+          ],
+          insight: '「気温だけで予測して外れる日」は湿度が効いている日。特徴量に THI を入れるだけで改善することが多い。',
+        };
+      },
+    },
+    {
+      id: 'regression', title: '重回帰モデルで予測する', tags: ['11.2.3', '係数の読み方'],
+      gen(rng) {
+        const a = pick(rng, [700, 800, 900]);
+        const b = pick(rng, [25, 30, 35, 40]);
+        const c = pick(rng, [10, 15, 20]);
+        const d = pick(rng, [80, 100, 120, 150]);
+        const T = pick(rng, [12, 16, 24, 28, 32]);
+        const wk = pick(rng, [0, 1]);
+        const T0 = 18;
+        const cdd = Math.max(T - T0, 0), hdd = Math.max(T0 - T, 0);
+        const y = a + b * cdd + c * hdd + d * wk;
+        const y1 = a + b * Math.max(T + 1 - T0, 0) + c * Math.max(T0 - (T + 1), 0) + d * wk;
+        return {
+          given: [['モデル', 'y = a + b·CDD + c·HDD + d·平日'], ['係数 a, b, c, d', a + ', ' + b + ', ' + c + ', ' + d + '（MW, MW/°C, MW/°C, MW）'], ['基準温度 T₀', T0 + ' °C'], ['入力', '気温 ' + T + ' °C、' + (wk ? '平日' : '休日')]],
+          q: '(a) 予測値 <b>y</b><br>(b) 気温が 1 °C 上がったときの予測値の変化 <b>Δy</b>',
+          answers: [
+            { key: 'y', label: '(a) y', unit: 'MW', value: y },
+            { key: 'dy', label: '(b) Δy', unit: 'MW', value: y1 - y, abs: 0.5 },
+          ],
+          steps: [
+            'CDD = max(' + T + ' − 18, 0) = ' + cdd + '、HDD = ' + hdd + '、平日 = ' + wk + '。',
+            eq('y = ' + a + ' + ' + b + ' × ' + cdd + ' + ' + c + ' × ' + hdd + ' + ' + d + ' × ' + wk + ' = ' + fmt(y) + ' MW') + '。',
+            '気温 +1 °C: ' + eq('y′ = ' + fmt(y1) + ' MW,  Δy = ' + fmt(y1 - y) + ' MW') + '。' + (T + 1 > T0 ? '冷房側なので係数 b がそのまま感度。' : (T + 1 <= T0 ? '暖房側なので −c が感度。' : '基準温度をまたぐので折れ点で感度が変わる。')),
+          ],
+          insight: '係数が「気温 1 °C で何 MW」と読めるのが重回帰の強み。説明責任が要る実務で今も主力。',
+        };
+      },
+    },
+    {
+      id: 'split', title: '時系列の分割と Skill Score', tags: ['11.2.5', 'ベースライン比較'],
+      gen(rng) {
+        const days = pick(rng, [365, 730, 1095]);
+        const rows = days * 24;
+        const trainR = pick(rng, [0.7, 0.8]);
+        const nTrain = Math.round(rows * trainR);
+        const nTest = rows - nTrain;
+        const rmseB = pick(rng, [60, 70, 80, 90]);
+        const rmseM = rmseB * pick(rng, [0.6, 0.7, 0.75, 0.85, 1.1]);
+        const ss = 1 - rmseM / rmseB;
+        return {
+          given: [['データ', days + ' 日 × 24 時間 = ' + rows + ' 行'], ['学習の割合', (trainR * 100) + ' %（時系列順で前から）'], ['検証期間の RMSE', 'ベースライン（前週同曜日）' + rmseB + ' MW、モデル ' + fmt(rmseM) + ' MW']],
+          q: '(a) 学習に使う行数<br>(b) 検証に使う行数<br>(c) <b>Skill Score = 1 − RMSE<sub>model</sub>/RMSE<sub>baseline</sub></b>',
+          answers: [
+            { key: 'tr', label: '(a) 学習', unit: '行', value: nTrain, abs: 1 },
+            { key: 'te', label: '(b) 検証', unit: '行', value: nTest, abs: 1 },
+            { key: 'ss', label: '(c) Skill Score', unit: '', value: ss, abs: 0.005 },
+          ],
+          steps: [
+            eq(rows + ' × ' + trainR + ' = ' + nTrain + ' 行が学習、残り ' + nTest + ' 行が検証') + '。ランダムに混ぜず、前から順に切る。',
+            eq('SS = 1 − ' + fmt(rmseM) + '/' + rmseB + ' = ' + fmt(ss)) + '。',
+            ss > 0 ? '正なのでベースラインに勝っている（誤差を ' + fmt(ss * 100) + ' % 減らした）。' : '負なので前週同曜日に負けている。特徴量かリークを疑う。',
+          ],
+          insight: 'ランダム分割は隣の時刻を「答え」として見せてしまう（リーク）。Skill Score が正でなければモデルに価値はない。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

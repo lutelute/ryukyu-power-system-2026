@@ -1,0 +1,62 @@
+/* ex.css — 演習ページ。notes.css と同じ色変数 */
+:root{--bg:#faf8f1;--panel:#fff;--panel-2:#f2efe6;--line:#dcd8cc;--text:#1a1a17;--muted:#52504a;--faint:#928f84;--accent:#1f9e8a;--warm:#b3812f;--neg:#cf4f5f;--upd:#6f54c4;
+  --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;--gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);line-height:1.8;font-size:15px;-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+.top{position:sticky;top:0;z-index:5;background:rgba(250,248,241,.94);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:8px 18px;display:flex;align-items:center;gap:16px;font-size:12px}
+.top .home{text-decoration:none;color:var(--muted);font-family:var(--mono);letter-spacing:.06em}
+.top .day{color:var(--faint);font-family:var(--mono);font-size:10.5px;letter-spacing:.08em}
+.top .rounds{display:flex;gap:3px;margin-left:auto}
+.top .rounds a{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:4px;text-decoration:none;color:var(--muted);font-family:var(--mono);font-size:10.5px;background:var(--panel)}
+.top .rounds a.on{background:var(--warm);color:#fff;border-color:var(--warm)}
+.wrap{max-width:860px;margin:0 auto;padding:26px 22px 60px}
+h1{font-family:var(--mincho);font-weight:600;font-size:24px;margin:0 0 10px;border-bottom:1px solid var(--text);padding-bottom:10px}
+h1 .sub{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--warm);border:1px solid currentColor;border-radius:3px;padding:1px 8px;vertical-align:middle;margin-left:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.chip{font-size:12px;text-decoration:none;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 11px}
+.chip.note{border-color:var(--text);color:var(--text);font-weight:600}
+.chip.viz{border-color:var(--accent);color:var(--accent);font-weight:600}
+.intro{color:var(--muted);font-size:14px;margin:6px 0 14px}
+.seedbox{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+.seedbox label{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.seedbox input{font:inherit;font-family:var(--mono);padding:5px 9px;border:1px solid var(--line);border-radius:6px;width:180px;background:#fff}
+button{font:inherit;font-size:13px;padding:6px 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text);cursor:pointer}
+button:hover{border-color:var(--text)}
+button.primary{background:var(--text);color:#fff;border-color:var(--text)}
+.score{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:700}
+.hint{font-size:12.5px;color:var(--faint);margin:8px 0 18px}
+.prob{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin:0 0 16px}
+.prob.solved{border-color:var(--accent)}
+.prob-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.pnum{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--warm);border:1px solid currentColor;border-radius:3px;padding:1px 8px}
+.ptitle{font-weight:700;font-size:15.5px}
+.ptags span{font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:3px;padding:0 5px;margin-right:4px}
+.pstat{margin-left:auto;font-size:12px;color:var(--accent);font-weight:700}
+table.given{border-collapse:collapse;font-size:13px;margin:6px 0 10px}
+table.given th,table.given td{border:1px solid var(--line);padding:3px 10px;text-align:left}
+table.given th{background:var(--panel-2);font-weight:600;color:var(--muted);white-space:nowrap}
+table.given td{font-family:var(--mono)}
+.q{font-size:14.5px;margin:6px 0 10px}
+.q b{color:var(--text)}
+.answers{display:flex;flex-direction:column;gap:6px;margin:8px 0 10px}
+.ans{display:flex;align-items:center;gap:8px;font-size:13.5px;flex-wrap:wrap}
+.alabel{min-width:200px;color:var(--muted)}
+.ans input{font:inherit;font-family:var(--mono);width:150px;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.ans.ok input{border-color:var(--accent);background:#eef8f5}
+.ans.ng input{border-color:var(--neg);background:#fbeeee}
+.unit{color:var(--faint);font-family:var(--mono);font-size:12px;min-width:60px}
+.mark{font-weight:700;width:20px}
+.ans.ok .mark{color:var(--accent)}.ans.ng .mark{color:var(--neg)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.fb{font-size:13px;margin-top:8px;min-height:1.2em;color:var(--muted)}
+.fb.ok{color:var(--accent);font-weight:700}.fb.ng{color:var(--neg)}
+.steps{margin:10px 0 0;padding:10px 12px 10px 34px;background:var(--panel-2);border-radius:8px;font-size:13.5px}
+.steps li{margin:4px 0}
+.steps li b{color:var(--text)}
+.steps .eq{font-family:"Times New Roman","Hiragino Mincho ProN",serif;font-size:15px;display:inline-block;margin:2px 0}
+.insight{margin-top:10px;padding:8px 12px;border-left:4px solid var(--upd);background:#f3f0fb;font-size:13.5px;border-radius:0 8px 8px 0}
+.pn{display:flex;justify-content:space-between;gap:12px;margin-top:30px;padding-top:16px;border-top:1px solid var(--line);font-size:13px}
+.pn a{text-decoration:none}.pn-prev{color:var(--muted)}.pn-next{color:var(--accent);font-weight:700}
+.bottom{max-width:860px;margin:0 auto;padding:12px 22px 40px;font-size:11px;color:var(--faint)}
+@media print{.top,.seedbox,.btns,.pn,.bottom{display:none}.steps{display:block!important}}

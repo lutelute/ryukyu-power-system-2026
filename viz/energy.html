@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第1回 エネルギー変換 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第1回 エネルギー変換 — 効率は「掛け算」と「熱の壁」で決まる</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch01.html">📖 講義ノート（第1回）</a><a class="e" href="../ex/ch01.html">✍ 演習で確かめる</a></div>
+  <div class="lead">発電とは一次エネルギーを電気に<b>何段も変換する</b>ことです。各段の効率は掛け算になり、熱を経由する方式には<b>カルノー効率という物理の壁</b>があります。風力・太陽光には別の壁があります。下の流れを「次へ」で追ってください。次は<a href="grid.html">第2回 電力システムの構成</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「効率 40% は技術が未熟だから」と誤解すると、改善の打ち手（温度を上げる／熱を経由しない）を間違えます。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>熱で発電する限り、高温と低温の差以上には稼げない。風と光は風速の3乗・温度で出力が決まる。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>沖縄電力 具志川・吉の浦火力（石炭・LNG）、風力発電所のパワーカーブ、太陽光パネルの温度係数。</span></div>
+  </div>
+
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis">
+        <canvas id="cv" width="360" height="430"></canvas>
+        <div class="mini" id="mini"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button>
+      <button class="primary" id="nextBtn">次へ ▶</button>
+      <button id="autoBtn">⏵ 自動</button>
+      <button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>高温側 T<sub>H</sub> <input type="range" id="thRange" min="300" max="1700" step="10" value="566"> <span id="thVal">566</span> °C</label>
+      <label>風速 <input type="range" id="uRange" min="0" max="25" step="0.5" value="10"> <span id="uVal">10.0</span> m/s</label>
+    </div>
+  </div>
+
+  <div class="aha">
+    <div class="aha-h">💡 見方が変わる一文</div>
+    <p>コンバインドサイクルが高効率なのは「無駄を減らした」からではなく、<b>より高い温度から熱を取る</b>ことでカルノーの壁そのものを押し上げたからです。</p>
+  </div>
+  <div class="myth">
+    <div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>火力の効率 40% は技術が未熟な証拠で、改良すればいずれ 90% に近づく。</div>
+    <div class="row"><span class="o">✓</span>主蒸気 566 °C・復水器 33 °C ではカルノー上限が 63.5%。実機はその 66% を達成しており、<b>壁の 2/3 まで来ている</b>のが実態です。壁を動かすには温度を上げるしかありません。</div>
+    <div class="row"><span class="x">✗</span>風速が 2 倍になれば風力発電の出力も 2 倍になる。</div>
+    <div class="row"><span class="o">✓</span>出力は風速の<b>3 乗</b>に比例するので 8 倍です（10→12 m/s で 1.73 倍）。この非線形性が、第10回で見る「風力の予測が難しい」理由になります。</div>
+  </div>
+  <details>
+    <summary>もっと詳しく：カルノー効率の導出・ベッツの限界・単位換算</summary>
+    <div class="det">
+      可逆サイクルではエントロピー収支 <i>Q<sub>H</sub></i>/<i>T<sub>H</sub></i> = <i>Q<sub>L</sub></i>/<i>T<sub>L</sub></i> が成り立ち、取り出せる仕事 <i>W</i> = <i>Q<sub>H</sub></i> − <i>Q<sub>L</sub></i> から η = 1 − <i>T<sub>L</sub></i>/<i>T<sub>H</sub></i> が出ます（温度は絶対温度 K）。
+      ベッツの限界 16/27 は「風車の後ろで風速が前の 1/3 になるとき取り出し量が最大」という運動量理論の結果です。
+      単位は 1 kWh = 3.6 MJ、1 toe = 41.868 GJ ≈ 11,630 kWh。
+      <b>限界：</b>このページの実効率（42%・62%・34%）は代表値で、燃料・出力・経年で数ポイント動きます。図の水力出力式 <i>P</i> = 9.8<i>QH</i>η も落差の損失（損失水頭）を効率に押し込んだ近似です。
+    </div>
+  </details>
+</div>
+
+<script>
+"use strict";
+/* 1. 乱数（本ページは決定論的だが、憲章どおりシード付きを用意） */
+let seed = 314;
+const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+  let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+
+/* 2. モデル（実計算） */
+const K0 = 273.15;
+const PLANTS = [
+  { name: '汽力(超臨界)', th: 566,  tl: 33, eta: 0.42, color: '--warm' },
+  { name: 'コンバインド', th: 1600, tl: 33, eta: 0.62, color: '--accent' },
+  { name: '原子力(PWR)', th: 325,  tl: 33, eta: 0.34, color: '--upd' },
+];
+const carnot = (th, tl) => 1 - (tl + K0) / (th + K0);
+let TH = 566, TL = 33;               // スライダで動く
+let U = 10.0;                        // 風速スライダ
+const RHO = 1.225, D = 90, A = Math.PI * (D / 2) ** 2, CP = 0.45, BETZ = 16 / 27;
+const P_RATED = 3.0, U_IN = 3.0, U_OUT = 25.0;
+const windRaw = u => 0.5 * RHO * A * u ** 3 / 1e6;                 // MW（風の全エネルギー）
+const windTurbine = u => (u < U_IN || u > U_OUT) ? 0 : Math.min(windRaw(u) * CP, P_RATED);
+const hydro = (Q, H, eta) => 9.8 * Q * H * eta;                    // kW
+const fmtP = x => (x * 100).toFixed(1) + '%';
+
+/* 3. 章とスライド */
+const CHAPTERS = [
+  { t: 'Ⅰ 問題',   c: 'var(--neg)',    start: 0 },
+  { t: 'Ⅱ 熱の壁', c: 'var(--upd)',    start: 3 },
+  { t: 'Ⅲ 風と光', c: 'var(--loss)',   start: 7 },
+  { t: 'Ⅳ まとめ', c: 'var(--accent)', start: 11 },
+];
+const SLIDES = [
+  { legend: '□=変換の段。矢印の太さ=残るエネルギー（各段で目減りする）',
+    mini: () => '<div>段数 <b>3</b></div><div>総合効率 <b>' + fmtP(0.90 * 0.45 * 0.98) + '</b></div>',
+    html() { return '<h3>発電とは、エネルギーを何段も変換すること</h3>'
+      + '<div class="eq curr">燃料 → 熱 → 回転 → 電気<span class="read">読み：火力では燃料の化学エネルギーを燃やして熱にし、蒸気でタービンを回し、発電機で電気にします。段ごとに一部が逃げます。</span></div>'
+      + '<div class="desc">石炭・LNG・原子力はすべて<b>「熱 → 回転 → 電気」</b>という同じ経路です。図の矢印が段ごとに細くなるのは、各段で必ずエネルギーが目減りするからです。では、どの段が一番細くなるのでしょうか。</div>'; },
+    draw() { drawChain([0.90, 0.45, 0.98], ['燃料→熱', '熱→回転', '回転→電気']); caption('熱→回転の段だけ細い。ここに壁がある'); } },
+  { legend: '横棒=各段の効率。総合効率はその「掛け算」',
+    mini: () => '<div>0.90 × 0.45 × 0.98 = <b>' + fmtP(0.90 * 0.45 * 0.98) + '</b></div>',
+    html() { return '<h3>効率は「足し算」ではなく「掛け算」になる</h3>'
+      + '<div class="eq curr">η<sub>total</sub> = η<sub>1</sub> · η<sub>2</sub> · η<sub>3</sub> = 0.90 × 0.45 × 0.98 = <b class="res">' + fmtP(0.90 * 0.45 * 0.98) + '</b><span class="read">読み：ボイラ 90%、タービン 45%、発電機 98% を掛けると 39.7%。一番低い段が全体を引きずります。</span></div>'
+      + '<div class="desc">ボイラと発電機はほぼ完璧なのに、総合では 4 割弱です。<b>タービン（熱 → 回転）の 45% が全体を決めている</b>ことが分かります。この 45% は設計が悪いのではなく、物理の上限に近いところにいます。次の章でその上限を見ます。</div>'; },
+    draw() { drawEffBars([['ボイラ', 0.90], ['タービン', 0.45], ['発電機', 0.98], ['総合', 0.90 * 0.45 * 0.98]]); caption('総合 = 3 本の積。最小の段に引きずられる'); } },
+  { legend: '実機の総合効率（代表値）。同じ「熱→電気」でも方式でこれだけ違う',
+    mini: () => PLANTS.map(p => '<div>' + p.name + ' <b>' + fmtP(p.eta) + '</b></div>').join(''),
+    html() { return '<h3>方式によって 34% から 62% まで開きがある</h3>'
+      + '<div class="eq curr">汽力 42%　／　コンバインド 62%　／　原子力 34%<span class="read">読み：どれも「熱 → 回転 → 電気」なのに効率が違う。何が違いを生んでいるのかが、この回の問いです。</span></div>'
+      + '<div class="desc">原子力は最新技術でも 34%、コンバインドサイクルは 62% に届きます。同じ熱機関でこれほど違うのは、部品の出来ではなく<b>「何度の熱から取り出しているか」</b>の差です。次の章で、その温度と効率の関係を式で確かめます。</div>'; },
+    draw() { drawPlantBars(false); caption('この差の正体を Ⅱ 章で解く'); } },
+
+  { legend: '曲線=カルノー効率 η=1−T_L/T_H（T_L=33°C 固定）。●=いまのスライダ位置',
+    mini: () => '<div>T<sub>H</sub> <b>' + TH + '</b>°C</div><div>η<sub>Carnot</sub> <b>' + fmtP(carnot(TH, TL)) + '</b></div>',
+    html() { return '<h3>熱機関には「カルノー効率」という壁がある</h3>'
+      + '<div class="eq curr">η<sub>Carnot</sub> = 1 − <span class="frac"><span><i>T</i><sub>L</sub></span><span><i>T</i><sub>H</sub></span></span> = 1 − <span class="frac"><span>' + (TL + K0).toFixed(0) + '</span><span>' + (TH + K0).toFixed(0) + '</span></span> = <b class="res">' + fmtP(carnot(TH, TL)) + '</b><span class="read">読み：高温側の絶対温度 T_H（K）と低温側 T_L で決まる理論上限。低温側は海水や大気で決まるので、上げられるのは T_H だけです。</span></div>'
+      + '<div class="desc">右下のスライダで T<sub>H</sub> を動かしてください。566 °C（汽力）では上限 <b>' + fmtP(carnot(566, 33)) + '</b>、1600 °C（ガスタービン入口）では <b>' + fmtP(carnot(1600, 33)) + '</b> です。<b>この式に材料や設計は一切出てきません</b>。温度差だけが壁の高さを決めます。</div>'; },
+    draw() { drawCarnotCurve(); caption('T_H を上げる以外に、この曲線を超える方法はない'); } },
+  { legend: '薄い棒=カルノー上限、濃い棒=実機。数字は「上限に対する達成率」',
+    mini: () => PLANTS.map(p => '<div>' + p.name.slice(0, 4) + ' 達成 <b>' + fmtP(p.eta / carnot(p.th, p.tl)) + '</b></div>').join(''),
+    html() { const a = PLANTS[0], b = PLANTS[1];
+      return '<h3>A/B：汽力 vs コンバインド — 差は「温度」から来ている</h3>'
+      + '<div class="eq curr">達成率 = η<sub>実機</sub> / η<sub>Carnot</sub>：汽力 <b class="res">' + fmtP(a.eta / carnot(a.th, a.tl)) + '</b>　コンバインド <b class="res">' + fmtP(b.eta / carnot(b.th, b.tl)) + '</b><span class="read">読み：実機が理論上限の何割まで迫っているか。両者ともおよそ 2/3 で、技術水準はほぼ同じです。</span></div>'
+      + '<div class="desc">上限に対する達成率はどの方式も <b>66〜74%</b> に収まります。つまり総合効率 42% と 62% の差は「作り込みの差」ではなく、<b>T<sub>H</sub> が 566 °C か 1600 °C か</b>の差がそのまま現れたものです。壁の 2/3 まで来た技術を磨くより、壁を動かすほうが効きます。</div>'; },
+    draw() { drawPlantBars(true); caption('達成率はどれも 2/3 前後 → 差は T_H の差'); } },
+  { legend: '原子力の T_H は約 325 °C。燃料被覆管を守るため蒸気温度を上げられない',
+    mini: () => '<div>T<sub>H</sub> 325°C → 上限 <b>' + fmtP(carnot(325, 33)) + '</b></div><div>実機 <b>34%</b></div>',
+    html() { return '<h3>原子力の効率が低いのは「わざと温度を抑えている」から</h3>'
+      + '<div class="eq curr">η<sub>Carnot</sub>(325 °C) = 1 − 306/598 = <b class="res">' + fmtP(carnot(325, 33)) + '</b>　→ 実機 34%（達成率 <b class="res">' + fmtP(0.34 / carnot(325, 33)) + '</b>）<span class="read">読み：上限そのものが 49% しかないので、達成率 70% でも 34% にしかなりません。</span></div>'
+      + '<div class="desc">軽水炉は燃料被覆管（ジルコニウム合金）の健全性を守るため、蒸気温度を約 280〜325 °C に抑えます。<b>技術が劣るのではなく、安全のために T<sub>H</sub> を低く設計している</b>のです。同じ達成率 70% でも、壁が低ければ効率は低くなります。</div>'; },
+    draw() { drawCarnotCurve(325); caption('壁が低い場所で戦っているだけ'); } },
+  { legend: '水力は「位置 → 回転 → 電気」。熱を経由しないのでカルノーの壁を受けない',
+    mini: () => '<div>P = 9.8·12·85·0.873 = <b>' + hydro(12, 85, 0.873).toFixed(0) + ' kW</b></div>',
+    html() { return '<h3>熱を経由しない方式には、この壁がない</h3>'
+      + '<div class="eq curr"><i>P</i> = 9.8 <i>Q H</i> η = 9.8 × 12 × 85 × 0.873 = <b class="res">' + hydro(12, 85, 0.873).toFixed(0) + '</b> kW<span class="read">読み：流量 Q（m³/s）×落差 H（m）×効率。係数 9.8 は水の密度 1000 kg/m³ と重力 9.8 m/s² を kW にまとめたものです。</span></div>'
+      + '<div class="desc">水力の総合効率は 80〜90% に達します。位置エネルギーを直接回転に変えるので、<b>温度差という概念自体が出てこない</b>からです。燃料電池・太陽光も同様に熱を経由しません。ただし、それぞれ別の理論限界を持ちます。次の章で風力と太陽光の壁を見ます。</div>'; },
+    draw() { drawChain([0.93, 0.94, 0.97], ['位置→運動', '運動→回転', '回転→電気']); caption('全段が 9 割超。掛け算しても 85% 残る'); } },
+
+  { legend: '曲線=風のエネルギー ½ρAu³（3乗）。●=スライダの風速',
+    mini: () => '<div>u = <b>' + U.toFixed(1) + '</b> m/s</div><div>風のエネルギー <b>' + windRaw(U).toFixed(2) + ' MW</b></div>',
+    html() { return '<h3>風力は風速の「3 乗」に比例する</h3>'
+      + '<div class="eq curr"><i>P</i><sub>wind</sub> = ½ ρ <i>A u</i><sup>3</sup> = ½ × 1.225 × ' + A.toFixed(0) + ' × ' + U.toFixed(1) + '<sup>3</sup> = <b class="res">' + windRaw(U).toFixed(2) + '</b> MW<span class="read">読み：空気密度 ρ、受風面積 A（直径 90 m）、風速 u。u が 3 乗で効くので、風速の小さな違いが出力の大きな違いになります。</span></div>'
+      + '<div class="desc">右下の風速スライダを 10 → 12 m/s に動かしてください。風速は 1.2 倍なのに、エネルギーは <b>' + (windRaw(12) / windRaw(10)).toFixed(3) + ' 倍</b>（=1.2³）に跳ねます。逆に 10 → 8 m/s では <b>' + (windRaw(8) / windRaw(10)).toFixed(3) + ' 倍</b> に落ちます。<b>この 3 乗が、第10回で扱う「風力予測の難しさ」の正体</b>です。</div>'; },
+    draw() { drawWindCurve(false); caption('u が 2 割増えるとエネルギーは 7 割増える'); } },
+  { legend: '点線=風の全エネルギー。実線=ベッツの限界 16/27。取り出せるのは実線まで',
+    mini: () => '<div>ベッツ <b>' + fmtP(BETZ) + '</b></div><div>実機 C<sub>p</sub> <b>' + fmtP(CP) + '</b></div>',
+    html() { return '<h3>風のエネルギーは全部は取れない — ベッツの限界</h3>'
+      + '<div class="eq curr"><i>C</i><sub>p</sub><sup>max</sup> = <span class="frac"><span>16</span><span>27</span></span> = <b class="res">' + fmtP(BETZ) + '</b><span class="read">読み：パワー係数（取り出せる割合）の理論上限。風車の後ろで風速が 1/3 になるときに最大になります。</span></div>'
+      + '<div class="desc">全部取り出すと風車の後ろで風が止まり、後続の空気が入って来られません。だから<b>「取り尽くせない」のは設計の失敗ではなく物理</b>です。実機の <i>C</i><sub>p</sub> は 0.35〜0.45 で、これは上限の 6〜7 割。カルノーの達成率と同じくらい優秀です。</div>'; },
+    draw() { drawWindCurve(true); caption('風にもカルノーに似た「壁」がある'); } },
+  { legend: '実機の出力（定格 3 MW）。3 つの折れ目：カットイン 3 / 定格 12 / カットアウト 25 m/s',
+    mini: () => '<div>u = <b>' + U.toFixed(1) + '</b> m/s</div><div>出力 <b>' + windTurbine(U).toFixed(2) + ' MW</b></div>',
+    html() { return '<h3>実機は「頭打ち」と「停止」で 3 乗を切り落とす</h3>'
+      + '<div class="eq curr"><i>P</i> = min(½ρ<i>Au</i><sup>3</sup><i>C</i><sub>p</sub>, <i>P</i><sub>rated</sub>)　（3 ≤ <i>u</i> ≤ 25 のとき）→ いま <b class="res">' + windTurbine(U).toFixed(2) + '</b> MW<span class="read">読み：カットイン未満は発電しない、定格に達したらピッチ制御で頭打ち、カットアウト超は保護のため停止。</span></div>'
+      + '<div class="desc">スライダを 25 m/s の手前と先で行き来してください。<b>24.5 → 25.5 m/s で出力が 3 MW から 0 へ不連続に落ちます</b>。台風の常襲地である沖縄では、この崖が予測と運用の最大のリスクになります（第10回・第15回）。</div>'; },
+    draw() { drawPowerCurve(); caption('カットアウトの崖：風速 1 m/s の読み違いで 3 MW → 0'); } },
+  { legend: '太陽光：光 → 電気に直接変換。単接合セルの上限は約 33.7%',
+    mini: () => '<div>SQ 限界 <b>33.7%</b></div><div>実用モジュール <b>15〜22%</b></div>',
+    html() { return '<h3>太陽光の壁：ショックレー・クワイサー限界</h3>'
+      + '<div class="eq curr">η<sub>max</sub>（単接合 Si）≈ <b class="res">33.7%</b>　／　実用 15〜22%<span class="read">読み：バンドギャップより弱い光子は吸収されず、強すぎる光子は余りが熱になる。この 2 つの取りこぼしで上限が決まります。</span></div>'
+      + '<div class="desc">熱機関ではないのでカルノーの壁はありませんが、<b>光子のエネルギーとバンドギャップのミスマッチ</b>という別の壁があります。さらに実機はセル温度が上がるほど効率が落ちます（温度係数 −0.4%/°C）。<b>高温の沖縄では同じ日射でも本土より出力が伸びにくい</b>理由で、第10回で定量化します。</div>'; },
+    draw() { drawSQ(); caption('光の「弱すぎ」と「強すぎ」の両方を捨てている'); } },
+
+  { legend: '左=電圧（母線ごとに違う局所量）、右=周波数（系統全体で 1 つの共通量）',
+    mini: () => '<div>電圧 <b>101±6 V</b></div><div>周波数 <b>60±0.2 Hz</b></div><div>歪率 <b>≤5%</b></div>',
+    html() { return '<h3>電力品質の 3 指標：電圧は局所、周波数は系統共通</h3>'
+      + '<div class="eq curr">電圧 ↔ 無効電力 <i>Q</i> の不足（その場所）　／　周波数 ↔ 有効電力 <i>P</i> の不足（系統全体）<span class="read">読み：電圧が下がる母線はその近くで Q が足りない。周波数が下がるのは系統全体で P が足りない。原因と場所が違います。</span></div>'
+      + '<div class="desc">図の左では母線ごとに電圧の高さが違いますが、右の周波数は系統のどこで測っても同じ 1 つの値です。<b>この「局所 vs 共通」の違い</b>が、第6回（電圧）と第8回（周波数）の考え方を分けます。沖縄のような独立系統では、周波数の共通性が特に厳しく効きます。</div>'; },
+    draw() { drawQuality(); caption('電圧はバラつく、周波数は 1 つ'); } },
+  { legend: '3 つの壁の一覧。熱＝カルノー、風＝ベッツ、光＝ SQ。水力だけ壁が事実上ない',
+    mini: () => '<div>カルノー <b>' + fmtP(carnot(566, 33)) + '</b></div><div>ベッツ <b>' + fmtP(BETZ) + '</b></div><div>SQ <b>33.7%</b></div>',
+    html() { return '<h3>まとめ：壁はどこにあり、何を動かせば効率が上がるか</h3>'
+      + '<div class="eq curr">熱: 1 − <i>T</i><sub>L</sub>/<i>T</i><sub>H</sub>　風: 16/27　光: ≈ 0.337　水: 壁なし<span class="read">読み：方式ごとに上限の式が違う。上限に対する達成率で見ると、どの方式も 6〜7 割まで来ています。</span></div>'
+      + '<div class="desc">効率を上げる王道は<b>「壁を磨く」ではなく「壁を動かす」</b>（T<sub>H</sub> を上げる、熱を経由しない）です。そして風力の 3 乗則と太陽光の温度依存は、<b>出力がこちらの意思で決められない</b>という再エネ固有の性質を予告しています。次回はこの電気を<b>どう運ぶか</b>（第2回 電力システムの構成）へ進みます。</div>'; },
+    draw() { drawWalls(); caption('壁を磨くより、壁を動かす'); } },
+];
+
+/* 4. 描画 */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1;
+  for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); }
+  for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); }
+  ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted');
+  ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT);
+  ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash);
+  ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, alpha = 1) { ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1);
+  if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 });
+  if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+
+function drawChain(effs, labels) {
+  const y = 150, x0 = 22, w = 78, gap = 10; let e = 1.0;
+  txt('残るエネルギー', 22, 60, { color: getCSS('--muted') });
+  for (let i = 0; i < 3; i++) {
+    const x = x0 + i * (w + gap + 14);
+    const hIn = 100 * e; e *= effs[i]; const hOut = 100 * e;
+    // 台形（入口の高さ→出口の高さ）
+    ctx.save(); ctx.fillStyle = getCSS(i === 1 && effs[1] < 0.6 ? '--neg' : '--accent'); ctx.globalAlpha = .75;
+    ctx.beginPath(); ctx.moveTo(x, y + 50 - hIn / 2); ctx.lineTo(x + w, y + 50 - hOut / 2); ctx.lineTo(x + w, y + 50 + hOut / 2); ctx.lineTo(x, y + 50 + hIn / 2); ctx.closePath(); ctx.fill(); ctx.restore();
+    txt(labels[i], x + w / 2, y + 130, { align: 'center', size: 10.5 });
+    txt('×' + effs[i].toFixed(2), x + w / 2, y + 146, { align: 'center', mono: true, color: getCSS('--upd') });
+    if (i < 2) txt('▶', x + w + 2, y + 54, { size: 12, color: getCSS('--faint') });
+  }
+  txt('100%', x0, y + 175, { mono: true }); txt('→ ' + fmtP(e), x0 + 3 * (w + gap + 14) - 10, y + 175, { mono: true, align: 'right', bold: true });
+  txt('掛け算で残るのは ' + fmtP(e), CW / 2, 345, { align: 'center', size: 12, bold: true });
+}
+function drawEffBars(items) {
+  axes(90, 50, 330, 330, '効率', ''); const n = items.length;
+  items.forEach(([lab, v], i) => { const y = 70 + i * 62, w = 235 * v;
+    rect(90, y, w, 34, getCSS(lab === '総合' ? '--neg' : '--accent'), .8);
+    txt(lab, 84, y + 22, { align: 'right', size: 11.5 }); txt(fmtP(v), 94 + w, y + 22, { mono: true, size: 11, bold: lab === '総合' }); });
+  for (let k = 0; k <= 4; k++) { const x = 90 + 235 * k / 4; line([[x, 330], [x, 335]], getCSS('--faint'), 1); txt((k * 25) + '%', x, 348, { align: 'center', size: 9, mono: true }); }
+}
+function drawPlantBars(showCarnot) {
+  axes(40, 40, 335, 300, '', '効率'); const bw = 62;
+  PLANTS.forEach((p, i) => { const x = 60 + i * 100, c = carnot(p.th, p.tl);
+    if (showCarnot) { rect(x, 300 - 240 * c, bw, 240 * c, getCSS(p.color), .25); txt(fmtP(c), x + bw / 2, 300 - 240 * c - 6, { align: 'center', size: 9.5, mono: true, color: getCSS('--muted') }); }
+    rect(x + (showCarnot ? 14 : 0), 300 - 240 * p.eta, showCarnot ? bw - 28 : bw, 240 * p.eta, getCSS(p.color), .9);
+    txt(fmtP(p.eta), x + bw / 2, 300 - 240 * p.eta + 16, { align: 'center', size: 10.5, mono: true, bold: true, color: '#fff' });
+    txt(p.name, x + bw / 2, 318, { align: 'center', size: 10 }); txt('T_H ' + p.th + '°C', x + bw / 2, 333, { align: 'center', size: 9, mono: true, color: getCSS('--muted') });
+    if (showCarnot) txt('達成 ' + fmtP(p.eta / c), x + bw / 2, 350, { align: 'center', size: 10, mono: true, color: getCSS('--upd'), bold: true }); });
+  for (let k = 0; k <= 4; k++) { const y = 300 - 240 * k / 4; txt((k * 25) + '%', 36, y + 4, { align: 'right', size: 9, mono: true }); }
+  if (showCarnot) txt('薄=カルノー上限 / 濃=実機', 40, 30, { size: 10, color: getCSS('--muted') });
+}
+function drawCarnotCurve(markTh) {
+  const L = 48, R = 335, T = 40, B = 320; axes(L, T, R, B, 'T_H [°C]', 'η');
+  const xOf = th => L + (th - 200) / 1500 * (R - L), yOf = e => B - e * (B - T);
+  const pts = []; for (let th = 200; th <= 1700; th += 10) pts.push([xOf(th), yOf(carnot(th, TL))]);
+  line(pts, getCSS('--upd'), 2.5);
+  for (const th of [500, 1000, 1500]) { line([[xOf(th), B], [xOf(th), B + 4]], getCSS('--faint'), 1); txt(th, xOf(th), B + 14, { align: 'center', size: 9, mono: true }); }
+  for (const e of [.25, .5, .75, 1]) { txt(fmtP(e), L - 4, yOf(e) + 4, { align: 'right', size: 9, mono: true }); line([[L, yOf(e)], [R, yOf(e)]], getCSS('--grid'), 1, [3, 3]); }
+  PLANTS.forEach(p => { const c = carnot(p.th, p.tl); dot(xOf(p.th), yOf(c), 4, getCSS(p.color)); dot(xOf(p.th), yOf(p.eta), 4, getCSS(p.color));
+    line([[xOf(p.th), yOf(c)], [xOf(p.th), yOf(p.eta)]], getCSS(p.color), 1, [2, 3]); txt(p.name.slice(0, 5), xOf(p.th) + 6, yOf(c) - 6, { size: 9 }); });
+  const th = markTh || TH; dot(xOf(th), yOf(carnot(th, TL)), 7, getCSS('--neg'));
+  txt('T_H=' + th + '°C → ' + fmtP(carnot(th, TL)), xOf(th) + (th > 1100 ? -8 : 10), yOf(carnot(th, TL)) - 12, { align: th > 1100 ? 'right' : 'left', size: 11, bold: true, color: getCSS('--neg') });
+  txt('上の●=上限、下の●=実機', L, 355, { size: 10, color: getCSS('--muted') });
+}
+function drawWindCurve(showBetz) {
+  const L = 48, R = 335, T = 40, B = 320, PMAX = 10; axes(L, T, R, B, 'u [m/s]', 'MW');
+  const xOf = u => L + u / 25 * (R - L), yOf = p => B - Math.min(p, PMAX) / PMAX * (B - T);
+  const raw = [], betz = [], turb = [];
+  for (let u = 0; u <= 25; u += .25) { raw.push([xOf(u), yOf(windRaw(u))]); betz.push([xOf(u), yOf(windRaw(u) * BETZ)]); turb.push([xOf(u), yOf(windTurbine(u))]); }
+  line(raw, getCSS('--faint'), 1.5, [4, 3]);
+  if (showBetz) { line(betz, getCSS('--upd'), 2.5); line(turb, getCSS('--accent'), 2.5); }
+  for (const u of [5, 10, 15, 20, 25]) txt(u, xOf(u), B + 14, { align: 'center', size: 9, mono: true });
+  for (const p of [2, 4, 6, 8, 10]) txt(p, L - 4, yOf(p) + 4, { align: 'right', size: 9, mono: true });
+  const pu = showBetz ? windRaw(U) * BETZ : windRaw(U); dot(xOf(U), yOf(pu), 7, getCSS('--neg'));
+  txt('u=' + U.toFixed(1) + ' → ' + pu.toFixed(2) + ' MW', xOf(U) + (U > 15 ? -10 : 10), yOf(pu) - 12, { align: U > 15 ? 'right' : 'left', size: 11, bold: true, color: getCSS('--neg') });
+  txt(showBetz ? '点線=風 / 紫=ベッツ / 緑=実機' : '点線=風の全エネルギー（u³）', L, 355, { size: 10, color: getCSS('--muted') });
+}
+function drawPowerCurve() {
+  const L = 48, R = 335, T = 40, B = 320; axes(L, T, R, B, 'u [m/s]', 'MW');
+  const xOf = u => L + u / 28 * (R - L), yOf = p => B - p / 3.5 * (B - T);
+  const pts = []; for (let u = 0; u <= 28; u += .1) pts.push([xOf(u), yOf(windTurbine(u))]);
+  line(pts, getCSS('--accent'), 2.5);
+  for (const [u, lab] of [[U_IN, 'カットイン'], [12, '定格'], [U_OUT, 'カットアウト']]) { line([[xOf(u), T], [xOf(u), B]], getCSS('--faint'), 1, [3, 3]); txt(lab, xOf(u), T - 8 + (u === 12 ? 0 : 0), { align: 'center', size: 9, color: getCSS('--muted') }); }
+  for (const u of [5, 10, 15, 20, 25]) txt(u, xOf(u), B + 14, { align: 'center', size: 9, mono: true });
+  for (const p of [1, 2, 3]) txt(p, L - 4, yOf(p) + 4, { align: 'right', size: 9, mono: true });
+  dot(xOf(U), yOf(windTurbine(U)), 7, getCSS('--neg'));
+  txt(windTurbine(U).toFixed(2) + ' MW', xOf(U) + (U > 18 ? -10 : 10), yOf(windTurbine(U)) - 12, { align: U > 18 ? 'right' : 'left', size: 11, bold: true, color: getCSS('--neg') });
+  rect(xOf(25), T, xOf(28) - xOf(25), B - T, getCSS('--neg'), .12); txt('停止', xOf(26.5), 200, { align: 'center', size: 10, color: getCSS('--neg') });
+}
+function drawSQ() {
+  const L = 48, R = 335, T = 60, B = 300; axes(L, T, R, B, '光子エネルギー', '寄与');
+  // 概念図：Eg 未満は 0、超えた分は熱
+  const eg = 0.42; const xOf = f => L + f * (R - L);
+  rect(L, T, xOf(eg) - L, B - T, getCSS('--faint'), .18); txt('弱すぎ：吸収されない', (L + xOf(eg)) / 2, 180, { align: 'center', size: 10, color: getCSS('--muted') });
+  rect(xOf(eg), T, R - xOf(eg), B - T, getCSS('--accent'), .12);
+  const pts = []; for (let f = eg; f <= 1; f += .01) pts.push([xOf(f), B - (eg / f) * (B - T) * .95]);
+  line(pts, getCSS('--accent'), 2.5); line([[xOf(eg), T + 12], [xOf(eg), B]], getCSS('--neg'), 1.5, [4, 3]);
+  txt('E_g', xOf(eg), T + 4, { align: 'center', size: 10, mono: true, color: getCSS('--neg') });
+  txt('強すぎ：余りが熱に', xOf(.72), 110, { align: 'center', size: 10, color: getCSS('--muted') });
+  txt('取り出せる割合の上限 ≈ 33.7%', CW / 2, 340, { align: 'center', size: 12, bold: true });
+}
+function drawQuality() {
+  // 左：電圧（母線ごと） 右：周波数（1 本）
+  axes(30, 50, 170, 300, '母線', 'V'); axes(200, 50, 340, 300, '場所', 'f');
+  const vs = [1.02, 0.99, 1.04, 0.97, 1.06, 1.01];
+  vs.forEach((v, i) => { const x = 40 + i * 21, h = (v - .9) / .2 * 250; rect(x, 300 - h, 16, h, getCSS(v > 1.05 || v < .95 ? '--neg' : '--accent'), .8); });
+  line([[30, 300 - (1.05 - .9) / .2 * 250], [170, 300 - (1.05 - .9) / .2 * 250]], getCSS('--neg'), 1, [3, 3]);
+  line([[30, 300 - (.95 - .9) / .2 * 250], [170, 300 - (.95 - .9) / .2 * 250]], getCSS('--neg'), 1, [3, 3]);
+  txt('1.05', 32, 300 - (1.05 - .9) / .2 * 250 - 4, { size: 9, mono: true, color: getCSS('--neg') });
+  txt('電圧：母線ごとに違う', 100, 325, { align: 'center', size: 10.5 });
+  for (let i = 0; i < 6; i++) { const x = 212 + i * 21; rect(x, 300 - 125, 16, 125, getCSS('--upd'), .8); }
+  line([[200, 175], [340, 175]], getCSS('--upd'), 2); txt('60.00 Hz', 270, 165, { align: 'center', size: 10, mono: true, color: getCSS('--upd') });
+  txt('周波数：どこでも同じ', 270, 325, { align: 'center', size: 10.5 });
+  txt('局所量', 100, 345, { align: 'center', size: 11, bold: true, color: getCSS('--accent') }); txt('共通量', 270, 345, { align: 'center', size: 11, bold: true, color: getCSS('--upd') });
+}
+function drawWalls() {
+  const rows = [['熱（汽力）', carnot(566, 33), 0.42, '--warm'], ['熱（CC）', carnot(1600, 33), 0.62, '--accent'], ['風', BETZ, 0.45, '--upd'], ['光', 0.337, 0.20, '--loss'], ['水', 1.0, 0.87, '--accent']];
+  axes(80, 40, 335, 330, '効率', '');
+  rows.forEach(([lab, wall, act, c], i) => { const y = 55 + i * 56; rect(80, y, 250 * wall, 30, getCSS(c), .22); rect(80, y + 6, 250 * act, 18, getCSS(c), .9);
+    txt(lab, 74, y + 20, { align: 'right', size: 10.5 }); txt('壁 ' + fmtP(wall), 84 + 250 * wall, y + 12, { size: 9, mono: true, color: getCSS('--muted') }); txt(fmtP(act), 84 + 250 * act, y + 21, { size: 9.5, mono: true, bold: true }); });
+  for (let k = 0; k <= 4; k++) { const x = 80 + 250 * k / 4; txt((k * 25) + '%', x, 348, { align: 'center', size: 9, mono: true }); }
+  txt('薄=理論の壁 / 濃=実機', 80, 32, { size: 10, color: getCSS('--muted') });
+}
+
+/* 5. スライドエンジン（共通） */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur = chOf(slideIdx);
+  el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur ? 'active' : (i < cur ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join('');
+  el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c);
+  el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain();
+  document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; TH = 566; U = 10; document.getElementById('thRange').value = 566; document.getElementById('uRange').value = 10; syncLabels(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+/* ページ固有の操作 */
+function syncLabels() { document.getElementById('thVal').textContent = TH; document.getElementById('uVal').textContent = U.toFixed(1); }
+document.getElementById('thRange').oninput = e => { TH = +e.target.value; syncLabels(); renderAll(); draw_(); };
+document.getElementById('uRange').oninput = e => { U = +e.target.value; syncLabels(); renderAll(); draw_(); };
+syncLabels();
+goSlide(0);
+</script>
+<script src="site.js"></script>
+<script src="nav.js"></script>
+<script src="terms.js"></script>
+</body>
+</html>

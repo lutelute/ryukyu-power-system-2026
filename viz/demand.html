@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第11回 電力需要予測 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第11回 電力需要予測 — 需要は分解できる、そして沖縄では湿度が効く</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch11.html">📖 講義ノート（第11回）</a><a class="e" href="../ex/ch11.html">✍ 演習で確かめる</a></div>
+  <div class="lead">第8回の ELD（経済負荷配分）は「明日の需要」を入力に動きます。その需要は<b>周期（年・週・日）＋気温の非線形＋ノイズ</b>に分解でき、統計モデルで予測できます。このページは沖縄本島を模した 1 年分の時間別需要をシード付きで生成し、<b>重回帰の学習・評価・ベースライン比較をすべてブラウザ内で実計算</b>します。前提は<a href="weather.html">第10回</a>、次は<a href="ml.html">第12回 機械学習</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「気温が高いと需要が増える」だけで沖縄の需要は当たりません。湿度と、前週同曜日という強力なベースラインを知らないと、無駄に複雑なモデルを作ります。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>需要 = 周期 ＋ 気温（不快指数）の折れ線 ＋ 先週の自分。それに勝てないモデルは要らない。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>中央給電指令所の翌日需要想定、スポット市場の入札量、沖縄電力の需給計画。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>基準温度 <input type="range" id="tbRange" min="16" max="30" step="0.5" value="24"> <span id="tbVal">24.0</span> °C</label>
+      <label>太陽光 <input type="range" id="pvRange" min="0" max="600" step="50" value="300"> <span id="pvVal">300</span> MW</label>
+      <button id="diceBtn">🎲</button>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>需要予測の最初の相手は最新のモデルではなく「<b>先週の同じ曜日の同じ時刻</b>」です — それに勝てないなら、何をしても価値がありません。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>需要は気温に比例するので、気温を説明変数にした線形回帰で十分。</div>
+    <div class="row"><span class="o">✓</span>関係は V 字（本土）／片側折れ線（沖縄）です。折れ目より下では気温が上がっても需要は増えません。<b>度日（CDD）で折れ目から先だけを数える</b>と相関が跳ね上がります（基準温度スライダで実測）。</div>
+    <div class="row"><span class="x">✗</span>時系列データでも、学習と検証はランダムに分ければよい。</div>
+    <div class="row"><span class="o">✓</span>未来のデータで学習して過去を当てることになり（データリーク）、非現実的に良い精度が出ます。<b>必ず時間で切る</b>（過去で学習、未来で検証）。第12回でその「逆転」を実測します。</div>
+  </div>
+  <details><summary>もっと詳しく：データ生成・OLS・評価指標</summary><div class="det">
+    このページの需要は、沖縄本島の特徴（年較差が小さい、暖房がほぼない、湿度が高い）を模した合成データです：気温 <i>T</i> = 23.5 − 6cos(年周期) − 3cos(日周期) ＋ノイズ、湿度 74±8%、不快指数 THI = 0.81<i>T</i> + 0.01<i>RH</i>(0.99<i>T</i> − 14.3) + 46.3、需要 = 700 ＋ 日内正弦 ＋ 週末 −70 ＋ 14·max(THI−70, 0)<sup>1.25</sup> ＋ 4·max(16−<i>T</i>, 0) ＋ ノイズ 22。
+    回帰は最小二乗（正規方程式をガウス消去で解く）。特徴量は定数・CDD・HDD・THI 超過分・時刻の sin/cos（2 次まで）・週末・前日同時刻・前週同曜日同時刻の 11 個。
+    評価は MAE・RMSE・MAPE と、前週同曜日ベースラインに対する Skill Score = 1 − RMSE<sub>model</sub>/RMSE<sub>base</sub>。
+    <b>限界：</b>合成データなので祝日・お盆・台風・観光需要などの特異日は入っていません。実データではこれらのダミー変数と外れ値処理が精度を左右します。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const gauss = () => { const u = Math.max(rng(), 1e-9), v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+/* ---- データ生成（1 年・時間値） ---- */
+let TB = 24, PVMW = 300, ROUND = 0; const N = 24 * 365; let D = null;
+function genData() { seed = 314 + ROUND * 7919; const T = [], RH = [], THI = [], Y = [], H = [], DOW = [], DOY = []; for (let k = 0; k < N; k++) { const doy = Math.floor(k / 24) + 1, h = k % 24, dow = (Math.floor(k / 24) + 0) % 7; const t = 23.5 - 6 * Math.cos(2 * Math.PI * (doy - 25) / 365) - 3 * Math.cos(2 * Math.PI * (h - 14) / 24) + 1.5 * gauss(); const rh = Math.max(40, Math.min(98, 74 + 8 * Math.sin(2 * Math.PI * (doy - 100) / 365) + 6 * gauss())); const thi = 0.81 * t + 0.01 * rh * (0.99 * t - 14.3) + 46.3; const y = 700 + 180 * Math.sin(2 * Math.PI * (h - 9) / 24) + 90 * Math.sin(4 * Math.PI * (h - 7) / 24) + (dow >= 5 ? -70 : 0) + 14 * Math.pow(Math.max(thi - 70, 0), 1.25) + 4 * Math.max(16 - t, 0) + 22 * gauss(); T.push(t); RH.push(rh); THI.push(thi); Y.push(Math.max(300, y)); H.push(h); DOW.push(dow); DOY.push(doy); } D = { T, RH, THI, Y, H, DOW, DOY }; }
+genData();
+const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+function corr(a, b) { const ma = mean(a), mb = mean(b); let sab = 0, saa = 0, sbb = 0; for (let i = 0; i < a.length; i++) { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) ** 2; sbb += (b[i] - mb) ** 2; } return sab / Math.sqrt(saa * sbb); }
+function daily(arr) { const out = []; for (let d = 0; d < 365; d++) { let s = 0; for (let h = 0; h < 24; h++) s += arr[d * 24 + h]; out.push(s / 24); } return out; }
+/* ---- 特徴量と OLS ---- */
+function feats(k, tb) { const t = D.T[k], thi = D.THI[k], h = D.H[k]; return [1, Math.max(t - tb, 0), Math.max(16 - t, 0), Math.max(thi - 70, 0), Math.sin(2 * Math.PI * h / 24), Math.cos(2 * Math.PI * h / 24), Math.sin(4 * Math.PI * h / 24), Math.cos(4 * Math.PI * h / 24), D.DOW[k] >= 5 ? 1 : 0, D.Y[k - 24], D.Y[k - 168]]; }
+const FNAMES = ['定数', 'CDD', 'HDD', 'THI超過', 'sin h', 'cos h', 'sin 2h', 'cos 2h', '週末', '前日同時刻', '前週同曜日'];
+function solve(A, b) { const n = b.length, M = A.map((r, i) => [...r, b[i]]); for (let c = 0; c < n; c++) { let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r; [M[c], M[p]] = [M[p], M[c]]; if (Math.abs(M[c][c]) < 1e-12) continue; for (let r = 0; r < n; r++) { if (r === c) continue; const f = M[r][c] / M[c][c]; for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; } } return M.map((r, i) => r[n] / (r[i] || 1)); }
+let FIT = null;
+function fit(tb) { const split = Math.floor(N * .75); const p = FNAMES.length; const XtX = Array.from({ length: p }, () => Array(p).fill(0)), Xty = Array(p).fill(0); for (let k = 168; k < split; k++) { const x = feats(k, tb), y = D.Y[k]; for (let i = 0; i < p; i++) { Xty[i] += x[i] * y; for (let j = 0; j < p; j++) XtX[i][j] += x[i] * x[j]; } } const beta = solve(XtX, Xty); const ev = { mae: 0, rmse: 0, mape: 0, bmae: 0, brmse: 0, bmape: 0, n: 0 }; const pred = [], truth = [], base = [], idx = []; for (let k = split; k < N; k++) { const x = feats(k, tb); let yh = 0; for (let i = 0; i < p; i++) yh += beta[i] * x[i]; const y = D.Y[k], yb = D.Y[k - 168]; ev.mae += Math.abs(y - yh); ev.rmse += (y - yh) ** 2; ev.mape += Math.abs((y - yh) / y); ev.bmae += Math.abs(y - yb); ev.brmse += (y - yb) ** 2; ev.bmape += Math.abs((y - yb) / y); ev.n++; pred.push(yh); truth.push(y); base.push(yb); idx.push(k); } ev.mae /= ev.n; ev.rmse = Math.sqrt(ev.rmse / ev.n); ev.mape = ev.mape / ev.n * 100; ev.bmae /= ev.n; ev.brmse = Math.sqrt(ev.brmse / ev.n); ev.bmape = ev.bmape / ev.n * 100; ev.skill = 1 - ev.rmse / ev.brmse; FIT = { beta, ev, pred, truth, base, idx, split }; return FIT; }
+function cddCorr(tb) { const dT = daily(D.T), dY = daily(D.Y); return corr(dT.map(t => Math.max(t - tb, 0)), dY); }
+function bestTb() { let best = 16, bc = -1; for (let tb = 16; tb <= 30; tb += .5) { const c = cddCorr(tb); if (c > bc) { bc = c; best = tb; } } return { tb: best, c: bc }; }
+/* ---- 正味需要 ---- */
+function netLoad(pvmw, day = 196) { const out = []; for (let h = 0; h < 24; h++) { const y = D.Y[(day - 1) * 24 + h]; const pv = pvmw * Math.max(0, Math.sin(Math.PI * (h - 6) / 13)); out.push({ h, y, pv, net: y - pv }); } let ramp = 0; for (let h = 1; h < 24; h++) ramp = Math.max(ramp, out[h].net - out[h - 1].net); return { out, ramp, min: Math.min(...out.map(o => o.net)) }; }
+const f0 = x => x.toFixed(0), f1 = x => x.toFixed(1), f2 = x => x.toFixed(2), f3 = x => x.toFixed(3);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 需要の構造', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ 回帰モデル', c: 'var(--loss)', start: 7 }, { t: 'Ⅳ 評価・まとめ', c: 'var(--accent)', start: 11 } ];
+const SLIDES = [
+  { legend: '第8回の制御分担図。ELD（10 分〜）の入力が「予測された需要」',
+    html() { return '<h3>問題：ELD は「明日の需要」を知らないと動けない</h3><div class="eq curr">自己制御性 → 調速制御 → LFC → <b>ELD</b>（経済負荷配分）　← ここに需要予測が要る<span class="read">読み：秒〜分の変動は制御で吸収する。10 分より長い「ゆっくりした大きな変化」は予測して計画する（教科書 7.4 節）。</span></div><div class="desc">教科書は負荷変動を「予測可能なゆっくりした変化」と「予測困難な短周期変化」に分けました。この回は前者を<b>実際に予測</b>します。データは沖縄本島を模した 1 年分（' + N.toLocaleString() + ' 時間）をシード付きで生成しています（🎲 で振り直し）。</div>'; },
+    draw() { drawHierarchy(); caption('10 分より長い変化は「予測」の仕事'); } },
+  { legend: '需要 = トレンド ＋ 年周期 ＋ 週周期 ＋ 日内 ＋ 気温効果 ＋ 不規則変動',
+    html() { return '<h3>需要は足し算に分解できる</h3><div class="eq curr"><i>y<sub>t</sub></i> = <i>T<sub>t</sub></i> + <i>S</i><sup>年</sup> + <i>S</i><sup>週</sup> + <i>S</i><sup>日</sup> + <i>f</i>(<i>T<sub>a</sub></i>) + ε<sub>t</sub><span class="read">読み：長期トレンド、季節、曜日、時刻の周期成分に、気温の非線形な効果と、予測できない残りが乗る。</span></div><div class="desc">それぞれの成分は別々の説明変数で表せます。<b>周期は sin/cos やダミー変数、気温は折れ線、そして「先週の自分」</b>。次の 5 枚で、この合成データの中に本当にその構造があるかを図で確かめます。</div>'; },
+    draw() { drawDecomp(); caption('成分ごとに違う説明変数を当てる'); } },
+
+  { legend: '曜日別の平均日負荷曲線。実線=平日、点線=土日',
+    html() { return '<h3>日内変動と週日性：平日は 2 山、週末は低い</h3><div class="eq curr">日内：sin(2π<i>h</i>/24), sin(4π<i>h</i>/24)　／　週：週末ダミー<span class="read">読み：時刻を周期関数で、曜日を 0/1 変数で表す。24 個の時刻ダミーより少ないパラメータで滑らかに表現できる。</span></div><div class="desc">図は生成データを曜日・時刻で平均したものです。<b>朝と午後の 2 つの山、昼休みの谷、土日の 70 MW 程度の落ち込み</b>が見えます。実データでも同じ形が出ます。これが「先週の同じ曜日の同じ時刻」がベースラインとして強い理由です。</div>'; },
+    draw() { drawDailyProfile(); caption('先週の同曜日同時刻 = ほぼ同じ形'); } },
+  { legend: '月別平均需要。沖縄は夏の単峰（本土は冬にも山）',
+    html() { return '<h3>年周期：沖縄は「夏の一山」</h3><div class="eq curr">暖房需要 ≈ 0　⇒　年周期は冷房で決まる単峰<span class="read">読み：那覇の冬は 15 °C 以上で暖房需要がほぼない。本土の 2 山（冬・夏）と違う。</span></div><div class="desc">月別に平均すると夏（7〜8 月）に山が 1 つ。年較差が本土より小さいので年周期成分の振幅も小さめです。この形は、次に見る<b>気温との関係が「片側」</b>であることと同じことを言っています。</div>'; },
+    draw() { drawMonthly(); caption('夏の一山 = 冷房主体'); } },
+  { legend: '日平均気温 vs 日平均需要の散布。折れ目より右で立ち上がる',
+    html() { const dT = daily(D.T), dY = daily(D.Y); return '<h3>気温と需要：直線ではなく「折れ線」</h3><div class="eq curr">相関（気温そのまま）= <b class="res">' + f3(corr(dT, dY)) + '</b>　　折れ目 ≈ 24 °C 以下では需要は気温にほぼ無関係<span class="read">読み：気温が低い側は平らで、ある温度から先だけ需要が増える。直線を当てはめると折れ目の両側で系統的に外れる。</span></div><div class="desc">本土なら冷房と暖房で V 字になりますが、沖縄は暖房側がないので<b>片側の折れ線</b>です。この形を表すのが次の「度日」です。</div>'; },
+    draw() { drawScatter(); caption('折れ目の右側だけが効く'); } },
+  { legend: '基準温度 T_b を動かして CDD=(T−T_b)⁺ と需要の相関を最大化（スライダ）',
+    mini: () => { const b = bestTb(); return '<div>T<sub>b</sub>=' + f1(TB) + ' 相関 <b>' + f3(cddCorr(TB)) + '</b></div><div>最良 <b>' + f1(b.tb) + '°C</b>（' + f3(b.c) + '）</div>'; },
+    html() { const b = bestTb(); return '<h3>度日法：折れ目から先だけを数える</h3><div class="eq curr">CDD = max(<i>T<sub>a</sub></i> − <i>T<sub>b</sub></i>, 0)　　<i>T<sub>b</sub></i> = ' + f1(TB) + ' °C で相関 <b class="res">' + f3(cddCorr(TB)) + '</b>　（最良 <i>T<sub>b</sub></i> = <b class="res">' + f1(b.tb) + '</b> °C, ' + f3(b.c) + '）<span class="read">読み：基準温度を超えた分だけを説明変数にする。折れ目の位置を基準温度で合わせると相関が最大になる。</span></div><div class="desc">右下の基準温度スライダを動かしてください。<b>相関が最大になる基準温度は、冷房が入り始める温度</b>を意味します。本土では 22〜24 °C、沖縄は湿度が高いので気温だけで見ると少し低めに出ることがあります。</div>'; },
+    draw() { drawCDD(); caption('基準温度 = 冷房が入る温度'); } },
+  { legend: 'A/B：気温・湿度・不快指数（THI）と需要の相関。沖縄は THI が最も高い',
+    html() { const dT = daily(D.T), dR = daily(D.RH), dH = daily(D.THI), dY = daily(D.Y); const c1 = corr(dT, dY), c2 = corr(dR, dY), c3 = corr(dH, dY); return '<h3>A/B：気温 ' + f3(c1) + ' vs THI ' + f3(c3) + ' — 湿度を入れると相関が上がる</h3><div class="eq curr">THI = 0.81<i>T<sub>a</sub></i> + 0.01<i>RH</i>(0.99<i>T<sub>a</sub></i> − 14.3) + 46.3　　相関：気温 <b class="res">' + f3(c1) + '</b>　湿度 ' + f3(c2) + '　THI <b class="res">' + f3(c3) + '</b><span class="read">読み：不快指数は気温と湿度を合わせた蒸し暑さ。冷房需要は気温だけでなく湿度でも増えるので、THI のほうが説明力が高い。</span></div><div class="desc">那覇の夏は湿度 75〜80%。<b>気温が本土より低い日でも湿度で冷房が入ります</b>。「気温だけのモデルでは沖縄の需要を説明できない」の数値的な根拠です。回帰モデルには THI の超過分（THI−70）⁺ を入れます。</div>'; },
+    draw() { drawCorrBars(); caption('沖縄では湿度が効く'); } },
+
+  { legend: '特徴量の一覧（11 個）。右は「予測時点で入手できるか」',
+    html() { return '<h3>特徴量設計：何を入力にするか</h3><div class="eq curr">気温系（CDD, HDD, THI⁺）＋周期（sin/cos ×2）＋週末＋自己回帰（前日・前週）<span class="read">読み：気象は予報値、周期とカレンダーは確定、自己回帰は過去の実績。すべて「前日の時点で手に入る」もの。</span></div><div class="desc">重要なのは<b>予測時点で入手できる情報だけ</b>を使うこと。「その日の実測気温」は当日が終わらないと確定しないので使えません（予報値を使う）。「1 時間前の実績」も前日予測では使えません。この規律を破ると第12回のデータリークになります。</div>'; },
+    draw() { drawFeatureTable(); caption('前日時点で手に入るものだけ'); } },
+  { legend: '学習（前 75%）→ 検証（後 25%）の時系列分割。推定された係数',
+    mini: () => { const f = fit(TB); return '<div>学習 <b>' + (f.split - 168).toLocaleString() + '</b> 点</div><div>検証 <b>' + f.ev.n.toLocaleString() + '</b> 点</div>'; },
+    html() { const f = fit(TB); return '<h3>重回帰の学習：正規方程式を解く</h3><div class="eq curr"><b>β</b> = (<b>X</b><sup>T</sup><b>X</b>)<sup>−1</sup><b>X</b><sup>T</sup><b>y</b>　→　CDD <b class="res">' + f2(f.beta[1]) + '</b>, THI⁺ <b class="res">' + f2(f.beta[3]) + '</b>, 週末 <b class="res">' + f2(f.beta[8]) + '</b>, 前週 <b class="res">' + f2(f.beta[10]) + '</b><span class="read">読み：最小二乗の解。CDD の係数は「基準温度を 1 °C 超えるごとに何 MW 増えるか」。週末の係数は負。</span></div><div class="desc">前 75%（' + (f.split - 168).toLocaleString() + ' 時間）で学習し、後 25% で検証します。<b>ランダムに混ぜてはいけません</b>（時系列分割）。係数の符号と大きさが物理的に妥当か（週末が負、CDD が正）を確認するのが、解釈できるモデルの利点です。</div>'; },
+    draw() { drawCoefs(); caption('係数の符号が物理と合っているか見る'); } },
+  { legend: 'A/B：前週同曜日ベースライン（橙）vs 重回帰（緑）。検証期間の 1 週間',
+    mini: () => { const f = fit(TB); return '<div>基準 RMSE <b>' + f1(f.ev.brmse) + '</b></div><div>回帰 RMSE <b>' + f1(f.ev.rmse) + '</b></div><div>Skill <b>' + f3(f.ev.skill) + '</b></div>'; },
+    html() { const f = fit(TB); return '<h3>A/B：ベースラインに ' + (f.ev.skill * 100).toFixed(0) + '% 勝てた</h3><div class="eq curr">Skill = 1 − <span class="frac"><span>RMSE<sub>model</sub></span><span>RMSE<sub>base</sub></span></span> = 1 − <span class="frac"><span>' + f1(f.ev.rmse) + '</span><span>' + f1(f.ev.brmse) + '</span></span> = <b class="res">' + f3(f.ev.skill) + '</b><span class="read">読み：前週同曜日同時刻をそのまま予測値にする素朴な方法に対し、モデルが誤差をどれだけ減らしたか。正でなければ価値がない。</span></div><div class="desc">ベースライン RMSE ' + f1(f.ev.brmse) + ' MW に対して回帰は ' + f1(f.ev.rmse) + ' MW。<b>まずこの比較を出すのが作法</b>です。高度な手法が前週同曜日に負けることは実務で珍しくありません。基準温度スライダで特徴量が変わると Skill も動きます。</div>'; },
+    draw() { drawAB(); caption('Skill が正 = ベースラインに勝っている'); } },
+  { legend: '検証期間の 3 指標。RMSE は大きな誤差を強く罰する',
+    html() { const f = fit(TB); return '<h3>評価指標：MAE・RMSE・MAPE の使い分け</h3><div class="eq curr">MAE = <b class="res">' + f1(f.ev.mae) + '</b> MW　RMSE = <b class="res">' + f1(f.ev.rmse) + '</b> MW　MAPE = <b class="res">' + f2(f.ev.mape) + '</b>%　（RMSE ≥ MAE は常に成立）<span class="read">読み：MAE は平均的なずれ、RMSE は 2 乗するので大きな外れを重く見る、MAPE は規模の違う系統の比較用。</span></div><div class="desc">電力では <b>RMSE を重視</b>します。小さな誤差が多数あるより、大きな誤差が 1 回ある方が周波数維持には危険だからです（第8回）。RMSE と MAE の差が大きいほど誤差のばらつきが大きい。太陽光の評価に MAPE を使えない話は第10回で見ました。</div>'; },
+    draw() { drawMetrics(); caption('電力は RMSE。大きな外れが怖い'); } },
+
+  { legend: '時系列分割（上）vs ランダム分割（下）。下は未来で学習して過去を当てている',
+    html() { return '<h3>検証の作法：時間で切る。混ぜない。</h3><div class="eq curr">walk-forward：[学習 →][検証]　を時間方向にずらす　／　ランダム分割 = データリーク<span class="read">読み：時系列では隣り合う時刻が似ているので、ランダムに混ぜると「答えの隣」が学習に入り、精度が水増しされる。</span></div><div class="desc">さらに、運用で予報値を使うなら<b>学習も予報値で行う</b>べきです。実測気温で学習したモデルを予報気温で動かすと精度が落ちます。第12回で、リークがあると検証精度と運用精度が逆転する様子を実測します。</div>'; },
+    draw() { drawSplit(); caption('未来を見て過去を当てる = リーク'); } },
+  { legend: '正味需要（需要 − 太陽光）。太陽光スライダで昼の凹みと夕方の急坂（ダックカーブ）',
+    mini: () => { const n = netLoad(PVMW); return '<div>最小正味 <b>' + f0(n.min) + ' MW</b></div><div>最大ランプ <b>' + f0(n.ramp) + ' MW/h</b></div>'; },
+    html() { const n0 = netLoad(0), n = netLoad(PVMW); return '<h3>正味需要とダックカーブ：予測すべきは「需要 − 太陽光」</h3><div class="eq curr">正味需要 = 需要 − 太陽光出力　→　太陽光 ' + PVMW + ' MW：最小 <b class="res">' + f0(n.min) + '</b> MW、最大ランプ <b class="res">' + f0(n.ramp) + '</b> MW/h（太陽光なし ' + f0(n0.ramp) + ' MW/h）<span class="read">読み：昼に太陽光で正味需要がへこみ、夕方に太陽光が消えて急に立ち上がる。この形がアヒルの横顔に見える。</span></div><div class="desc">太陽光スライダを上げると、<b>夕方の立ち上がり（ランプ）が ' + (n.ramp / Math.max(n0.ramp, 1)).toFixed(1) + ' 倍</b>に急になり、昼の最小正味需要が火力の最低出力を割ると出力抑制が要ります（第14・15回）。ELD が扱うのはこの正味需要で、需要と再エネの<b>両方の予測誤差</b>が合成されます。</div>'; },
+    draw() { drawDuck(); caption('昼の谷と夕方の坂。系統が小さいほど坂は急'); } },
+  { legend: '第11回の要点',
+    html() { const f = fit(TB); return '<h3>まとめ：分解 → 折れ線 → ベースライン → 時間で切る</h3><div class="eq curr">周期 + (THI−70)⁺ + 前週の自分　／　Skill = ' + f3(f.ev.skill) + '　／　検証は時系列分割<span class="read">読み：この 3 行が第11回。</span></div><div class="desc">統計モデルは解釈できて実用的ですが、交互作用（気温×時刻×曜日）を手で設計する必要があり、長期依存も苦手です。次回は<b>機械学習（勾配ブースティング・LSTM）</b>でそこを超える方法と、引き換えに増える落とし穴（リーク・外挿・説明責任）を扱います。</div>'; },
+    draw() { drawSummary(); caption('次回：機械学習で超える、そして落とし穴'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawHierarchy() { const L = 40, T = 60, R = 335, B = 300; axes(L, T, R, B, '変動周期（対数）', '変動幅'); const items = [['自己制御性', 0.05, .15, '--faint'], ['調速制御', .22, .3, '--warm'], ['LFC', .45, .55, '--upd'], ['ELD', .72, 1.0, '--accent']]; items.forEach(([n, x, h, c]) => { const px = L + x * (R - L), w = 60, py = B - h * (B - T); rect(px, py, w, B - py, getCSS(c), .5); txt(n, px + w / 2, py - 6, { align: 'center', size: 10, bold: n === 'ELD' }); }); ['1 秒', '1 分', '10 分'].forEach((t, i) => txt(t, L + (.2 + i * .25) * (R - L), B + 14, { align: 'center', size: 9, mono: true })); txt('ELD の入力 = 需要予測', CW / 2, 340, { align: 'center', size: 11, bold: true, color: getCSS('--accent') }); }
+function drawDecomp() { const L = 30, R = 335; const rows = [['年周期', (x) => .5 * Math.sin(x * 2 * Math.PI), '--upd'], ['週周期', (x) => ((x * 52) % 1 > 5 / 7 ? -.5 : .3), '--warm'], ['日内', (x) => .5 * Math.sin(x * 365 * 2 * Math.PI), '--accent'], ['気温効果', (x) => Math.max(0, Math.sin(x * 2 * Math.PI) - .3) * 1.2, '--neg'], ['ノイズ', () => (rng() - .5) * .6, '--faint']]; seed = 5; rows.forEach(([n, fn, c], i) => { const y0 = 70 + i * 62; txt(n, L, y0 - 22, { size: 10, bold: true, color: getCSS(c) }); const pts = []; for (let k = 0; k <= 300; k++) { const x = k / 300; pts.push([L + x * (R - L), y0 - 18 * fn(x)]); } line(pts, getCSS(c), 1.5); }); txt('＋ すべて足すと需要になる', CW / 2, 395, { align: 'center', size: 10.5 }); }
+function drawDailyProfile() { const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '時刻', 'MW'); const prof = Array.from({ length: 7 }, () => Array(24).fill(0)), cnt = Array.from({ length: 7 }, () => Array(24).fill(0)); for (let k = 0; k < N; k++) { prof[D.DOW[k]][D.H[k]] += D.Y[k]; cnt[D.DOW[k]][D.H[k]]++; } let mn = 1e9, mx = 0; const P = prof.map((r, d) => r.map((v, h) => { const m = v / cnt[d][h]; mn = Math.min(mn, m); mx = Math.max(mx, m); return m; })); const xOf = h => L + h / 23 * (R - L), yOf = v => B - (v - mn + 20) / (mx - mn + 40) * (B - T); P.forEach((r, d) => line(r.map((v, h) => [xOf(h), yOf(v)]), getCSS(d >= 5 ? '--warm' : '--upd'), d >= 5 ? 1.5 : 1.8, d >= 5 ? [4, 3] : null)); [0, 6, 12, 18, 23].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); txt('平日（青）', L + 8, T + 14, { size: 10, color: getCSS('--upd'), bold: true }); txt('土日（橙点線）', L + 8, T + 30, { size: 10, color: getCSS('--warm'), bold: true }); txt(f0(mn) + '〜' + f0(mx) + ' MW', R - 4, T + 14, { align: 'right', size: 9.5, mono: true, color: getCSS('--muted') }); }
+function drawMonthly() { const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '月', 'MW'); const m = Array(12).fill(0), c = Array(12).fill(0); for (let k = 0; k < N; k++) { const mo = Math.min(11, Math.floor((D.DOY[k] - 1) / 30.42)); m[mo] += D.Y[k]; c[mo]++; } const M = m.map((v, i) => v / c[i]); const mn = Math.min(...M) - 40, mx = Math.max(...M) + 40; const yOf = v => B - (v - mn) / (mx - mn) * (B - T); M.forEach((v, i) => { const x = L + 8 + i * 23; rect(x, yOf(v), 18, B - yOf(v), getCSS(i >= 5 && i <= 8 ? '--neg' : '--upd'), .8); txt(i + 1, x + 9, B + 14, { align: 'center', size: 9, mono: true }); }); txt('夏（6〜9 月）に一山', CW / 2, 340, { align: 'center', size: 10.5, color: getCSS('--neg'), bold: true }); }
+function drawScatter() { const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '日平均気温 [°C]', '日平均需要 [MW]'); const dT = daily(D.T), dY = daily(D.Y); const tmin = Math.min(...dT), tmax = Math.max(...dT), ymin = Math.min(...dY), ymax = Math.max(...dY); const xOf = t => L + (t - tmin) / (tmax - tmin) * (R - L), yOf = y => B - (y - ymin) / (ymax - ymin) * (B - T); dT.forEach((t, i) => dot(xOf(t), yOf(dY[i]), 2.2, getCSS(t > 24 ? '--neg' : '--upd'))); line([[xOf(24), T], [xOf(24), B]], getCSS('--faint'), 1, [4, 3]); txt('折れ目 ≈ 24 °C', xOf(24) + 4, T + 12, { size: 9.5, color: getCSS('--muted') }); [Math.ceil(tmin), 20, 25, 30].forEach(t => { if (t >= tmin && t <= tmax) txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true }); }); txt('相関 ' + f3(corr(dT, dY)), L + 8, T + 14, { size: 10.5, mono: true, bold: true }); }
+function drawCDD() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '基準温度 T_b [°C]', '相関'); const xOf = tb => L + (tb - 16) / 14 * (R - L), yOf = c => B - (c - .3) / .7 * (B - T); const pts = []; for (let tb = 16; tb <= 30; tb += .25) pts.push([xOf(tb), yOf(cddCorr(tb))]); line(pts, getCSS('--upd'), 2.5); const b = bestTb(); dot(xOf(b.tb), yOf(b.c), 5, getCSS('--accent')); txt('最良 ' + f1(b.tb) + '°C', xOf(b.tb), yOf(b.c) - 12, { align: 'center', size: 10, color: getCSS('--accent'), bold: true }); dot(xOf(TB), yOf(cddCorr(TB)), 7, getCSS('--neg')); txt('T_b=' + f1(TB) + ' → ' + f3(cddCorr(TB)), xOf(TB) + (TB > 25 ? -10 : 10), yOf(cddCorr(TB)) + 18, { align: TB > 25 ? 'right' : 'left', size: 10.5, bold: true, color: getCSS('--neg') }); [16, 20, 24, 28].forEach(t => txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true })); [.4, .6, .8, 1].forEach(c => txt(c.toFixed(1), L - 4, yOf(c) + 4, { align: 'right', size: 9, mono: true })); }
+function drawCorrBars() { const dT = daily(D.T), dR = daily(D.RH), dH = daily(D.THI), dY = daily(D.Y); const L = 80, T = 60, R = 335, B = 300; axes(L, T, R, B, '', '需要との相関'); const yOf = c => B - c / 1.0 * (B - T); [['気温', corr(dT, dY), '--upd'], ['湿度', corr(dR, dY), '--warm'], ['THI', corr(dH, dY), '--neg']].forEach(([n, c, col], i) => { const x = L + 25 + i * 80; rect(x, yOf(c), 55, B - yOf(c), getCSS(col), .85); txt(n, x + 27, B + 16, { align: 'center', size: 11 }); txt(f3(c), x + 27, yOf(c) - 6, { align: 'center', size: 10.5, mono: true, bold: true }); }); [0, .5, 1].forEach(c => txt(c.toFixed(1), L - 4, yOf(c) + 4, { align: 'right', size: 9, mono: true })); txt('日平均値どうしの相関', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawFeatureTable() { const rows = [['CDD / HDD / THI⁺', '気象', '予報値'], ['sin, cos（時刻）', '周期', '確定'], ['週末ダミー', 'カレンダー', '確定'], ['前日同時刻', '自己回帰', '実績'], ['前週同曜日', '自己回帰', '実績（最強）']]; txt('特徴量', 30, 60, { size: 10, color: getCSS('--muted') }); txt('種類', 175, 60, { size: 10, color: getCSS('--muted') }); txt('入手', 260, 60, { size: 10, color: getCSS('--muted') }); rows.forEach(([a, b, c], i) => { const y = 92 + i * 46; rect(20, y - 20, 325, 38, getCSS('--panel'), 1); line([[20, y + 18], [345, y + 18]], getCSS('--grid'), 1); txt(a, 30, y + 4, { size: 10.5, bold: true }); txt(b, 175, y + 4, { size: 10 }); txt(c, 260, y + 4, { size: 10, color: getCSS(c.startsWith('予報') ? '--warm' : '--accent') }); }); txt('❌ その日の実測気温、1 時間前の実績', CW / 2, 345, { align: 'center', size: 10.5, color: getCSS('--neg'), bold: true }); }
+function drawCoefs() { const f = fit(TB); const L = 110, T = 40, R = 335, B = 330; const sel = [1, 2, 3, 8, 9, 10]; const vals = sel.map(i => f.beta[i]); const m = Math.max(...vals.map(Math.abs)) * 1.15; const xOf = v => L + (v + m) / (2 * m) * (R - L); line([[xOf(0), T], [xOf(0), B]], getCSS('--text'), 1); sel.forEach((i, k) => { const y = T + 20 + k * 46, v = f.beta[i]; rect(Math.min(xOf(0), xOf(v)), y, Math.abs(xOf(v) - xOf(0)), 26, getCSS(v >= 0 ? '--accent' : '--neg'), .8); txt(FNAMES[i], L - 6, y + 18, { align: 'right', size: 10 }); txt(f2(v), v >= 0 ? xOf(v) + 4 : xOf(v) - 4, y + 18, { align: v >= 0 ? 'left' : 'right', size: 9.5, mono: true, bold: true }); }); txt('係数（学習データで推定）', CW / 2, 355, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawAB() { const f = fit(TB); const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '検証期間の 1 週間', 'MW'); const n = 168, off = 24 * 30; const ys = f.truth.slice(off, off + n), pr = f.pred.slice(off, off + n), bs = f.base.slice(off, off + n); const mn = Math.min(...ys, ...pr, ...bs) - 20, mx = Math.max(...ys, ...pr, ...bs) + 20; const xOf = k => L + k / n * (R - L), yOf = v => B - (v - mn) / (mx - mn) * (B - T); line(bs.map((v, k) => [xOf(k), yOf(v)]), getCSS('--warm'), 1.2); line(pr.map((v, k) => [xOf(k), yOf(v)]), getCSS('--accent'), 1.8); line(ys.map((v, k) => [xOf(k), yOf(v)]), getCSS('--text'), 1.2, [3, 2]); txt('実績（点線）', L + 8, T + 14, { size: 9.5 }); txt('回帰 RMSE ' + f1(f.ev.rmse), L + 8, T + 30, { size: 9.5, color: getCSS('--accent'), bold: true }); txt('前週 RMSE ' + f1(f.ev.brmse), L + 8, T + 46, { size: 9.5, color: getCSS('--warm'), bold: true }); txt('Skill = ' + f3(f.ev.skill), R - 4, T + 14, { align: 'right', size: 11, mono: true, bold: true }); }
+function drawMetrics() { const f = fit(TB); const L = 80, T = 60, R = 335, B = 300; axes(L, T, R, B, '', 'MW'); const m = Math.max(f.ev.brmse, f.ev.rmse) * 1.2; const yOf = v => B - v / m * (B - T); [['MAE', f.ev.mae, '--upd'], ['RMSE', f.ev.rmse, '--neg'], ['MAE(基準)', f.ev.bmae, '--faint'], ['RMSE(基準)', f.ev.brmse, '--faint']].forEach(([n, v, c], i) => { const x = L + 15 + i * 62; rect(x, yOf(v), 45, B - yOf(v), getCSS(c), .85); txt(n, x + 22, B + 14, { align: 'center', size: 8.5 }); txt(f1(v), x + 22, yOf(v) - 6, { align: 'center', size: 10, mono: true, bold: true }); }); txt('MAPE = ' + f2(f.ev.mape) + '%（基準 ' + f2(f.ev.bmape) + '%）', CW / 2, 340, { align: 'center', size: 10.5, mono: true }); }
+function drawSplit() { const L = 30, R = 335; [[80, '時系列分割（正しい）', '--accent'], [220, 'ランダム分割（リーク）', '--neg']].forEach(([y, lab, c]) => { txt(lab, L, y - 20, { size: 11, bold: true, color: getCSS(c) }); if (c === '--accent') { rect(L, y, (R - L) * .75, 30, getCSS('--upd'), .5); rect(L + (R - L) * .75, y, (R - L) * .25, 30, getCSS('--accent'), .7); txt('学習（過去）', L + (R - L) * .37, y + 20, { align: 'center', size: 10, color: '#fff', bold: true }); txt('検証（未来）', L + (R - L) * .87, y + 20, { align: 'center', size: 10, color: '#fff', bold: true }); } else { seed = 3; for (let k = 0; k < 60; k++) rect(L + k / 60 * (R - L), y, (R - L) / 60, 30, getCSS(rng() < .75 ? '--upd' : '--neg'), .7); txt('学習と検証が時間軸で混ざる', L + (R - L) / 2, y + 50, { align: 'center', size: 10, color: getCSS('--neg') }); } line([[L, y + 35], [R, y + 35]], getCSS('--text'), 1); txt('時間 →', R, y + 48, { align: 'right', size: 9, color: getCSS('--muted') }); }); txt('隣の時刻は似ている → 混ぜると「答えの隣」で学習してしまう', CW / 2, 340, { align: 'center', size: 10 }); }
+function drawDuck() { const n0 = netLoad(0), n = netLoad(PVMW); const L = 45, T = 40, R = 335, B = 300; axes(L, T, R, B, '時刻', 'MW'); const all = [...n0.out.map(o => o.y), ...n.out.map(o => o.net)]; const mn = Math.min(...all) - 40, mx = Math.max(...all) + 40; const xOf = h => L + h / 23 * (R - L), yOf = v => B - (v - mn) / (mx - mn) * (B - T); line(n0.out.map(o => [xOf(o.h), yOf(o.y)]), getCSS('--text'), 1.5, [4, 3]); line(n.out.map(o => [xOf(o.h), yOf(o.net)]), getCSS('--neg'), 2.5); line([[L, yOf(320)], [R, yOf(320)]], getCSS('--warm'), 1.5, [5, 4]); txt('火力最低出力 320', R - 4, yOf(320) - 5, { align: 'right', size: 9.5, color: getCSS('--warm') }); [0, 6, 12, 18, 23].forEach(h => txt(h, xOf(h), B + 14, { align: 'center', size: 9, mono: true })); txt('需要（点線）', L + 8, T + 14, { size: 9.5 }); txt('正味需要 PV ' + PVMW + ' MW', L + 8, T + 30, { size: 9.5, color: getCSS('--neg'), bold: true }); txt('最大ランプ ' + f0(n.ramp) + ' MW/h', R - 4, T + 14, { align: 'right', size: 10, mono: true, bold: true }); }
+function drawSummary() { const rows = [['分解', '周期 + 気温 + ノイズ', '--upd'], ['折れ線', 'CDD / THI⁺', '--warm'], ['ベースライン', '前週同曜日に勝つ', '--neg'], ['時間で切る', 'リークを防ぐ', '--accent']]; rows.forEach(([a, b, c], i) => { const y = 75 + i * 68; rect(40, y - 22, 280, 52, getCSS(c), .15); txt(a, 180, y - 2, { align: 'center', size: 12, bold: true }); txt(b, 180, y + 18, { align: 'center', size: 10, color: getCSS('--muted') }); }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur2 = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur2 ? 'active' : (i < cur2 ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur2 ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+function sync() { document.getElementById('tbVal').textContent = TB.toFixed(1); document.getElementById('pvVal').textContent = PVMW; }
+document.getElementById('resetBtn').onclick = () => { stopAuto(); TB = 24; PVMW = 300; ROUND = 0; genData(); document.getElementById('tbRange').value = 24; document.getElementById('pvRange').value = 300; sync(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('tbRange').oninput = e => { TB = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('pvRange').oninput = e => { PVMW = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('diceBtn').onclick = () => { ROUND++; genData(); renderAll(); draw_(); };
+sync(); goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

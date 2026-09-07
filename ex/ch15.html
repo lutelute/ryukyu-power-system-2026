@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第15回 演習 — 沖縄系統の連系可能量</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第15回: 6 制約の最小値、系統慣性の混合、K の低下と ΔF、RoCoF と UFR 到達時間、蓄電池の必要量、最低出力制約。
+// 数値感は viz/island.html（S = 1,500 MW、H0 = 4.5 s、K0 = 150 MW/Hz、60 Hz、火力最低出力 320 MW）に合わせる。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+
+EX.page({
+  ch: 15,
+  intro: '15 回の道具をつないで「太陽光を何 MW まで入れられるか」を出します。6 つの上限の最小値、慣性と系統定数の低下、RoCoF と UFR、蓄電池の必要量、火力の最低出力まで。',
+  problems: [
+    {
+      id: 'min6', title: '6 つの制約の最小値と律速', tags: ['15.2', '連系可能量'],
+      gen(rng) {
+        const names = ['電圧', '線路容量', 'N-1', '周波数', '安定度', '最低出力'];
+        const lims = [pick(rng, [260, 300, 350, 420]), pick(rng, [380, 425, 500]), pick(rng, [260, 288, 330]), pick(rng, [200, 240, 270, 310]), pick(rng, [280, 320, 360]), pick(rng, [230, 280, 330])];
+        const mn = Math.min(...lims);
+        const idx = lims.indexOf(mn) + 1;
+        const sorted = [...lims].sort((a, b) => a - b);
+        const second = sorted[1];
+        return {
+          given: names.map((n, i) => ['① ② ③ ④ ⑤ ⑥'.split(' ')[i] + ' ' + n + ' の上限', lims[i] + ' MW']),
+          q: '(a) 連系可能量（6 つの最小値）<br>(b) 律速となる制約の番号（1〜6）<br>(c) その制約だけを対策して十分に伸ばしたとき、次の連系可能量（2 番目に低い上限）',
+          answers: [
+            { key: 'mn', label: '(a) 連系可能量', unit: 'MW', value: mn, abs: 0.5 },
+            { key: 'idx', label: '(b) 律速の番号', unit: '', value: idx, abs: 0.1 },
+            { key: 'sec', label: '(c) 対策後', unit: 'MW', value: second, abs: 0.5 },
+          ],
+          steps: [
+            '制約は「すべて満たす」ものなので、上限の集合の最小値が答え: ' + eq('min = ' + mn + ' MW') + '（' + names[idx - 1] + '）。',
+            '律速でない制約に投資しても答えは変わらない。' + names[idx - 1] + ' の板を伸ばすと、次に低い ' + names[lims.indexOf(second)] + ' の ' + second + ' MW が答えになる。',
+            '対策の順番は「今の律速 → 次の律速」。動く図では対策トグルで棒が伸び、赤い棒（律速）が移る。',
+          ],
+          insight: '連系可能量は系統の性能ではなく「一番弱い制約の位置」。樽の一番低い板と同じ。',
+        };
+      },
+    },
+    {
+      id: 'inertia-mix', title: '系統慣性の混合 — 太陽光は H = 0', tags: ['15.2.4', '第7回・第8回'],
+      gen(rng) {
+        const units = [[pick(rng, [300, 400]), 5], [pick(rng, [300, 500]), 4], [pick(rng, [200, 300]), 3]];
+        const pv = pick(rng, [0, 200, 400, 600]);
+        const Ssync = units.reduce((s, u) => s + u[0], 0);
+        const Hnum = units.reduce((s, u) => s + u[0] * u[1], 0);
+        const Hsync = Hnum / Ssync;
+        const Hsys = Hnum / (Ssync + pv);
+        return {
+          given: [['同期機', units.map((u, i) => '機 ' + (i + 1) + ': ' + u[0] + ' MVA, H = ' + u[1] + ' s').join('、')], ['太陽光（インバータ、H = 0）', pv + ' MW'], ['系統容量の基準', '同期機 + 太陽光 = ' + (Ssync + pv) + ' MVA']],
+          q: '(a) 同期機だけの合成慣性定数 <b>H = ΣH<sub>i</sub>S<sub>i</sub> / ΣS<sub>i</sub></b><br>(b) 太陽光を含めた系統容量基準の <b>H<sub>sys</sub></b>',
+          answers: [
+            { key: 'Hs', label: '(a) 同期機のみ', unit: 's', value: Hsync },
+            { key: 'Hsys', label: '(b) H_sys（PV 込み）', unit: 's', value: Hsys },
+          ],
+          steps: [
+            '運動エネルギーの合計 ' + eq('ΣH<sub>i</sub>S<sub>i</sub> = ' + units.map(u => u[1] + '×' + u[0]).join(' + ') + ' = ' + fmt(Hnum) + ' MJ') + '。',
+            eq('H = ' + fmt(Hnum) + ' / ' + Ssync + ' = ' + fmt(Hsync) + ' s') + '。',
+            '太陽光は容量に入るがエネルギーを持たない: ' + eq('H<sub>sys</sub> = ' + fmt(Hnum) + ' / ' + (Ssync + pv) + ' = ' + fmt(Hsys) + ' s') + '。同じ MW でも「勢いの貯金」が薄まる。',
+          ],
+          insight: '太陽光を増やして同期機を止めると H_sys は二重に下がる（分子が減り、分母は変わらない）。',
+        };
+      },
+    },
+    {
+      id: 'k-drop', title: '系統定数の低下と周波数偏差', tags: ['15.2.4', '第8回'],
+      gen(rng) {
+        const K0 = 150, pv = pick(rng, [0, 150, 300, 450, 600]);
+        const K = K0 * (1 - 0.75 * pv / 900);
+        const trip = pick(rng, [120, 150, 180, 250]);
+        const dF = -trip / K;
+        return {
+          given: [['現在の系統定数 K₀', K0 + ' MW/Hz（1,500 MW、%K = 1.0）'], ['太陽光 P<sub>PV</sub>', pv + ' MW'], ['動く図の簡略モデル', 'K = K₀(1 − 0.75 P<sub>PV</sub>/900)'], ['脱落電源', trip + ' MW']],
+          q: '(a) 太陽光導入後の <b>K</b><br>(b) 脱落後の定常的な周波数偏差 <b>ΔF = ΔP/K</b>（低下は負）<br>(c) 到達周波数（60 Hz 基準）',
+          answers: [
+            { key: 'K', label: '(a) K', unit: 'MW/Hz', value: K },
+            { key: 'dF', label: '(b) ΔF', unit: 'Hz', value: dF, abs: 0.02 },
+            { key: 'F', label: '(c) F', unit: 'Hz', value: 60 + dF, abs: 0.02 },
+          ],
+          steps: [
+            'ガバナ付き火力を止めた分だけ K<sub>G</sub> が減る: ' + eq('K = 150 × (1 − 0.75 × ' + pv + '/900) = ' + fmt(K) + ' MW/Hz') + '。',
+            eq('ΔF = −' + trip + ' / ' + fmt(K) + ' = ' + fmt(dF) + ' Hz') + '。',
+            eq('F = 60 + (' + fmt(dF) + ') = ' + fmt(60 + dF, 2) + ' Hz') + '。' + (60 + dF < 59 ? 'UFR（59 Hz 台）を割る。周波数の板がここで決まる。' : '運用範囲内だが、慣性低下で最低点（nadir）はさらに低い。'),
+          ],
+          insight: '同じ脱落でも太陽光が増えるほど ΔF は大きい。第8回の ΔP = KΔF は第15回でも主役。',
+        };
+      },
+    },
+    {
+      id: 'rocof-ufr', title: 'RoCoF と UFR 到達までの時間', tags: ['15.2.4', '第8回'],
+      gen(rng) {
+        const S = 1500;
+        const H = pick(rng, [2.0, 2.5, 3.0, 3.5, 4.5]);
+        const trip = pick(rng, [120, 150, 180, 250]);
+        const ufr = pick(rng, [59.0, 58.5, 58.0]);
+        const rocof = -trip * 60 / (2 * H * S);
+        const t = (60 - ufr) / -rocof;
+        return {
+          given: [['系統容量 S', S + ' MW'], ['系統慣性定数 H<sub>sys</sub>', H + ' s'], ['脱落電源', trip + ' MW'], ['UFR 整定', ufr + ' Hz']],
+          q: '(a) <b>RoCoF = ΔP f₀ / (2H<sub>sys</sub>S)</b>（低下は負）<br>(b) この変化率が続くとして UFR 整定に達するまでの時間 <b>t</b>',
+          answers: [
+            { key: 'rocof', label: '(a) RoCoF', unit: 'Hz/s', value: rocof, abs: 0.02 },
+            { key: 't', label: '(b) t', unit: 's', value: t },
+          ],
+          steps: [
+            eq('RoCoF = −' + trip + ' × 60 / (2 × ' + H + ' × ' + S + ') = ' + fmt(rocof) + ' Hz/s') + '。',
+            eq('t = (60 − ' + ufr + ') / ' + fmt(-rocof) + ' = ' + fmt(t) + ' s') + '。',
+            (t < 1 ? '1 秒未満。ガバナ（数秒）は間に合わず、蓄電池の高速応答か負荷遮断に頼ることになる。' : 'ガバナが立ち上がる時間はある。ただし最低点（nadir）は別に評価する。'),
+          ],
+          insight: 'H が半分なら RoCoF は 2 倍、UFR までの時間は半分。太陽光の連系可能量を周波数が律速する仕組み。',
+        };
+      },
+    },
+    {
+      id: 'battery', title: '周波数を守るのに必要な蓄電池の応答', tags: ['15.3', '対策'],
+      gen(rng) {
+        const K = pick(rng, [75, 90, 105, 120]);
+        const trip = pick(rng, [150, 180, 250]);
+        const dFmax = pick(rng, [0.8, 1.0, 1.2, 1.5]);
+        const Kreq = trip / dFmax;
+        const Kbat = Math.max(Kreq - K, 0);
+        const Pbat = Kbat * dFmax;
+        return {
+          given: [['太陽光導入後の系統定数 K', K + ' MW/Hz'], ['想定する脱落', trip + ' MW'], ['許容する周波数低下 |ΔF|<sub>max</sub>', dFmax + ' Hz（UFR に余裕を持たせる）']],
+          q: '(a) 必要な系統定数 <b>K<sub>req</sub> = ΔP / |ΔF|<sub>max</sub></b><br>(b) 蓄電池が肩代わりすべき <b>K<sub>bat</sub> = K<sub>req</sub> − K</b><br>(c) そのとき蓄電池が出す出力 <b>P<sub>bat</sub> = K<sub>bat</sub> × |ΔF|<sub>max</sub></b>',
+          answers: [
+            { key: 'Kreq', label: '(a) K_req', unit: 'MW/Hz', value: Kreq },
+            { key: 'Kbat', label: '(b) K_bat', unit: 'MW/Hz', value: Kbat, abs: 0.5 },
+            { key: 'Pbat', label: '(c) P_bat', unit: 'MW', value: Pbat, abs: 0.5 },
+          ],
+          steps: [
+            eq('K<sub>req</sub> = ' + trip + ' / ' + dFmax + ' = ' + fmt(Kreq) + ' MW/Hz') + '。',
+            eq('K<sub>bat</sub> = ' + fmt(Kreq) + ' − ' + K + ' = ' + fmt(Kbat) + ' MW/Hz') + (Kbat === 0 ? '（既存の K で足りる）' : '。周波数に比例して出力を出す「ドループ」を蓄電池に持たせる。'),
+            eq('P<sub>bat</sub> = ' + fmt(Kbat) + ' × ' + dFmax + ' = ' + fmt(Pbat) + ' MW') + '。最低点を守るには、これを 0.1 秒台で出せる速さも要る（第9回）。',
+          ],
+          insight: '蓄電池は K（定常）と H（初期の落ち方）の両方を補える。周波数の板を伸ばす主力。',
+        };
+      },
+    },
+    {
+      id: 'min-output', title: '火力の最低出力と太陽光の受け入れ上限', tags: ['15.3', '第14回'],
+      gen(rng) {
+        const Dmin = pick(rng, [550, 600, 650, 700]);
+        const Pth = pick(rng, [280, 320, 360]);
+        const chg = pick(rng, [0, 50, 100, 150]);
+        const pv1 = Dmin - Pth;
+        const pv2 = pv1 + chg;
+        return {
+          given: [['昼の最小需要 D<sub>min</sub>', Dmin + ' MW（休日の正午）'], ['火力の最低出力の合計', Pth + ' MW（慣性・電圧維持のため止められない）'], ['蓄電池の充電', chg + ' MW（昼に需要を持ち上げる）']],
+          q: '(a) 充電なしで受け入れられる太陽光の上限 <b>P<sub>PV</sub> ≤ D<sub>min</sub> − P<sub>th,min</sub></b><br>(b) 充電ありの上限',
+          answers: [
+            { key: 'pv1', label: '(a) 充電なし', unit: 'MW', value: pv1, abs: 0.5 },
+            { key: 'pv2', label: '(b) 充電あり', unit: 'MW', value: pv2, abs: 0.5 },
+          ],
+          steps: [
+            '昼の需要のうち火力が最低でも出す分を差し引いた残りが、太陽光の居場所: ' + eq(Dmin + ' − ' + Pth + ' = ' + pv1 + ' MW') + '。これを超える太陽光は出力制御（第10回）になる。',
+            '充電は需要を増やすのと同じ: ' + eq(pv1 + ' + ' + chg + ' = ' + pv2 + ' MW') + '。',
+            '火力の最低出力を下げる（部分負荷運転の改良）、需要を昼に動かす（DR）、他の板と同時に見る。',
+          ],
+          insight: '「太陽光を増やせば火力を止められる」は最低出力と慣性の分だけ成り立たない。この板が九州の出力制御の正体。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

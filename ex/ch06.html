@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第6回 演習 — 電圧と無効電力</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第6回: 電圧降下の近似式・調相容量・短絡容量と感度 ρ・PV カーブの鼻先・LTC タップ・フェランチ効果。
+// 約束: 教科書 6.2 節の (RP+XQ+V_r²)² + (RQ−XP)² = V_s²V_r² から出発する。P, Q は受電端で「消費」する量（正）。
+//       短絡容量 C = V_r²/Z、感度比 ρ ≈ P/C + R/Z（教科書 6.2 節）。特記なき数値は p.u.、S_base は問題ごとに与える。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+
+EX.page({
+  ch: 6,
+  intro: '電圧は「局所量」です。受電端の電圧が P と Q だけで決まる式（教科書 6.2 節）から、電圧降下 → それを戻す調相容量 → 短絡容量で決まる感度 → 解が消える鼻先 → タップ → 軽負荷時の電圧上昇、と実習で観察する現象を数値で裏付けます。',
+  problems: [
+    {
+      id: 'vdrop', title: '電圧降下の近似式 ΔV ≈ (RP + XQ)/V', tags: ['6.2.4', '教科書 6.2'],
+      gen(rng) {
+        const R = pick(rng, [0.02, 0.03, 0.05, 0.08]);
+        const X = pick(rng, [0.10, 0.15, 0.20, 0.30]);
+        const P = pick(rng, [0.4, 0.6, 0.8, 1.0]);
+        const Q = pick(rng, [0.2, 0.3, 0.4, 0.5]);
+        const Vs = pick(rng, [1.00, 1.02, 1.05]);
+        const dVP = R * P, dVQ = X * Q, dV = dVP + dVQ;
+        const Vr = Vs - dV;
+        const share = dVQ / dV * 100;
+        return {
+          given: [['送電端電圧 V<sub>s</sub>', Vs + ' p.u.'], ['線路 R, X', R + ', ' + X + ' p.u.'], ['受電端負荷 P, Q（遅れ、消費）', P + ', ' + Q + ' p.u.'], ['近似', '分母の V<sub>r</sub> は 1.0 とする']],
+          q: '教科書 6.2 節の RP + XQ + V<sub>r</sub><sup>2</sup> = V<sub>s</sub>V<sub>r</sub> cos δ で cos δ ≈ 1 とおくと、V<sub>s</sub> − V<sub>r</sub> ≈ (RP + XQ)/V<sub>r</sub> が得られる。<br>(a) 電圧降下 <b>ΔV = V<sub>s</sub> − V<sub>r</sub></b> を求めよ。<br>(b) 受電端電圧 <b>V<sub>r</sub></b> を求めよ。<br>(c) 電圧降下のうち<b>無効電力の項 XQ が占める割合</b>を % で求めよ。',
+          answers: [
+            { key: 'dV', label: '(a) ΔV', unit: 'p.u.', value: dV },
+            { key: 'Vr', label: '(b) V_r', unit: 'p.u.', value: Vr, tol: 0.005 },
+            { key: 'share', label: '(c) XQ の割合', unit: '%', value: share },
+          ],
+          steps: [
+            'cos δ ≈ 1 とすると ' + eq('V<sub>s</sub>V<sub>r</sub> − V<sub>r</sub><sup>2</sup> = V<sub>r</sub>(V<sub>s</sub> − V<sub>r</sub>) ≈ RP + XQ') + '。両辺を V<sub>r</sub> ≈ 1 で割って ' + eq('ΔV ≈ RP + XQ') + '。',
+            '(a) ' + eq('RP = ' + R + ' × ' + P + ' = ' + fmt(dVP, 4) + ',  XQ = ' + X + ' × ' + Q + ' = ' + fmt(dVQ, 4)) + ' → ' + eq('ΔV = ' + fmt(dV, 4) + ' p.u.') + '。',
+            '(b) ' + eq('V<sub>r</sub> = ' + Vs + ' − ' + fmt(dV, 4) + ' = ' + fmt(Vr, 4) + ' p.u.') + (Vr < 0.95 ? '。運用下限 0.95 を割っており、対策が要る。' : '。運用範囲（0.95〜1.05）に入っている。'),
+            '(c) ' + eq('XQ / (RP + XQ) = ' + fmt(dVQ, 4) + ' / ' + fmt(dV, 4) + ' = ' + fmt(share, 1) + ' %') + '。X ≫ R の送電系統では、P より小さい Q が電圧降下の大半をつくる。',
+          ],
+          insight: '電圧降下の主犯は XQ。だから電圧を戻す最短の手は「Q を減らす（または供給する）」で、これが第 2 問につながる。配電系統（R ≈ X）ではこの比が崩れ、P も電圧を動かす。',
+        };
+      },
+    },
+    {
+      id: 'qc', title: '電圧を戻す調相容量 Q<sub>C</sub>', tags: ['6.2.5', '問 6-4'],
+      gen(rng) {
+        const X = pick(rng, [0.10, 0.15, 0.20, 0.25, 0.30]);
+        const Vr = pick(rng, [0.92, 0.93, 0.94, 0.95, 0.96]);
+        const Vt = pick(rng, [0.98, 1.00, 1.02]);
+        const Sb = pick(rng, [100, 500, 1000]);
+        const Qc = (Vt - Vr) * Vr / X;
+        const QcM = Qc * Sb;
+        const Qn = QcM / (Vt * Vt);
+        return {
+          given: [['受電端から見た系統リアクタンス X', X + ' p.u.（R は無視）'], ['現在の受電端電圧 V<sub>r</sub>', Vr + ' p.u.'], ['目標電圧 V<sub>目標</sub>', Vt + ' p.u.'], ['基準容量 S<sub>base</sub>', Sb + ' MVA']],
+          q: '電圧感度の式 ΔV ≈ X ΔQ / V<sub>r</sub>（第 1 問の XQ 項）を使い、受電端に電力用コンデンサを入れて電圧を V<sub>目標</sub> まで戻したい。<br>(a) 必要な無効電力 <b>Q<sub>C</sub></b> を p.u. で求めよ。<br>(b) <b>Q<sub>C</sub></b> を Mvar で求めよ。<br>(c) コンデンサの出力は電圧の 2 乗に比例する。目標電圧で Q<sub>C</sub> を出すために必要な<b>定格容量 Q<sub>N</sub>（1.0 p.u. 電圧時の出力）</b>を Mvar で求めよ。',
+          answers: [
+            { key: 'Qc', label: '(a) Q_C', unit: 'p.u.', value: Qc },
+            { key: 'QcM', label: '(b) Q_C', unit: 'Mvar', value: QcM },
+            { key: 'Qn', label: '(c) 定格容量 Q_N', unit: 'Mvar', value: Qn },
+          ],
+          steps: [
+            '必要な電圧上昇は ' + eq('ΔV = ' + Vt + ' − ' + Vr + ' = ' + fmt(Vt - Vr, 2) + ' p.u.') + '。コンデンサは負荷の Q を打ち消す（受電端の無効電力消費を減らす）ので、ΔV ≈ X ΔQ / V<sub>r</sub> を ΔQ について解く。',
+            '(a) ' + eq('Q<sub>C</sub> = ΔV × V<sub>r</sub> / X = ' + fmt(Vt - Vr, 2) + ' × ' + Vr + ' / ' + X + ' = ' + fmt(Qc, 4) + ' p.u.') + '。',
+            '(b) ' + eq('Q<sub>C</sub> = ' + fmt(Qc, 4) + ' × ' + Sb + ' = ' + fmt(QcM) + ' Mvar') + '。',
+            '(c) コンデンサの出力は |Y||V|<sup>2</sup>。目標電圧 ' + Vt + ' で ' + fmt(QcM) + ' Mvar 出すには ' + eq('Q<sub>N</sub> = ' + fmt(QcM) + ' / ' + Vt + '<sup>2</sup> = ' + fmt(Qn) + ' Mvar') + '。投入直前（' + Vr + ' p.u.）には ' + fmt(Qn * Vr * Vr) + ' Mvar しか出ないことにも注意。',
+          ],
+          insight: '「電圧が下がっているときほどコンデンサは効かない」を数値で見た。最も Q が欲しい重負荷・低電圧時に出力が V² で萎むのが、SVC や同期調相機が選ばれる理由。',
+        };
+      },
+    },
+    {
+      id: 'ssc', title: '短絡容量と電圧感度 ρ', tags: ['6.2.4', '教科書 6.2'],
+      gen(rng) {
+        const Ssc = pick(rng, [500, 800, 1000, 1500, 2000, 3000]);
+        const Sb = 100;
+        const dQ = pick(rng, [10, 20, 30, 50]);
+        const Pmw = pick(rng, [50, 100, 150, 200]);
+        const rx = pick(rng, [0.1, 0.2, 0.3, 1.0]);
+        const C = Ssc / Sb;
+        const Xth = 1 / C;
+        const dVpct = dQ / Ssc * 100;
+        const rz = rx / Math.sqrt(1 + rx * rx);
+        const rho = (Pmw / Sb) / C + rz;
+        return {
+          given: [['受電点の短絡容量 C（三相）', Ssc + ' MVA'], ['基準容量 S<sub>base</sub>', Sb + ' MVA'], ['投入するコンデンサ', dQ + ' Mvar'], ['受電点の有効電力 P', Pmw + ' MW'], ['系統インピーダンスの R/X 比', rx + '']],
+          q: '短絡容量 C = V<sub>r</sub><sup>2</sup>/Z（V<sub>r</sub> ≈ 1）は「その点がどれだけ電圧的に強いか」を表す。<br>(a) 受電点から見た系統の等価リアクタンス <b>X = 1/C</b> を p.u. で求めよ。<br>(b) コンデンサ投入による電圧上昇 <b>ΔV ≈ ΔQ/C</b> を % で求めよ。<br>(c) 教科書の感度比 <b>ρ ≈ P/C + R/Z</b> を求めよ（P, C は p.u.、R/Z = (R/X)/√(1+(R/X)<sup>2</sup>)）。',
+          answers: [
+            { key: 'X', label: '(a) X', unit: 'p.u.', value: Xth },
+            { key: 'dV', label: '(b) ΔV', unit: '%', value: dVpct },
+            { key: 'rho', label: '(c) ρ', unit: '', value: rho },
+          ],
+          steps: [
+            '(a) p.u. に直すと ' + eq('C = ' + Ssc + ' / ' + Sb + ' = ' + fmt(C, 1) + ' p.u.') + '。C = V<sub>r</sub><sup>2</sup>/Z ≈ 1/X より ' + eq('X = 1 / ' + fmt(C, 1) + ' = ' + fmt(Xth, 4) + ' p.u.') + '。短絡容量が大きい点ほど X が小さい。',
+            '(b) 第 1 問の XQ 項で X = 1/C とおくと ' + eq('ΔV ≈ ΔQ / C = ' + dQ + ' / ' + Ssc + ' = ' + fmt(dVpct, 2) + ' %') + '。同じ ' + dQ + ' Mvar でも、短絡容量が半分の点なら電圧は倍動く。',
+            '(c) ' + eq('R/Z = ' + rx + ' / √(1 + ' + rx + '<sup>2</sup>) = ' + fmt(rz, 3)) + '、' + eq('P/C = ' + fmt(Pmw / Sb, 2) + ' / ' + fmt(C, 1) + ' = ' + fmt((Pmw / Sb) / C, 4)) + ' → ' + eq('ρ = ' + fmt(rho, 3)) + '。' + (rho < 0.3 ? 'ρ ≪ 1 なので、電圧を動かすのは無効電力である。' : 'ρ が 1 に近く、有効電力も電圧をかなり動かす（配電系統の性質）。'),
+          ],
+          insight: '短絡容量は「遮断器を選ぶ数字」であると同時に「電圧の硬さ」でもある。太陽光の連系検討で「短絡容量が小さい末端ほど電圧上昇が大きい」と言われるのは、この ΔV ≈ ΔQ/C（配電では ΔP·R/Z も）のため。',
+        };
+      },
+    },
+    {
+      id: 'pv-nose', title: 'PV カーブの鼻先（最大受電電力）', tags: ['6.3.3', '教科書 6.2'],
+      gen(rng) {
+        const Vs = pick(rng, [1.00, 1.02, 1.05]);
+        const X = pick(rng, [0.20, 0.25, 0.30, 0.40, 0.50]);
+        const Sb = pick(rng, [100, 500, 1000]);
+        const f = pick(rng, [0.4, 0.5, 0.6, 0.7, 0.8]);
+        const Pmax = Vs * Vs / (2 * X);
+        const PmaxM = Pmax * Sb;
+        const PL = Math.round(f * PmaxM / 10) * 10;
+        const Ppu = PL / Sb;
+        const disc = Math.pow(Vs, 4) - 4 * X * X * Ppu * Ppu;
+        const Vr = Math.sqrt((Vs * Vs + Math.sqrt(disc)) / 2);
+        const Vnose = Vs / Math.SQRT2;
+        const margin = (PmaxM - PL) / PmaxM * 100;
+        return {
+          given: [['送電端電圧 V<sub>s</sub>', Vs + ' p.u.'], ['線路リアクタンス X', X + ' p.u.（R = 0）'], ['負荷', '力率 1（Q = 0）'], ['現在の負荷 P<sub>L</sub>', PL + ' MW'], ['基準容量 S<sub>base</sub>', Sb + ' MVA']],
+          q: '教科書 6.2 節の式で R = 0、Q = 0 とすると V<sub>r</sub><sup>4</sup> − V<sub>s</sub><sup>2</sup>V<sub>r</sub><sup>2</sup> + X<sup>2</sup>P<sup>2</sup> = 0 となり、V<sub>r</sub> の実数解が存在する条件が P ≤ V<sub>s</sub><sup>2</sup>/(2X) である。<br>(a) 最大受電電力 <b>P<sub>max</sub></b> を MW で求めよ。<br>(b) 鼻先点での受電端電圧 <b>V<sub>r</sub></b> を求めよ。<br>(c) 現在の負荷 P<sub>L</sub> における受電端電圧 <b>V<sub>r</sub></b>（高い方の解）を求めよ。',
+          answers: [
+            { key: 'Pmax', label: '(a) P_max', unit: 'MW', value: PmaxM },
+            { key: 'Vnose', label: '(b) 鼻先の V_r', unit: 'p.u.', value: Vnose, tol: 0.005 },
+            { key: 'Vr', label: '(c) P_L での V_r', unit: 'p.u.', value: Vr, tol: 0.005 },
+          ],
+          steps: [
+            'V<sub>r</sub><sup>2</sup> についての 2 次方程式の判別式 V<sub>s</sub><sup>4</sup> − 4X<sup>2</sup>P<sup>2</sup> ≥ 0 より ' + eq('P<sub>max</sub> = V<sub>s</sub><sup>2</sup> / (2X) = ' + Vs + '<sup>2</sup> / (2 × ' + X + ') = ' + fmt(Pmax, 4) + ' p.u. = ' + fmt(PmaxM) + ' MW') + '。',
+            '(b) 判別式 = 0 のとき ' + eq('V<sub>r</sub><sup>2</sup> = V<sub>s</sub><sup>2</sup> / 2') + ' → ' + eq('V<sub>r</sub> = ' + Vs + ' / √2 = ' + fmt(Vnose, 4) + ' p.u.') + '。鼻先では電圧が定格の 7 割まで落ちており、実運用ではとうに下限を割っている。',
+            '(c) ' + eq('P<sub>L</sub> = ' + PL + ' / ' + Sb + ' = ' + fmt(Ppu, 3) + ' p.u.') + '、' + eq('V<sub>r</sub><sup>2</sup> = [V<sub>s</sub><sup>2</sup> + √(V<sub>s</sub><sup>4</sup> − 4X<sup>2</sup>P<sup>2</sup>)] / 2 = [' + fmt(Vs * Vs, 4) + ' + √(' + fmt(disc, 4) + ')] / 2 = ' + fmt(Vr * Vr, 4)) + ' → ' + eq('V<sub>r</sub> = ' + fmt(Vr, 4) + ' p.u.') + '。',
+            '余裕は ' + eq('(P<sub>max</sub> − P<sub>L</sub>) / P<sub>max</sub> = ' + fmt(margin, 1) + ' %') + '。負荷を増やすと V<sub>r</sub> は鼻先に向かって加速度的に落ち、P<sub>max</sub> を超えた瞬間に解が消える（潮流計算が収束しなくなる）。',
+          ],
+          insight: '「収束しない」には「解がない」と「見つけられない」の 2 通りがある。この単純系では前者を式で確認できた。実系統では継続法で鼻先を追い、そこから余裕をとった点を運用限界にする。',
+        };
+      },
+    },
+    {
+      id: 'ltc', title: 'LTC タップ 1 段の電圧変化', tags: ['6.2.6', '教科書 6.4'],
+      gen(rng) {
+        const V2 = pick(rng, [0.93, 0.94, 0.95, 0.96]);
+        const Vt = pick(rng, [0.99, 1.00, 1.01]);
+        const s = pick(rng, [1.25, 1.5, 2.5]);
+        const r = 1 + s / 100;
+        const dV1 = V2 * s / 100;
+        const n = Math.ceil(Math.log(Vt / V2) / Math.log(r) - 1e-9);
+        const V2n = V2 * Math.pow(r, n);
+        return {
+          given: [['二次側電圧 V<sub>2</sub>（現在）', V2 + ' p.u.'], ['目標電圧', Vt + ' p.u. 以上'], ['タップ 1 段の変圧比変化', s + ' %'], ['仮定', '一次側電圧は変わらない（タップで二次電圧が比例して変わる）']],
+          q: '負荷時タップ切換器（LTC）で二次電圧を上げる。<br>(a) タップを 1 段上げたときの電圧変化 <b>ΔV<sub>1段</sub></b> を p.u. で求めよ。<br>(b) 目標電圧以上にするのに必要な<b>最小の段数 n</b> を求めよ。<br>(c) n 段上げた後の二次電圧 <b>V<sub>2</sub>′</b> を求めよ。',
+          answers: [
+            { key: 'dV1', label: '(a) ΔV（1 段）', unit: 'p.u.', value: dV1 },
+            { key: 'n', label: '(b) n', unit: '段', value: n, abs: 0.5 },
+            { key: 'V2n', label: '(c) V₂′', unit: 'p.u.', value: V2n, tol: 0.003 },
+          ],
+          steps: [
+            '(a) タップ 1 段で変圧比が ' + s + ' % 変わるので ' + eq('ΔV<sub>1段</sub> = ' + V2 + ' × ' + s + '/100 = ' + fmt(dV1, 4) + ' p.u.') + '。',
+            '(b) n 段で ' + eq('V<sub>2</sub> × ' + r + '<sup>n</sup> ≥ ' + Vt) + ' → ' + eq('n ≥ ln(' + Vt + '/' + V2 + ') / ln ' + r + ' = ' + fmt(Math.log(Vt / V2) / Math.log(r), 2)) + ' → 切り上げて <b>' + n + ' 段</b>。',
+            '(c) ' + eq('V<sub>2</sub>′ = ' + V2 + ' × ' + r + '<sup>' + n + '</sup> = ' + fmt(V2n, 4) + ' p.u.') + '。目標を ' + fmt((V2n - Vt) * 100, 2) + ' % 上回る。この「上回り分」が不感帯より小さければ、次の負荷変化まで LTC は動かない。',
+            '実際には二次側の電圧を上げると負荷の Q が増え、一次側の電圧がわずかに下がる。タップは<b>無効電力を作らず「配分」を変えているだけ</b>で、系統全体の Q 不足は解決しない。',
+          ],
+          insight: 'タップは段階的（離散）で、動作に数十秒〜分の遅れと不感帯がある。1 段の刻みが粗いほど早く目標に届くが、電圧が飛ぶ。刻み・不感帯・遅れの設定が VQC の実務の勘所。',
+        };
+      },
+    },
+    {
+      id: 'ferranti', title: 'フェランチ効果（軽負荷時の受電端電圧上昇）', tags: ['6.2.5', '第3回との接続'],
+      gen(rng) {
+        const VkV = pick(rng, [154, 275, 500]);
+        const L = pick(rng, [100, 150, 200, 250]);
+        const x = pick(rng, [0.30, 0.35, 0.40]);
+        const b = pick(rng, [3.0, 3.5, 4.0]);
+        const X = x * L;
+        const B = b * L * 1e-6;
+        const Qc = VkV * VkV * B;
+        const ratio = 1 / (1 - X * B / 2);
+        const Vr = VkV * ratio;
+        const rise = (ratio - 1) * 100;
+        return {
+          given: [['送電端電圧 V<sub>s</sub>（線間）', VkV + ' kV'], ['亘長 ℓ', L + ' km'], ['単位長リアクタンス x', x + ' Ω/km'], ['単位長対地サセプタンス b', b + ' μS/km'], ['受電端', '無負荷（開放）、公称 π 形等価回路、R = 0']],
+          q: '無負荷では受電端の充電容量に流れる進み電流が線路リアクタンスで電圧を「上げる」。公称 π 形回路で受電端開放のとき V<sub>s</sub> = V<sub>r</sub>(1 − XB/2) となる。<br>(a) 線路全体の充電無効電力 <b>Q<sub>c</sub> = V<sub>s</sub><sup>2</sup>B</b> を Mvar で求めよ。<br>(b) 受電端電圧 <b>V<sub>r</sub></b> を kV で求めよ。<br>(c) 電圧上昇率 <b>(V<sub>r</sub> − V<sub>s</sub>)/V<sub>s</sub></b> を % で求めよ。',
+          answers: [
+            { key: 'Qc', label: '(a) Q_c', unit: 'Mvar', value: Qc },
+            { key: 'Vr', label: '(b) V_r', unit: 'kV', value: Vr, tol: 0.003 },
+            { key: 'rise', label: '(c) 上昇率', unit: '%', value: rise },
+          ],
+          steps: [
+            '線路定数をまとめる: ' + eq('X = ' + x + ' × ' + L + ' = ' + fmt(X, 1) + ' Ω,  B = ' + b + ' × ' + L + ' = ' + fmt(b * L, 0) + ' μS = ' + B.toExponential(2) + ' S') + '。',
+            '(a) ' + eq('Q<sub>c</sub> = V<sub>s</sub><sup>2</sup>B = ' + VkV + '<sup>2</sup> × ' + B.toExponential(2) + ' = ' + fmt(Qc) + ' Mvar') + '（kV<sup>2</sup> × S = MVA）。これが「制御できない無効電力供給源」で、軽負荷時に余る。',
+            '(b) 受電端開放では受電端側の B/2 に流れる電流 I = jV<sub>r</sub>B/2 が X を通り、V<sub>s</sub> = V<sub>r</sub> + jX·I = V<sub>r</sub>(1 − XB/2)。よって ' + eq('V<sub>r</sub> = V<sub>s</sub> / (1 − XB/2) = ' + VkV + ' / (1 − ' + fmt(X * B / 2, 4) + ') = ' + fmt(Vr, 1) + ' kV') + '。',
+            '(c) ' + eq('上昇率 = (' + fmt(Vr, 1) + ' − ' + VkV + ') / ' + VkV + ' = ' + fmt(rise, 2) + ' %') + '。XB は亘長の 2 乗で効くので、長距離・高電圧線ほど顕著。夜間や連休に分路リアクトルを入れて抑える。',
+          ],
+          insight: '重負荷時は Q 不足で電圧が下がり、軽負荷時は線路自身の充電容量で電圧が上がる。同じ線路が時間帯で逆の問題を起こすので、調相設備は「入れる」だけでなく「切る・リアクトルを入れる」側も要る。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

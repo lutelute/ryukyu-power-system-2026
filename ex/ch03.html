@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第3回 演習 — 複素電力・単位法・送電電力式</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第3回: S = P + jQ、力率改善、単位法、送電電力式、π 型等価回路。遅れ力率の Q を正（消費）とする。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+const SQ3 = Math.sqrt(3), D2R = Math.PI / 180;
+
+EX.page({
+  ch: 3,
+  intro: '「P は角度で、Q は電圧で運ばれる」を式で確かめます。複素電力・力率改善・単位法換算・送電電力式の順に、本講義の背骨になる計算を手で通します。',
+  problems: [
+    {
+      id: 'complex-power', title: '複素電力と線電流', tags: ['3.2.1', 'S = P + jQ'],
+      gen(rng) {
+        const P = pick(rng, [40, 60, 80, 100, 120]);
+        const pf = pick(rng, [0.7, 0.75, 0.8, 0.85, 0.9]);
+        const V = pick(rng, [66, 154]);
+        const S = P / pf, Q = Math.sqrt(S * S - P * P);
+        const I = S * 1e6 / (SQ3 * V * 1e3);
+        return {
+          given: [['有効電力 P', P + ' MW'], ['力率 cos φ（遅れ）', String(pf)], ['線間電圧 V', V + ' kV']],
+          q: '(a) 皮相電力 <b>|S|</b><br>(b) 無効電力 <b>Q</b>（遅れ＝消費を正）<br>(c) 線電流 <b>I</b>',
+          answers: [
+            { key: 'S', label: '(a) |S|', unit: 'MVA', value: S },
+            { key: 'Q', label: '(b) Q', unit: 'Mvar', value: Q },
+            { key: 'I', label: '(c) I', unit: 'A', value: I },
+          ],
+          steps: [
+            eq('|S| = P / cos φ = ' + P + ' / ' + pf + ' = ' + fmt(S) + ' MVA') + '。',
+            eq('Q = √(S² − P²) = P tan φ = ' + fmt(Q) + ' Mvar') + '（遅れなので Q &gt; 0、誘導性負荷が消費）。',
+            eq('I = |S| / (√3 V) = ' + fmt(S) + '×10⁶ / (1.732 × ' + V + '×10³) = ' + fmt(I) + ' A') + '。電流を決めるのは P ではなく |S|。',
+          ],
+          insight: 'ジョッキの容量が |S|、ビールが P、泡が Q。線路が運ぶのはジョッキごと。',
+        };
+      },
+    },
+    {
+      id: 'pf-correction', title: '力率改善に必要なコンデンサ容量', tags: ['3.2.1', '力率'],
+      gen(rng) {
+        const P = pick(rng, [50, 80, 100, 150]);
+        const pf1 = pick(rng, [0.7, 0.75, 0.8, 0.85]);
+        const pf2 = pick(rng, [0.95, 1.0]);
+        const Qc = P * (Math.tan(Math.acos(pf1)) - Math.tan(Math.acos(pf2)));
+        const iRatio = pf1 / pf2;
+        const lossRatio = (pf1 / pf2) * (pf1 / pf2);
+        return {
+          given: [['有効電力 P', P + ' MW'], ['改善前の力率', String(pf1)], ['目標の力率', String(pf2)]],
+          q: '(a) 目標力率にするために必要な<b>コンデンサ容量 Q<sub>C</sub></b><br>(b) 改善後の線電流は改善前の何倍か <b>I<sub>2</sub>/I<sub>1</sub></b><br>(c) 損失は何倍か <b>P<sub>loss,2</sub>/P<sub>loss,1</sub></b>',
+          answers: [
+            { key: 'Qc', label: '(a) Q_C', unit: 'Mvar', value: Qc },
+            { key: 'ir', label: '(b) I_2/I_1', unit: '倍', value: iRatio },
+            { key: 'lr', label: '(c) 損失比', unit: '倍', value: lossRatio },
+          ],
+          steps: [
+            '改善前の Q: ' + eq('Q<sub>1</sub> = P tan φ<sub>1</sub> = ' + fmt(P * Math.tan(Math.acos(pf1))) + ' Mvar') + '、目標の Q: ' + eq('Q<sub>2</sub> = ' + fmt(P * Math.tan(Math.acos(pf2))) + ' Mvar') + '。',
+            eq('Q<sub>C</sub> = Q<sub>1</sub> − Q<sub>2</sub> = ' + fmt(Qc) + ' Mvar') + '。コンデンサが Q を現地で供給し、線路が運ぶ Q が減る。',
+            'P が同じなら I ∝ 1/cos φ: ' + eq('I<sub>2</sub>/I<sub>1</sub> = cos φ<sub>1</sub>/cos φ<sub>2</sub> = ' + fmt(iRatio)) + '、損失は I² なので ' + eq(fmt(lossRatio) + ' 倍') + '。',
+          ],
+          insight: '高圧受電の力率割引（85% 基準）は、この損失と設備占有の減り分を料金に写したもの。',
+        };
+      },
+    },
+    {
+      id: 'per-unit', title: '単位法換算と基準変換', tags: ['3.2.3', '単位法'],
+      gen(rng) {
+        const Z = pick(rng, [5, 10, 20, 30, 40]);
+        const Vb = pick(rng, [66, 154, 275]);
+        const Sb = 100;
+        const Zb = Vb * Vb / Sb;
+        const Zpu = Z / Zb;
+        const Sb2 = pick(rng, [50, 200, 500]);
+        const Zpu2 = Zpu * (Sb2 / Sb);
+        return {
+          given: [['線路インピーダンス Z', 'j' + Z + ' Ω'], ['基準容量 S<sub>base</sub>', Sb + ' MVA'], ['基準電圧 V<sub>base</sub>', Vb + ' kV'], ['別の基準容量 S′<sub>base</sub>', Sb2 + ' MVA（電圧は同じ）']],
+          q: '(a) 基準インピーダンス <b>Z<sub>base</sub> = V<sub>base</sub>²/S<sub>base</sub></b><br>(b) <b>Z<sub>pu</sub></b><br>(c) 基準容量を ' + Sb2 + ' MVA に変えたときの <b>Z′<sub>pu</sub></b>',
+          answers: [
+            { key: 'Zb', label: '(a) Z_base', unit: 'Ω', value: Zb },
+            { key: 'Zpu', label: '(b) Z_pu', unit: 'p.u.', value: Zpu },
+            { key: 'Zpu2', label: '(c) Z′_pu', unit: 'p.u.', value: Zpu2 },
+          ],
+          steps: [
+            eq('Z<sub>base</sub> = (' + Vb + '×10³)² / (' + Sb + '×10⁶) = ' + fmt(Zb) + ' Ω') + '（線間電圧・三相容量で統一）。',
+            eq('Z<sub>pu</sub> = Z / Z<sub>base</sub> = ' + Z + ' / ' + fmt(Zb) + ' = ' + fmt(Zpu) + ' p.u.') + '。',
+            '基準変換: ' + eq('Z′<sub>pu</sub> = Z<sub>pu</sub> × (S′<sub>base</sub>/S<sub>base</sub>) × (V<sub>base</sub>/V′<sub>base</sub>)² = ' + fmt(Zpu) + ' × ' + (Sb2 / Sb) + ' = ' + fmt(Zpu2)) + '。容量基準を上げると p.u. 値は大きくなる。',
+          ],
+          insight: '機器の定数は容量基準の p.u. で似た値になる（変圧器 X ≈ 0.1）。だから経験で妥当性を判断できる。',
+        };
+      },
+    },
+    {
+      id: 'power-angle', title: '送電電力式 — P は δ、Q は V', tags: ['3.2.5', '本講義で最も重要な式'],
+      gen(rng) {
+        const Vs = pick(rng, [1.0, 1.02, 1.05]);
+        const Vr = pick(rng, [0.95, 0.98, 1.0]);
+        const X = pick(rng, [0.2, 0.25, 0.3, 0.4]);
+        const deg = pick(rng, [10, 15, 20, 30]);
+        const d = deg * D2R;
+        const P = Vs * Vr * Math.sin(d) / X;
+        const Pmax = Vs * Vr / X;
+        const Qr = (Vs * Vr * Math.cos(d) - Vr * Vr) / X;
+        return {
+          given: [['送電端電圧 V<sub>s</sub>', Vs + ' p.u.'], ['受電端電圧 V<sub>r</sub>', Vr + ' p.u.'], ['線路リアクタンス X', X + ' p.u.（R = 0）'], ['相差角 δ', deg + '°']],
+          q: '(a) 送電電力 <b>P</b><br>(b) 最大送電電力 <b>P<sub>max</sub></b>（δ = 90°）<br>(c) 受電端の無効電力 <b>Q<sub>r</sub></b> = (V<sub>s</sub>V<sub>r</sub> cos δ − V<sub>r</sub>²)/X',
+          answers: [
+            { key: 'P', label: '(a) P', unit: 'p.u.', value: P },
+            { key: 'Pmax', label: '(b) P_max', unit: 'p.u.', value: Pmax },
+            { key: 'Qr', label: '(c) Q_r', unit: 'p.u.', value: Qr, abs: 0.01 },
+          ],
+          steps: [
+            eq('P = V<sub>s</sub>V<sub>r</sub> sin δ / X = ' + Vs + ' × ' + Vr + ' × sin ' + deg + '° / ' + X + ' = ' + fmt(P) + ' p.u.') + '。',
+            eq('P<sub>max</sub> = V<sub>s</sub>V<sub>r</sub> / X = ' + fmt(Pmax) + ' p.u.') + '。これが定態安定限界（第7回）。',
+            eq('Q<sub>r</sub> = (' + Vs + ' × ' + Vr + ' × cos ' + deg + '° − ' + Vr + '²) / ' + X + ' = ' + fmt(Qr) + ' p.u.') + (Qr < 0 ? '。負なので受電端は Q を送電端へ返している（電圧差の向きに注意）。' : '。正なので受電端は Q を受け取っている。'),
+          ],
+          insight: 'δ を動かすと P が、V_r を動かすと Q が主に変わる。動く図のスライダで確かめると腑に落ちる。',
+        };
+      },
+    },
+    {
+      id: 'pi-model', title: 'π 型等価回路と充電容量', tags: ['3.2.2', '線路定数'],
+      gen(rng) {
+        const L = pick(rng, [50, 100, 150, 200]);
+        const x = pick(rng, [0.3, 0.35, 0.4, 0.45]);
+        const b = pick(rng, [2.5, 3.0, 3.5, 4.0]);
+        const V = pick(rng, [154, 275, 500]);
+        const X = x * L;
+        const B = b * L;
+        const Qc = V * V * 1e6 * B * 1e-6 / 1e6;
+        return {
+          given: [['亘長 L', L + ' km'], ['リアクタンス', x + ' Ω/km'], ['充電サセプタンス', b + ' µS/km'], ['線間電圧 V', V + ' kV']],
+          q: '(a) 線路全体のリアクタンス <b>X</b><br>(b) 線路全体のサセプタンス <b>B</b>（π 型では両端に B/2 ずつ）<br>(c) 線路が発生する充電容量 <b>Q<sub>C</sub> = V²B</b>',
+          answers: [
+            { key: 'X', label: '(a) X', unit: 'Ω', value: X },
+            { key: 'B', label: '(b) B', unit: 'µS', value: B },
+            { key: 'Qc', label: '(c) Q_C', unit: 'Mvar', value: Qc },
+          ],
+          steps: [
+            eq('X = ' + x + ' × ' + L + ' = ' + fmt(X) + ' Ω') + '、' + eq('B = ' + b + ' × ' + L + ' = ' + fmt(B) + ' µS') + '。',
+            '充電容量: ' + eq('Q<sub>C</sub> = V² B = (' + V + '×10³)² × ' + fmt(B) + '×10⁻⁶ = ' + fmt(Qc) + ' Mvar') + '。',
+            '軽負荷時はこの Q が受電端の電圧を押し上げる（フェランチ効果）。長い線路・高い電圧ほど大きい。',
+          ],
+          insight: '夜間に受電端電圧が上がるのは線路自身が Q を作るから。分路リアクトルで吸い取る。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

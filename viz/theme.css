@@ -1,0 +1,94 @@
+/* ===== 共通テーマ：ノート / エンジニアリング仕様書スタイル =====
+   クリーム紙・インク色・モノスペース・角ばった白カード＋1px 罫線。
+   各ページの inline <style>（＝レイアウト）の "後ろ" で読み込み、同じセレクタの見た目を上書きする。
+   → レイアウト＝各ページの inline style ／ 配色・書体＝この 1 ファイル、という役割分担。
+   配色を変えたいときはここだけ触る。canvas 内の描画色は JS から getCSS('--accent') 等で取る。
+
+   ※ 下の @import が唯一の外部参照（Web フォント）。オフラインでも
+     フォールバック（Hiragino / system-ui / Menlo）で崩れずに読める。
+     完全にゼロにしたい場合はこの 1 行を消すだけでよい。 */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
+:root{
+  --bg:#faf8f1; --panel:#ffffff; --panel-2:#f2efe6; --line:#dcd8cc; --grid:#e7e3d8;
+  --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+  /* 意味を持たせた色。ページ間で意味を統一する（例：--neg は常に「誤り・負」） */
+  --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+  --pos:#1f9e8a; --true:#a98a4a; --seed:#b3812f;
+  --ink:#1a1a17; --ink-2:#52504a; --ink-3:#928f84; --rule:#dcd8cc;
+  --mincho:"Noto Sans JP","Hiragino Sans",sans-serif;
+  --gothic:"Noto Sans JP","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+html,body{background:var(--bg);color:var(--ink);font-family:var(--mono);line-height:1.6;}
+.wrap{max-width:1040px;padding:40px 30px 64px;}
+.nav{font-family:var(--mono);font-size:11px;letter-spacing:.03em;line-height:2.0;color:var(--ink-3);margin-bottom:22px;}
+.nav a{color:var(--ink-2);text-decoration:none;} .nav a:hover{color:var(--ink);text-decoration:underline;}
+h1{font-family:var(--gothic);font-weight:700;font-size:21px;letter-spacing:.04em;color:var(--ink);margin:0;padding-bottom:11px;border-bottom:1px solid var(--ink);}
+.lead{font-family:var(--gothic);color:var(--ink-2);font-size:13px;line-height:1.75;margin:15px 0 24px;}
+.lead b{color:var(--ink);font-weight:700;}
+
+/* ---- ステージ（章タブ＋図＋説明＋操作バー）---- */
+.stage{background:var(--panel);border:1px solid var(--ink);border-radius:3px;overflow:hidden;}
+.stepper{background:var(--panel-2);border-bottom:1px solid var(--ink);}
+.stp{border-right:1px dashed var(--rule);}
+.stp:last-child{border-right:none;}
+.stp .n{width:20px;height:20px;border-radius:2px;font-family:var(--mono);font-size:11px;background:transparent;color:var(--ink-3);border:1px solid var(--ink-3);}
+.stp .t{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-3);}
+.stp.done .n{background:transparent;color:var(--ink);border-color:var(--ink);} .stp.done .t{color:var(--ink-2);}
+.stp.active{background:var(--panel);}
+.stp.active .n{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700;}
+.stp.active .t{color:var(--ink);font-weight:700;}
+.stp.active:after{background:var(--ink);}
+.vis{border-right:1px dashed var(--rule);}
+canvas{border:1px solid var(--rule);border-radius:2px;background:#fffdf6;}
+.mini{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);}
+.mini b{color:var(--ink);font-weight:700;}
+.legend{font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;color:var(--ink-3);}
+.legend .sw,.legend i.sw,.dotmark{border:1px solid rgba(0,0,0,.18);}
+.explain .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--ink-3);border:1px solid var(--ink-3);border-radius:2px;text-transform:uppercase;}
+.explain h3{font-family:var(--gothic);font-weight:700;font-size:16px;color:var(--ink);letter-spacing:.02em;}
+.eq{background:#fff;border:1px solid var(--ink);border-radius:2px;color:var(--ink);}
+.eq.curr{border-color:var(--ink);border-left:3px solid var(--accent);box-shadow:none;}
+.eq .num{color:var(--accent);} .eq .res{color:var(--accent);font-weight:700;}
+.desc{font-family:var(--gothic);font-size:12.5px;line-height:1.8;color:var(--ink-2);} .desc b{color:var(--ink);font-weight:700;}
+table{font-family:var(--mono);}
+td,th{border:1px solid var(--rule);} th{color:var(--ink-3);font-weight:500;letter-spacing:.03em;}
+.bar{border-top:1px solid var(--ink);background:var(--panel-2);}
+button{font-family:var(--gothic);font-size:12.5px;border-radius:2px;border:1px solid var(--ink);background:#fff;color:var(--ink);}
+button:hover:not(:disabled){background:var(--panel-2);border-color:var(--ink);}
+button.primary{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700;}
+button.primary:hover:not(:disabled){background:#000;}
+select{background:#fff;color:var(--ink);border:1px solid var(--ink);border-radius:2px;font-family:var(--mono);font-size:12px;}
+input[type=range]{accent-color:var(--accent);}
+label{color:var(--ink-2);}
+
+/* ---- なぜ学ぶ? / 一言で言うと / どこで使われる? — ページ冒頭の落とし込み 3 行 ---- */
+.purpose{background:var(--panel);border:1px solid var(--rule);border-radius:2px;padding:11px 16px;margin:0 0 18px;}
+.purpose .prow{font-family:var(--gothic);font-size:12.5px;line-height:1.75;color:var(--ink-2);display:flex;gap:10px;}
+.purpose .prow+.prow{margin-top:4px;}
+.purpose .pq{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--accent);border:1px solid currentColor;border-radius:2px;padding:1px 7px;white-space:nowrap;flex:none;align-self:flex-start;margin-top:3px;min-width:7.5em;text-align:center;}
+.purpose .prow b{color:var(--ink);}
+
+/* ---- 💡 見方が変わる一文 — 読み終えた視座を一段上げる「アハ」---- */
+.aha{background:var(--panel);border:1px solid var(--rule);border-left:3px solid var(--upd);border-radius:2px;padding:12px 16px;margin:14px 0;}
+.aha-h{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--upd);font-weight:700;margin-bottom:5px;}
+.aha p{margin:0;font-family:var(--gothic);font-size:13.5px;line-height:1.9;color:var(--ink);}
+.aha b{color:var(--upd);}
+
+/* ---- ⚠ よくある誤解 — ✗誤解 → ✓正しい理解 を 2 組 ---- */
+.myth{background:var(--panel);border:1px solid var(--rule);border-left:3px solid var(--warm);border-radius:2px;padding:13px 16px;margin:14px 0;}
+.myth-h{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--warm);font-weight:700;margin-bottom:8px;}
+.myth .row{font-family:var(--gothic);font-size:12.5px;line-height:1.8;color:var(--ink-2);display:block;position:relative;padding-left:24px;}
+.myth .row+.row{margin-top:2px;}
+.myth .x,.myth .o{position:absolute;left:0;top:0;font-weight:700;}
+.myth .x{color:var(--neg);}
+.myth .o{color:var(--accent);}
+.myth .row b{color:var(--ink);}
+
+details{background:var(--panel);border:1px solid var(--rule);border-radius:2px;}
+summary{font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:var(--ink-2);} summary:hover{color:var(--ink);}
+.det{font-family:var(--gothic);font-size:12.5px;line-height:1.8;color:var(--ink-2);}
+.det a,.desc a,.lead a,.det b a{color:var(--accent);}
+
+@media print{@page{size:A4;margin:12mm;}html,body{background:#fff;color:#000;}.stage{border-color:#000;}}

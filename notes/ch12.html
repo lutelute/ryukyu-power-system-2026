@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第12回: 機械学習を用いた気象・需要予測 — 講義ノート</title>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="notes.css">
+</head>
+<body>
+<header class="top">
+  <a class="home" href="../index.html">▲ 地図（トップ）</a>
+  <nav class="days"><span class="">Day 1 基礎と潮流計算入門</span><span class="">Day 2 潮流とダイナミクス</span><span class="on">Day 3 インバータと予測</span><span class="">Day 4 AI と統合演習</span></nav>
+  <nav class="rounds"><a href="ch01.html" class="" title="第1回 エネルギー変換">1</a><a href="ch02.html" class="" title="第2回 電力システムの構成">2</a><a href="ch03.html" class="" title="第3回 P と Q の分離">3</a><a href="ch04.html" class="" title="第4回 Y行列と直流法潮流">4</a><a href="ch05.html" class="" title="第5回 ニュートン・ラフソン法">5</a><a href="ch06.html" class="" title="第6回 電圧と無効電力">6</a><a href="ch07.html" class="" title="第7回 等面積法と安定度">7</a><a href="ch08.html" class="" title="第8回 周波数と需給バランス">8</a><a href="ch09.html" class="" title="第9回 インバータと系統連系">9</a><a href="ch10.html" class="" title="第10回 気象と再エネ出力">10</a><a href="ch11.html" class="" title="第11回 電力需要予測">11</a><a href="ch12.html" class="on" title="第12回 機械学習で予測する">12</a><a href="ch13.html" class="" title="第13回 AI × 系統解析">13</a><a href="ch14.html" class="" title="第14回 経済負荷配分と OPF">14</a><a href="ch15.html" class="" title="第15回 沖縄系統・統合演習">15</a></nav>
+</header>
+<div class="wrap">
+  <main class="doc">
+    <div class="chips"><span class="chip day">Day 3 インバータと予測</span><a class="chip viz" href="../viz/ml.html">🖥 動く図で見る</a><a class="chip ex" href="../ex/ch12.html">✍ 演習で確かめる</a><a class="chip" href="symbols.html">記号表</a></div>
+    <h1>第12回: 機械学習を用いた気象・需要予測</h1>
+<p><strong>Day 3 / コマ12</strong> ｜ 電力エネルギーシステム解析の基礎と応用</p>
+<blockquote class="callout textbook">
+<p><strong>教科書対応</strong>: 本講義の独自部分（教科書の範囲外）。
+第10回（気象・再エネ予測）と第11回（需要予測）を、機械学習で統一的に扱う。</p>
+</blockquote>
+<blockquote class="callout viz">
+<p><strong>🖥 動くインフォグラフ</strong>：<a href="../viz/ml.html"><code>viz/ml.html</code></a> — 深さ2の木をブースティング、リークの逆転を実測。
+ブラウザで「次へ ▶」を押しながら、この回の核心を実計算で追えます（<code>index.html</code> から全回に飛べます）。</p>
+</blockquote>
+<!-- intuition:start（tools/sync-intuition.mjs が スライド/ch12.md から生成。直接編集せずスライドを直す）-->
+<blockquote class="callout ex">
+<p><strong>✍ 演習</strong>：<a href="../ex/ch12.html"><code>ex/ch12.html</code></a> — 学籍番号ごとに数値が変わる問題。採点・途中式つき。
+<strong>📊 スライド</strong>：<code>スライド/ch12.pptx</code>（講義用）</p>
+</blockquote>
+<hr>
+<h2 id="s1">まず直感で（3 分でつかむ）</h2>
+<blockquote class="callout key">
+<p><strong>📌 一言でいうと</strong>：表形式のデータでは、決定木を残差で積み上げる勾配ブースティングが強い。ただし木は外挿ができず、入力の誤差はそのまま出力に出る。</p>
+</blockquote>
+<blockquote class="callout analogy">
+<p><strong>🪄 たとえ話：間違いノートと地図の外</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">勉強</th>
+<th align="left">勾配ブースティング</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">1 回目の <strong>間違いだけ</strong> を復習</td>
+<td align="left">2 本目の木は <strong>残差</strong> を学ぶ</td>
+</tr>
+<tr>
+<td align="left">次はその残りの間違いを復習</td>
+<td align="left">3 本目は残りの残差…（数十〜数百本）</td>
+</tr>
+<tr>
+<td align="left">一度に直しすぎると <strong>別の間違い</strong> が増える</td>
+<td align="left"><strong>学習率 ν</strong> で一度に直す量を絞る</td>
+</tr>
+<tr>
+<td align="left">答えを見て勉強すると模試は満点</td>
+<td align="left"><strong>リーク</strong>：検証は満点、運用で崩壊</td>
+</tr>
+<tr>
+<td align="left">見たことのない問題は <strong>平均点</strong> しか取れない</td>
+<td align="left"><strong>外挿不能</strong>：葉の平均値しか返せない</td>
+</tr>
+</tbody></table></div>
+<p>崩れる点：間違いノートを覚えすぎると過学習。木の深さ・本数・早期停止で止める。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：2021年2月 テキサス寒波</strong>
+記録的な低温は学習データの <strong>範囲の外</strong> だった。需要予測は暖房需要の急増を捉えきれず、供給側も設備の凍結で次々に脱落。数百万世帯が数日停電した。外挿の失敗と供給脱落が重なった事例である。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：データリーク — 模試は満点、本番は零点</strong>
+「未来の実績」や「当日にならないと分からない値」が特徴量に紛れると、検証精度が現実離れして高くなる。運用に出した瞬間に精度が崩れる。最も多いのは、気温を実測値で検証してしまう形である。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 この回の式で読むと</strong>：どちらも検証では見えない。だから今日は「検証の設計」を手法と同じ重さで扱う。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ木は外挿できないのか</strong>
+木の出力は「葉に入った学習データの平均」。学習範囲を超えた入力は端の葉に落ち、端の平均値を返し続ける。記録更新の日は線形の方が素直に伸びる。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ表形式では木が強いのか</strong>
+気温 × 時刻 × 曜日のような交互作用と、冷房が入る温度のような閾値を、分割の組合せで自然に表せる。線形回帰は人が項を書かないと表せない。</p>
+</blockquote>
+<blockquote class="callout warn">
+<p><strong>⚠ リークの見つけ方</strong>
+「予測時点で本当に手に入るか」を特徴量 1 つずつ問う。精度が良すぎたら疑う。</p>
+</blockquote>
+<p><strong>この回の地図</strong>：Ⅰ 決定木 — 1 回の分割で何が起きているか → Ⅱ ブースティング — 残差を積み上げる、早期停止で止める → Ⅲ 限界 — 外挿できない、入力の誤差がそのまま出る → Ⅳ 実務 — 区間で出す、重要度で説明する</p>
+<!-- intuition:end -->
+<hr>
+<h2 id="s2">12.1 導入</h2>
+<h3 id="s3">学習目標</h3>
+<ol>
+<li><strong>決定木 → ランダムフォレスト → 勾配ブースティング</strong>の発展を説明できる。</li>
+<li><strong>XGBoost / LightGBM</strong> で予測モデルを構築し、ハイパーパラメータを調整できる。</li>
+<li><strong>LSTM</strong> の構造（ゲート機構）を説明し、時系列予測に適用できる。</li>
+<li><strong>分位点回帰</strong>により予測区間を推定し、確率予測ができる。</li>
+<li><strong>特徴量重要度・SHAP</strong> でモデルを解釈できる。</li>
+<li>機械学習を社会インフラに適用する際の<strong>注意点</strong>を論じられる。</li>
+</ol>
+<h3 id="s4">前提知識（第11回との接続）</h3>
+<p>第11回で統計的手法の限界を挙げた。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">限界</th>
+<th align="left">機械学習での解決</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">非線形な相互作用を手作業で設計する必要</td>
+<td align="left"><strong>木モデルが自動で発見</strong>する</td>
+</tr>
+<tr>
+<td align="left">説明変数が多いと過学習</td>
+<td align="left">正則化・アンサンブルで抑制</td>
+</tr>
+<tr>
+<td align="left">長期依存を捉えにくい</td>
+<td align="left"><strong>LSTM</strong> のゲート機構</td>
+</tr>
+</tbody></table></div>
+<p>一方で<strong>失うもの</strong>もある。それが解釈性である。本回はこのトレードオフを扱う。</p>
+<hr>
+<h2 id="s5">12.2 理論</h2>
+<h3 id="s6">12.2.1 決定木からアンサンブルへ</h3>
+<p><strong>決定木</strong>: 特徴量空間を再帰的に分割し、各領域で定数を予測する。</p>
+<pre><code>                  [気温 &gt; 26 ?]
+＼
+           No ／                 ＼ Yes
+      [時刻 &gt; 8?]              [湿度 &gt; 70?]
+＼                 ／     ＼
+    680MW   760MW           880MW   1020MW
+</code></pre>
+<p><strong>長所</strong>: 非線形・相互作用を自動的に捉える。解釈しやすい。前処理がほぼ不要。
+<strong>短所</strong>: 単体では<strong>過学習しやすく不安定</strong>（データが少し変わると木が大きく変わる）。</p>
+<p><strong>アンサンブル学習</strong>: 複数の木を組み合わせて弱点を補う。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">手法</th>
+<th align="left">考え方</th>
+<th align="left">木の作り方</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>バギング / ランダムフォレスト</strong></td>
+<td align="left">多数決・平均で<strong>分散を減らす</strong></td>
+<td align="left">並列・独立。ブートストラップ標本</td>
+</tr>
+<tr>
+<td align="left"><strong>ブースティング</strong></td>
+<td align="left">前の誤りを次が修正し<strong>バイアスを減らす</strong></td>
+<td align="left">逐次。残差を学習</td>
+</tr>
+</tbody></table></div>
+<p><strong>ランダムフォレスト</strong>:</p>
+<ol>
+<li>ブートストラップ標本（復元抽出）で <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi></mrow><annotation encoding="application/x-tex">M</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">M</span></span></span></span> 本の木を作る</li>
+<li>各分岐で<strong>特徴量もランダムに選ぶ</strong>（木の相関を下げる）</li>
+<li>予測は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>M</mi></mrow><annotation encoding="application/x-tex">M</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.109em;">M</span></span></span></span> 本の平均</li>
+</ol>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mover accent="true"><mi>y</mi><mo>^</mo></mover><mo>=</mo><mfrac><mn>1</mn><mi>M</mi></mfrac><munderover><mo>∑</mo><mrow><mi>m</mi><mo>=</mo><mn>1</mn></mrow><mi>M</mi></munderover><msub><mi>f</mi><mi>m</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\hat{y} = \frac{1}{M}\sum_{m=1}^{M}f_m(\mathbf{x})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:3.0954em;vertical-align:-1.2671em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">M</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8283em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">m</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.109em;">M</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2671em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">m</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span></span></span></span></span></p>
+<p><strong>勾配ブースティング</strong>: 残差を順番に学習していく。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>F</mi><mn>0</mn></msub><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo>=</mo><mover accent="true"><mi>y</mi><mo>ˉ</mo></mover><mo separator="true">,</mo><mspace width="2em"/><msub><mi>F</mi><mi>k</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi>F</mi><mrow><mi>k</mi><mo>−</mo><mn>1</mn></mrow></msub><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo>+</mo><mi>ν</mi><mtext> </mtext><msub><mi>h</mi><mi>k</mi></msub><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">F_0(\mathbf{x}) = \bar{y}, \qquad
+F_k(\mathbf{x}) = F_{k-1}(\mathbf{x}) + \nu\,h_k(\mathbf{x})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.5678em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">ˉ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0637em;">ν</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>k</mi></msub></mrow><annotation encoding="application/x-tex">h_k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> は残差（正確には損失関数の負勾配）に当てはめた木、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ν</mi></mrow><annotation encoding="application/x-tex">\nu</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0637em;">ν</span></span></span></span> は<strong>学習率</strong>（0.01〜0.1）。</p>
+<p><strong>XGBoost</strong> は勾配ブースティングに次を加えたもの。</p>
+<ul>
+<li><strong>2 次までのテイラー展開</strong>を使った高速な最適化</li>
+<li><strong>正則化項</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Ω</mi><mo stretchy="false">(</mo><mi>f</mi><mo stretchy="false">)</mo><mo>=</mo><mi>γ</mi><mi>T</mi><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>λ</mi><mi mathvariant="normal">∥</mi><mi>w</mi><msup><mi mathvariant="normal">∥</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">\Omega(f) = \gamma T + \frac{1}{2}\lambda\|w\|^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">Ω</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord mathnormal">λ</span><span class="mord">∥</span><span class="mord mathnormal" style="margin-right:0.0269em;">w</span><span class="mord"><span class="mord">∥</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span>（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span></span> は葉の数）</li>
+<li>欠損値の自動処理、並列化</li>
+</ul>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="script">L</mi><mo>=</mo><munder><mo>∑</mo><mi>i</mi></munder><mi>l</mi><mo stretchy="false">(</mo><msub><mi>y</mi><mi>i</mi></msub><mo separator="true">,</mo><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mi>i</mi></msub><mo stretchy="false">)</mo><mo>+</mo><munder><mo>∑</mo><mi>k</mi></munder><mi mathvariant="normal">Ω</mi><mo stretchy="false">(</mo><msub><mi>f</mi><mi>k</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathcal{L} = \sum_i l(y_i, \hat{y}_i) + \sum_k \Omega(f_k)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathcal">L</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.3277em;vertical-align:-1.2777em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2777em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.3521em;vertical-align:-1.3021em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.8479em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.3021em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">Ω</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0315em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span></p>
+<p><strong>なぜ表形式データで木モデルが強いのか</strong>: 電力需要のような表形式データでは、
+特徴量に明確な意味があり、しきい値による分割が自然に働く。
+<strong>深層学習より木モデルの方が高精度になることが多い</strong>（データ量が中規模の場合は特に）。</p>
+<!-- fig:ch12_split.png -->
+<p><img src="../%E5%9B%B3/ch12_split.png" alt="図 12.1">
+<em>図 12.1　決定木の 1 回の分割。全特徴量・全閾値を試して二乗誤差の減少が最大になる場所を選び、葉の値はそこに入ったデータの平均になる（左）。右は特徴量ごとのゲインで、時刻の周期成分が最も効く。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch12_boosting.png -->
+<p><img src="../%E5%9B%B3/ch12_boosting.png" alt="図 12.2">
+<em>図 12.2　勾配ブースティングの逐次当てはめ（深さ 2、学習率 0.2）。木を 1 → 5 → 20 → 80 本と積むにつれ、残差が減って形が細かくなる。1 本ずつは弱いが、足し合わせると滑らかな関数になる。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch12_learning_curve.png -->
+<p><img src="../%E5%9B%B3/ch12_learning_curve.png" alt="図 12.3">
+<em>図 12.3　学習曲線。学習誤差は単調に減るが、検証誤差は底を打って上昇に転じる（過学習）。この底（149 本、RMSE 29.0 MW）で止めるのが早期停止である。</em></p>
+<!-- /fig -->
+
+<h3 id="s7">12.2.2 特徴量エンジニアリング — ここが精度を決める</h3>
+<p><strong>モデルよりも特徴量が効く。</strong> 第11回の特徴量に加え、次を検討する。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">種類</th>
+<th align="left">特徴量の例</th>
+<th align="left">意図</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>ラグ</strong></td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mrow><mi>t</mi><mo>−</mo><mn>24</mn></mrow></msub></mrow><annotation encoding="application/x-tex">y_{t-24}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">24</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mrow><mi>t</mi><mo>−</mo><mn>168</mn></mrow></msub></mrow><annotation encoding="application/x-tex">y_{t-168}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">168</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mrow><mi>t</mi><mo>−</mo><mn>336</mn></mrow></msub></mrow><annotation encoding="application/x-tex">y_{t-336}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">336</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">前日・前週・2週前の同時刻</td>
+</tr>
+<tr>
+<td align="left"><strong>移動統計</strong></td>
+<td align="left">過去 24h/168h の平均・最大・最小・標準偏差</td>
+<td align="left">直近の水準とばらつき</td>
+</tr>
+<tr>
+<td align="left"><strong>気温の履歴</strong></td>
+<td align="left">前 3 日の平均気温、指数加重平均</td>
+<td align="left"><strong>蓄熱効果</strong>（第11回）</td>
+</tr>
+<tr>
+<td align="left"><strong>交互作用</strong></td>
+<td align="left">気温 × 時刻、気温 × 曜日、THI × 平日フラグ</td>
+<td align="left">冷房需要は昼の平日に集中</td>
+</tr>
+<tr>
+<td align="left"><strong>周期のエンコード</strong></td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>sin</mi><mo>⁡</mo><mi mathvariant="normal">/</mi><mi>cos</mi><mo>⁡</mo></mrow><annotation encoding="application/x-tex">\sin/\cos</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">sin</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">/</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span></span></span></span>（時刻・曜日・年）</td>
+<td align="left">23 時と 0 時が近いことを表現</td>
+</tr>
+<tr>
+<td align="left"><strong>カレンダー</strong></td>
+<td align="left">祝日、休日前後、お盆・年末年始、連休の長さ</td>
+<td align="left">特異日</td>
+</tr>
+<tr>
+<td align="left"><strong>再エネ</strong></td>
+<td align="left">予測日射量、予測風速、太陽高度</td>
+<td align="left">正味需要の予測</td>
+</tr>
+<tr>
+<td align="left"><strong>ランプ</strong></td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>t</mi></msub><mo>−</mo><msub><mi>y</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow><annotation encoding="application/x-tex">y_t - y_{t-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span>、日射の変化率</td>
+<td align="left">変化の速さ（第11回 問11-8）</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>リーク（leakage）に厳重注意</strong>: 予測時点で入手できない情報を入れてはならない。</p>
+<ul>
+<li>❌ その日の<strong>実測</strong>平均気温 → その日が終わらないと分からない</li>
+<li>✅ その日の<strong>予報</strong>平均気温 → 前日に入手できる</li>
+<li>❌ 全期間で計算した平均・標準偏差での標準化 → 未来の情報が混入</li>
+<li>✅ 学習データのみで計算した統計量で標準化</li>
+</ul>
+<p>リークがあると検証では素晴らしい精度が出るが、<strong>運用すると全く当たらない</strong>。
+実務で最も多い失敗である。</p>
+</blockquote>
+<!-- fig:ch12_linear_vs_tree.png -->
+<p><img src="../%E5%9B%B3/ch12_linear_vs_tree.png" alt="図 12.4">
+<em>図 12.4　線形回帰（第11回と同じ度日・フーリエ項）と勾配ブースティングの比較。RMSE は 34.4 → 32.2 MW で差は 6%。右は木が学んだ「暑い日の昼だけ跳ねる」交互作用の形で、これを人が設計せずに拾えるのが木の利点。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch12_leak.png -->
+<p><img src="../%E5%9B%B3/ch12_leak.png" alt="図 12.5">
+<em>図 12.5　入力の誤差が出力に出る様子。気温を実測値で検証すると RMSE 34.5 MW だが、実際の運用で使える予報値（σ = 1.5 °C）にすると 59.0 MW と 1.7 倍になる。気温 1 °C の予報誤差が需要 19 MW の誤差に相当する。</em></p>
+<!-- /fig -->
+
+<h3 id="s8">12.2.3 LSTM — 長期依存を扱う</h3>
+<p><strong>RNN の問題</strong>: 単純な再帰型ニューラルネットは、
+誤差を逆伝播する際に勾配が指数的に消える（<strong>勾配消失</strong>）ため、長期の依存を学習できない。</p>
+<p><strong>LSTM（Long Short-Term Memory）</strong>: <strong>セル状態</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">c_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> という「記憶の高速道路」を設け、
+3 つのゲートで情報の出入りを制御する。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mtable rowspacing="0.25em" columnalign="right left right left" columnspacing="0em 1em 0em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><msub><mi>f</mi><mi>t</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><mi>σ</mi><mo stretchy="false">(</mo><msub><mi>W</mi><mi>f</mi></msub><mo stretchy="false">[</mo><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo separator="true">,</mo><msub><mi>x</mi><mi>t</mi></msub><mo stretchy="false">]</mo><mo>+</mo><msub><mi>b</mi><mi>f</mi></msub><mo stretchy="false">)</mo></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mrow><mtext mathvariant="bold">忘却ゲート:</mtext><mtext> </mtext><mtext mathvariant="bold">何を忘れるか</mtext></mrow></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><msub><mi>i</mi><mi>t</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><mi>σ</mi><mo stretchy="false">(</mo><msub><mi>W</mi><mi>i</mi></msub><mo stretchy="false">[</mo><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo separator="true">,</mo><msub><mi>x</mi><mi>t</mi></msub><mo stretchy="false">]</mo><mo>+</mo><msub><mi>b</mi><mi>i</mi></msub><mo stretchy="false">)</mo></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mrow><mtext mathvariant="bold">入力ゲート:</mtext><mtext> </mtext><mtext mathvariant="bold">何を書き込むか</mtext></mrow></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><msub><mover accent="true"><mi>c</mi><mo>~</mo></mover><mi>t</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><mi>tanh</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>W</mi><mi>c</mi></msub><mo stretchy="false">[</mo><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo separator="true">,</mo><msub><mi>x</mi><mi>t</mi></msub><mo stretchy="false">]</mo><mo>+</mo><msub><mi>b</mi><mi>c</mi></msub><mo stretchy="false">)</mo></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mtext>新しい候補</mtext></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><msub><mi>c</mi><mi>t</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><msub><mi>f</mi><mi>t</mi></msub><mo>⊙</mo><msub><mi>c</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><msub><mi>i</mi><mi>t</mi></msub><mo>⊙</mo><msub><mover accent="true"><mi>c</mi><mo>~</mo></mover><mi>t</mi></msub></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mtext mathvariant="bold">セル状態の更新</mtext></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><msub><mi>o</mi><mi>t</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><mi>σ</mi><mo stretchy="false">(</mo><msub><mi>W</mi><mi>o</mi></msub><mo stretchy="false">[</mo><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo separator="true">,</mo><msub><mi>x</mi><mi>t</mi></msub><mo stretchy="false">]</mo><mo>+</mo><msub><mi>b</mi><mi>o</mi></msub><mo stretchy="false">)</mo></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mtext mathvariant="bold">出力ゲート</mtext></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><msub><mi>h</mi><mi>t</mi></msub></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><msub><mi>o</mi><mi>t</mi></msub><mo>⊙</mo><mi>tanh</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>c</mi><mi>t</mi></msub><mo stretchy="false">)</mo></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mtext>隠れ状態</mtext></mrow></mstyle></mtd></mtr></mtable><annotation encoding="application/x-tex">\begin{aligned}
+f_t &amp;= \sigma(W_f[h_{t-1},x_t]+b_f) &amp;&amp; \textbf{忘却ゲート: 何を忘れるか}\\
+i_t &amp;= \sigma(W_i[h_{t-1},x_t]+b_i) &amp;&amp; \textbf{入力ゲート: 何を書き込むか}\\
+\tilde{c}_t &amp;= \tanh(W_c[h_{t-1},x_t]+b_c) &amp;&amp; \text{新しい候補}\\
+c_t &amp;= f_t\odot c_{t-1} + i_t\odot\tilde{c}_t &amp;&amp; \textbf{セル状態の更新}\\
+o_t &amp;= \sigma(W_o[h_{t-1},x_t]+b_o) &amp;&amp; \textbf{出力ゲート}\\
+h_t &amp;= o_t\odot\tanh(c_t) &amp;&amp; \text{隠れ状態}
+\end{aligned}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:8.7em;vertical-align:-4.1em;"></span><span class="mord"><span class="mtable"><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:4.6em;"><span style="top:-6.76em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-5.26em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">i</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.76em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">c</span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">~</span></span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.26em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-0.76em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:0.74em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:4.1em;"><span></span></span></span></span></span><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:4.6em;"><span style="top:-6.76em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1076em;">f</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span><span style="top:-5.26em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span><span style="top:-3.76em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mop">tanh</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span><span style="top:-2.26em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊙</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">i</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊙</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">c</span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">~</span></span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-0.76em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">o</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">o</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span><span style="top:0.74em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊙</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mop">tanh</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:4.1em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:1em;"></span><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:4.6em;"><span style="top:-6.6em;"><span class="pstrut" style="height:2.84em;"></span><span class="mord"></span></span><span style="top:-5.1em;"><span class="pstrut" style="height:2.84em;"></span><span class="mord"></span></span><span style="top:-3.6em;"><span class="pstrut" style="height:2.84em;"></span><span class="mord"></span></span><span style="top:-2.1em;"><span class="pstrut" style="height:2.84em;"></span><span class="mord"></span></span><span style="top:-0.6em;"><span class="pstrut" style="height:2.84em;"></span><span class="mord"></span></span><span style="top:0.9em;"><span class="pstrut" style="height:2.84em;"></span><span class="mord"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:4.1em;"><span></span></span></span></span></span><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:4.6em;"><span style="top:-6.76em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mord text"><span class="mord textbf cjk_fallback">忘却ゲート</span><span class="mord textbf">: </span><span class="mord textbf cjk_fallback">何を忘れるか</span></span></span></span><span style="top:-5.26em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mord text"><span class="mord textbf cjk_fallback">入力ゲート</span><span class="mord textbf">: </span><span class="mord textbf cjk_fallback">何を書き込むか</span></span></span></span><span style="top:-3.76em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mord text"><span class="mord cjk_fallback">新しい候補</span></span></span></span><span style="top:-2.26em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mord text"><span class="mord textbf cjk_fallback">セル状態の更新</span></span></span></span><span style="top:-0.76em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mord text"><span class="mord textbf cjk_fallback">出力ゲート</span></span></span></span><span style="top:0.74em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"></span><span class="mord text"><span class="mord cjk_fallback">隠れ状態</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:4.1em;"><span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>要点</strong>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>t</mi></msub><mo>=</mo><msub><mi>f</mi><mi>t</mi></msub><mo>⊙</mo><msub><mi>c</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><mo>⋯</mo></mrow><annotation encoding="application/x-tex">c_t = f_t\odot c_{t-1} + \cdots</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊙</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7917em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.313em;"></span><span class="minner">⋯</span></span></span></span> という<strong>加算</strong>の形になっているため、
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mi>t</mi></msub><mo>≈</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">f_t \approx 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> なら勾配がそのまま流れる。これが勾配消失を防ぐ仕組みである。</p>
+<p><strong>電力需要への適用</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">項目</th>
+<th align="left">設計</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">入力</td>
+<td align="left">過去 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi></mrow><annotation encoding="application/x-tex">L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span></span></span></span> 時間の需要＋気象＋カレンダー（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo>=</mo><mn>168</mn></mrow><annotation encoding="application/x-tex">L = 168</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">168</span></span></span></span> が典型）</td>
+</tr>
+<tr>
+<td align="left">出力</td>
+<td align="left">次の 24 時間（多段予測）</td>
+</tr>
+<tr>
+<td align="left">正規化</td>
+<td align="left"><strong>学習データのみ</strong>で fit した scaler を使う</td>
+</tr>
+<tr>
+<td align="left">損失</td>
+<td align="left">MSE（RMSE 重視）または Pinball loss（分位点）</td>
+</tr>
+</tbody></table></div>
+<p><strong>LSTM が木モデルに勝てるとは限らない</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">条件</th>
+<th align="left">有利なモデル</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">データが中規模（数年分）</td>
+<td align="left"><strong>木モデル（XGBoost）</strong></td>
+</tr>
+<tr>
+<td align="left">データが大規模（数十年、多地点）</td>
+<td align="left">LSTM / Transformer</td>
+</tr>
+<tr>
+<td align="left">特徴量が豊富で意味が明確</td>
+<td align="left"><strong>木モデル</strong></td>
+</tr>
+<tr>
+<td align="left">生の時系列から自動で特徴抽出したい</td>
+<td align="left">LSTM</td>
+</tr>
+<tr>
+<td align="left">解釈性が必要</td>
+<td align="left"><strong>木モデル</strong></td>
+</tr>
+</tbody></table></div>
+<!-- fig:ch12_lstm.png -->
+<p><img src="../%E5%9B%B3/ch12_lstm.png" alt="図 12.6">
+<em>図 12.6　LSTM のゲート機構。忘却・入力・出力の 3 つのゲートがセル状態への出入りを制御し、セル状態は掛け算ではなく加算で更新されるため勾配が消えにくい。長い系列を扱えるが、表形式のデータでは木モデルに及ばないことが多い。</em></p>
+<!-- /fig -->
+
+<h3 id="s9">12.2.4 予測区間の推定 — 点予測では足りない</h3>
+<p>第10回で述べたとおり、電力運用では<strong>予備力の設計</strong>に不確実性の情報が要る。</p>
+<p><strong>方法 1: 分位点回帰（Quantile Regression）</strong></p>
+<p><strong>Pinball loss（分位点損失）</strong>を最小化する。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>L</mi><mi>τ</mi></msub><mo stretchy="false">(</mo><mi>y</mi><mo separator="true">,</mo><mover accent="true"><mi>y</mi><mo>^</mo></mover><mo stretchy="false">)</mo><mo>=</mo><mrow><mo fence="true">{</mo><mtable rowspacing="0.36em" columnalign="left left" columnspacing="1em"><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mi>τ</mi><mo stretchy="false">(</mo><mi>y</mi><mo>−</mo><mover accent="true"><mi>y</mi><mo>^</mo></mover><mo stretchy="false">)</mo></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mi>y</mi><mo>≥</mo><mover accent="true"><mi>y</mi><mo>^</mo></mover></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>τ</mi><mo stretchy="false">)</mo><mo stretchy="false">(</mo><mover accent="true"><mi>y</mi><mo>^</mo></mover><mo>−</mo><mi>y</mi><mo stretchy="false">)</mo></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mi>y</mi><mo>&lt;</mo><mover accent="true"><mi>y</mi><mo>^</mo></mover></mrow></mstyle></mtd></mtr></mtable></mrow></mrow><annotation encoding="application/x-tex">L_\tau(y,\hat{y}) = \begin{cases}
+\tau(y-\hat{y}) &amp; y \geq \hat{y}\\
+(1-\tau)(\hat{y}-y) &amp; y &lt; \hat{y}
+\end{cases}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.1132em;">τ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:3em;vertical-align:-1.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size4">{</span></span><span class="mord"><span class="mtable"><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.69em;"><span style="top:-3.69em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="mclose">)</span></span></span><span style="top:-2.25em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mclose">)</span><span class="mopen">(</span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.19em;"><span></span></span></span></span></span><span class="arraycolsep" style="width:1em;"></span><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.69em;"><span style="top:-3.69em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span></span></span><span style="top:-2.25em;"><span class="pstrut" style="height:3.008em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.19em;"><span></span></span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi><mo>=</mo><mn>0.1</mn><mo separator="true">,</mo><mn>0.5</mn><mo separator="true">,</mo><mn>0.9</mn></mrow><annotation encoding="application/x-tex">\tau = 0.1, 0.5, 0.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">0.1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0.5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0.9</span></span></span></span> の 3 つのモデルを学習すれば、80% 予測区間が得られる。</p>
+<p><strong>非対称性が本質</strong>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi><mo>=</mo><mn>0.9</mn></mrow><annotation encoding="application/x-tex">\tau = 0.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.9</span></span></span></span> のモデルは、予測が実績を下回る誤差
+（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo>&gt;</mo><mover accent="true"><mi>y</mi><mo>^</mo></mover></mrow><annotation encoding="application/x-tex">y &gt; \hat{y}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7335em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span></span></span></span>）を 9 倍強く罰する。結果として<strong>上振れ側に寄った予測</strong>になる。</p>
+<p><strong>方法 2: アンサンブルのばらつき</strong> — 複数モデル・複数初期値の予測の分散を使う。</p>
+<p><strong>方法 3: 残差のブートストラップ</strong> — 過去の残差分布から区間を作る。</p>
+<p><strong>評価指標</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">指標</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>PICP</strong>（Prediction Interval Coverage Probability）</td>
+<td align="left">実績が区間に入る割合。名目値（80%）に近いほど良い</td>
+</tr>
+<tr>
+<td align="left"><strong>PINAW</strong>（Normalized Averaged Width）</td>
+<td align="left">区間の平均幅。<strong>狭いほど良い</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>Pinball loss</strong></td>
+<td align="left">両者を同時に評価する</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>トレードオフ</strong>: 区間を広げれば PICP は上がるが実用的でない。
+「<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>±</mo><mi mathvariant="normal">∞</mi></mrow><annotation encoding="application/x-tex">\pm\infty</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord">±</span><span class="mord">∞</span></span></span></span>」なら被覆率 100% だが情報がゼロである。
+<strong>狭くて、かつ当たる区間</strong>を作るのが目標である。</p>
+</blockquote>
+<!-- fig:ch12_quantile.png -->
+<p><img src="../%E5%9B%B3/ch12_quantile.png" alt="図 12.7">
+<em>図 12.7　予測区間。学習期間の残差の分位点から時刻ごとに幅を決めた 90% 区間で、実際に区間へ入った割合（PICP）は 84.2%、幅の指標 PINAW は 0.078。予備力はこの区間の上端で決める。</em></p>
+<!-- /fig -->
+
+<h3 id="s10">12.2.5 モデルの解釈</h3>
+<p>社会インフラでは「なぜその予測になったか」の説明が求められる。</p>
+<p><strong>(1) 特徴量重要度（Feature Importance）</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">種類</th>
+<th align="left">計算方法</th>
+<th align="left">注意点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">Gain</td>
+<td align="left">その特徴量で分割したときの損失減少量の合計</td>
+<td align="left">相関する特徴量で不安定</td>
+</tr>
+<tr>
+<td align="left">Split</td>
+<td align="left">分割に使われた回数</td>
+<td align="left">カーディナリティの高い変数に偏る</td>
+</tr>
+<tr>
+<td align="left"><strong>Permutation</strong></td>
+<td align="left">その特徴量をシャッフルしたときの性能低下</td>
+<td align="left"><strong>推奨</strong>。相関には注意</td>
+</tr>
+</tbody></table></div>
+<p><strong>(2) SHAP 値</strong></p>
+<p>協力ゲーム理論の Shapley 値に基づき、
+<strong>各特徴量が予測をどれだけ動かしたか</strong>を加法的に分解する。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mover accent="true"><mi>y</mi><mo>^</mo></mover><mo stretchy="false">(</mo><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo><mo>=</mo><msub><mi>ϕ</mi><mn>0</mn></msub><mo>+</mo><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>p</mi></munderover><msub><mi>ϕ</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">\hat{y}(\mathbf{x}) = \phi_0 + \sum_{j=1}^{p}\phi_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathbf">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:3.1123em;vertical-align:-1.4138em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.6985em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3471em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4138em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">\phi_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> は全体平均、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ϕ</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">\phi_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">ϕ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0572em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> は特徴量 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi></mrow><annotation encoding="application/x-tex">j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0572em;">j</span></span></span></span> の寄与。
+<strong>個別の予測についても説明できる</strong>のが強み。</p>
+<p>例: 「この日の需要予測が平均より 120 MW 高いのは、
+気温の寄与 +85 MW、平日である寄与 +40 MW、日射の寄与 −5 MW による」</p>
+<p><strong>(3) 部分依存プロット（PDP）</strong>: ある特徴量を変化させたときの予測値の平均的変化。
+第11回で見た<strong>需要-気温の V 字カーブ</strong>が、モデルによって再現されているか確認できる。</p>
+<!-- fig:ch12_importance.png -->
+<p><img src="../%E5%9B%B3/ch12_importance.png" alt="図 12.8">
+<em>図 12.8　Permutation Importance。特徴量をわざと並べ替えたときの RMSE の増加量で測る。不快指数 THI が最も効き、時刻の周期成分が続く。壊しても誤差が増えない特徴量は不要である。</em></p>
+<!-- /fig -->
+
+<h3 id="s11">12.2.6 電力系統への機械学習適用の注意点</h3>
+<p><strong>社会インフラであることに由来する固有の要求がある。</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">論点</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>説明責任</strong></td>
+<td align="left">需給計画の根拠を説明できないと運用判断できない。ブラックボックスは避ける</td>
+</tr>
+<tr>
+<td align="left"><strong>外挿の危険</strong></td>
+<td align="left">木モデルは<strong>学習範囲外を外挿できない</strong>（葉の値で頭打ち）。 猛暑日の記録更新時に大きく外す</td>
+</tr>
+<tr>
+<td align="left"><strong>分布シフト</strong></td>
+<td align="left">EV 普及、省エネ、コロナのような構造変化で過去の関係が崩れる</td>
+</tr>
+<tr>
+<td align="left"><strong>異常時の挙動</strong></td>
+<td align="left">台風・停電時のデータは異常値。学習に含めるか、どう扱うか</td>
+</tr>
+<tr>
+<td align="left"><strong>再現性</strong></td>
+<td align="left">乱数シード固定、モデルのバージョン管理</td>
+</tr>
+<tr>
+<td align="left"><strong>保守性</strong></td>
+<td align="left">定期的な再学習の仕組みと、性能劣化の監視</td>
+</tr>
+<tr>
+<td align="left"><strong>フォールバック</strong></td>
+<td align="left">モデルが異常な値を出したとき、統計モデルや前週同曜日に切り替える仕組み</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>外挿の問題は特に重要</strong>: 例えば「観測史上最高気温 36 °C」の日を予測する場合、
+学習データに 34 °C までしかなければ、木モデルは 34 °C 相当の予測しか出せない。
+<strong>線形モデルなら外挿できる</strong>ため、実務では
+<strong>木モデル＋線形モデルのハイブリッド</strong>が使われることがある。</p>
+</blockquote>
+<p><strong>推奨アーキテクチャ（実務的な構成）</strong>:</p>
+<pre><code>      ┌─ 統計モデル（重回帰）──┐
+入力 ─┼─ XGBoost ──────────────┼→ 加重平均 → 予測値
+      └─ LSTM ─────────────────┘        │
+                                        ├→ 妥当性チェック
+                                   （異常なら前週同曜日へフォールバック）
+</code></pre>
+<!-- fig:ch12_extrapolation.png -->
+<p><img src="../%E5%9B%B3/ch12_extrapolation.png" alt="図 12.9">
+<em>図 12.9　外挿の失敗。32 °C 以上を学習させずに 40 °C まで予測させると、線形回帰は傾きを保って伸びるのに対し、木は学習範囲の端で平らになる。40 °C での差は 326 MW に達する。</em></p>
+<!-- /fig -->
+
+<hr>
+<h2 id="s12">12.3 シミュレーション</h2>
+<h3 id="s13">12.3.1 データ準備と特徴量生成</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第12回 デモ1: 機械学習用の特徴量生成（リーク防止を徹底）&quot;&quot;&quot;
+import numpy as np
+import pandas as pd
+
+# 第11回 11.3.1 の make_okinawa_demand() を再利用
+df = make_okinawa_demand(periods=24*365*3)      # 3年分
+
+def build_features(df, target=&quot;demand&quot;):
+    &quot;&quot;&quot;予測時点（前日）で入手可能な情報のみで特徴量を作る&quot;&quot;&quot;
+    X = pd.DataFrame(index=df.index)
+    idx = df.index
+
+    # --- 気象（前日時点の予報値と仮定）---
+    X[&quot;temp&quot;]     = df.temp
+    X[&quot;humidity&quot;] = df.humidity
+    X[&quot;thi&quot;]      = df.thi
+    X[&quot;cdd&quot;]      = np.maximum(df.temp - 24, 0)
+    X[&quot;hdd&quot;]      = np.maximum(16 - df.temp, 0)
+    X[&quot;thi_c&quot;]    = np.maximum(df.thi - 70, 0)
+
+    # --- 気温の履歴（蓄熱効果）---
+    X[&quot;temp_ma24&quot;]  = df.temp.shift(24).rolling(24).mean()
+    X[&quot;temp_ma72&quot;]  = df.temp.shift(24).rolling(72).mean()
+    X[&quot;temp_ewm&quot;]   = df.temp.shift(24).ewm(alpha=0.25).mean()
+    X[&quot;temp_max24&quot;] = df.temp.shift(24).rolling(24).max()
+
+    # --- カレンダー ---
+    X[&quot;hour&quot;]  = idx.hour
+    X[&quot;dow&quot;]   = idx.dayofweek
+    X[&quot;month&quot;] = idx.month
+    X[&quot;is_weekend&quot;] = (idx.dayofweek &gt;= 5).astype(int)
+
+    # --- 周期エンコード（23時と0時が近いことを表現）---
+    for name, val, period in [(&quot;h&quot;, idx.hour.values, 24),
+                              (&quot;d&quot;, idx.dayofweek.values, 7),
+                              (&quot;y&quot;, idx.dayofyear.values, 365)]:
+        X[f&quot;sin_{name}&quot;] = np.sin(2*np.pi*val/period)
+        X[f&quot;cos_{name}&quot;] = np.cos(2*np.pi*val/period)
+
+    # --- 交互作用（冷房は昼の平日に集中）---
+    X[&quot;thi_x_hour&quot;]    = X[&quot;thi_c&quot;]*np.sin(2*np.pi*idx.hour.values/24)
+    X[&quot;thi_x_weekday&quot;] = X[&quot;thi_c&quot;]*(1 - X[&quot;is_weekend&quot;])
+
+    # --- ラグ（24時間以上前のみ。前日予測を想定）---
+    for lag in [24, 48, 168, 336]:
+        X[f&quot;lag_{lag}&quot;] = df[target].shift(lag)
+
+    # --- 移動統計（必ず shift(24) してから）---
+    base = df[target].shift(24)
+    X[&quot;ma_24&quot;]   = base.rolling(24).mean()
+    X[&quot;ma_168&quot;]  = base.rolling(168).mean()
+    X[&quot;std_168&quot;] = base.rolling(168).std()
+    X[&quot;max_24&quot;]  = base.rolling(24).max()
+    X[&quot;min_24&quot;]  = base.rolling(24).min()
+
+    # --- ランプ ---
+    X[&quot;ramp_24&quot;] = df[target].shift(24) - df[target].shift(25)
+    return X
+
+X = build_features(df)
+y = df[&quot;demand&quot;]
+mask = X.notna().all(axis=1)
+X, y = X[mask], y[mask]
+
+# 時系列分割（絶対にシャッフルしない）
+n = len(X)
+i_tr, i_va = int(n*0.6), int(n*0.8)
+X_tr, y_tr = X.iloc[:i_tr],      y.iloc[:i_tr]
+X_va, y_va = X.iloc[i_tr:i_va],  y.iloc[i_tr:i_va]
+X_te, y_te = X.iloc[i_va:],      y.iloc[i_va:]
+
+print(f&quot;特徴量数: {X.shape[1]}&quot;)
+print(f&quot;学習: {X_tr.index[0].date()} 〜 {X_tr.index[-1].date()}  ({len(X_tr):,})&quot;)
+print(f&quot;検証: {X_va.index[0].date()} 〜 {X_va.index[-1].date()}  ({len(X_va):,})&quot;)
+print(f&quot;評価: {X_te.index[0].date()} 〜 {X_te.index[-1].date()}  ({len(X_te):,})&quot;)
+</code></pre>
+<h3 id="s14">12.3.2 モデルの比較</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第12回 デモ2: 統計モデル vs RF vs XGBoost&quot;&quot;&quot;
+import numpy as np
+import time
+from sklearn.linear_model import Ridge
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+
+try:
+    from xgboost import XGBRegressor
+    HAS_XGB = True
+except ImportError:
+    from sklearn.ensemble import HistGradientBoostingRegressor
+    HAS_XGB = False
+    print(&quot;xgboost 未導入のため HistGradientBoosting で代替します&quot;)
+
+def report(name, y_true, y_pred, elapsed=None):
+    mae  = mean_absolute_error(y_true, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    mape = np.mean(np.abs((y_true-y_pred)/y_true))*100
+    t = f&quot;{elapsed:6.1f}s&quot; if elapsed else &quot;     -&quot;
+    print(f&quot;{name:&lt;28} MAE={mae:7.2f}  RMSE={rmse:7.2f}  MAPE={mape:6.3f}%  {t}&quot;)
+    return rmse
+
+print(f&quot;{&#39;モデル&#39;:&lt;28} {&#39;MAE&#39;:&gt;11} {&#39;RMSE&#39;:&gt;12} {&#39;MAPE&#39;:&gt;13}  {&#39;学習時間&#39;:&gt;7}&quot;)
+print(&quot;-&quot;*78)
+
+&lt;!-- fig:ch12_compare.png --&gt;
+![図 12.10](../図/ch12_compare.png)
+*図 12.10　同じデータ・同じ検証期間でのモデル比較。決定木 1 本（120.6 MW）は前週同曜日（99.2 MW）にも負けるが、ランダムフォレストで 66.9 MW、勾配ブースティングで 31.2 MW まで下がる。弱い学習器を束ねる効果が大きい。*
+&lt;!-- /fig --&gt;
+
+# ベースライン
+rmse_base = report(&quot;前週同曜日（ベースライン）&quot;, y_te, X_te[&quot;lag_168&quot;])
+
+# Ridge（第11回相当）
+t0 = time.time()
+ridge = Ridge(alpha=1.0).fit(X_tr, y_tr)
+report(&quot;Ridge 回帰&quot;, y_te, ridge.predict(X_te), time.time()-t0)
+
+# ランダムフォレスト
+t0 = time.time()
+rf = RandomForestRegressor(n_estimators=300, max_depth=18,
+                           min_samples_leaf=5, n_jobs=-1, random_state=42)
+rf.fit(X_tr, y_tr)
+report(&quot;ランダムフォレスト&quot;, y_te, rf.predict(X_te), time.time()-t0)
+
+# 勾配ブースティング
+t0 = time.time()
+if HAS_XGB:
+    gbm = XGBRegressor(n_estimators=2000, learning_rate=0.03, max_depth=6,
+                       subsample=0.8, colsample_bytree=0.8,
+                       reg_lambda=1.0, early_stopping_rounds=50,
+                       random_state=42, n_jobs=-1)
+    gbm.fit(X_tr, y_tr, eval_set=[(X_va, y_va)], verbose=False)
+    print(f&quot;   （early stopping: {gbm.best_iteration} 本で停止）&quot;)
+else:
+    gbm = HistGradientBoostingRegressor(max_iter=1000, learning_rate=0.05,
+                                        random_state=42).fit(X_tr, y_tr)
+rmse_gbm = report(&quot;XGBoost&quot;, y_te, gbm.predict(X_te), time.time()-t0)
+
+print(&quot;-&quot;*78)
+print(f&quot;Skill Score（XGBoost 対 ベースライン）: {1 - rmse_gbm/rmse_base:.4f}&quot;)
+</code></pre>
+<h3 id="s15">12.3.3 特徴量重要度と SHAP</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第12回 デモ3: モデルの解釈&quot;&quot;&quot;
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.inspection import permutation_importance
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+
+# --- Permutation Importance（推奨手法）---
+sub = slice(0, 3000)
+perm = permutation_importance(gbm, X_te[sub], y_te[sub],
+                              n_repeats=8, random_state=42, n_jobs=-1)
+imp = pd.Series(perm.importances_mean, index=X.columns).sort_values(ascending=False)
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
+imp.head(15).iloc[::-1].plot.barh(ax=axes[0], color=&quot;#457b9d&quot;)
+axes[0].set_xlabel(&quot;性能低下量（重要度）&quot;)
+axes[0].set_title(&quot;Permutation Importance 上位15&quot;)
+axes[0].grid(axis=&quot;x&quot;, alpha=0.3)
+
+# --- 部分依存プロット（需要-気温カーブの再現を確認）---
+temps = np.linspace(X_te.temp.min(), X_te.temp.max(), 40)
+base_row = X_te.median()
+preds = []
+for t in temps:
+    row = base_row.copy()
+    row[&quot;temp&quot;] = t
+    row[&quot;cdd&quot;]  = max(t-24, 0)
+    row[&quot;hdd&quot;]  = max(16-t, 0)
+    # THI は湿度を median で固定して再計算
+    thi = 0.81*t + 0.01*row[&quot;humidity&quot;]*(0.99*t - 14.3) + 46.3
+    row[&quot;thi&quot;] = thi
+    row[&quot;thi_c&quot;] = max(thi-70, 0)
+    preds.append(gbm.predict(row.values.reshape(1, -1))[0])
+
+axes[1].plot(temps, preds, lw=2.5, color=&quot;#e63946&quot;)
+axes[1].set_xlabel(&quot;気温 [°C]&quot;); axes[1].set_ylabel(&quot;予測需要 [MW]&quot;)
+axes[1].set_title(&quot;部分依存プロット — 需要-気温カーブ&quot;)
+axes[1].grid(alpha=0.3)
+plt.tight_layout()
+plt.savefig(&quot;../図/ch12_interpretation.png&quot;, dpi=150)
+
+print(&quot;=== 重要度 上位10 ===&quot;)
+print(imp.head(10).round(2))
+
+# --- SHAP（導入済みなら）---
+try:
+    import shap
+    explainer = shap.TreeExplainer(gbm)
+    sv = explainer.shap_values(X_te[:2000])
+    shap.summary_plot(sv, X_te[:2000], show=False, max_display=15)
+    plt.tight_layout(); plt.savefig(&quot;../図/ch12_shap.png&quot;, dpi=150); plt.close()
+
+    # 個別予測の説明
+    i = 100
+    contrib = pd.Series(sv[i], index=X.columns).sort_values(key=abs, ascending=False)
+    print(f&quot;\n=== {X_te.index[i]} の予測の内訳 ===&quot;)
+    print(f&quot;基準値（平均）      : {explainer.expected_value:8.1f} MW&quot;)
+    for name, v in contrib.head(6).items():
+        print(f&quot;  {name:&lt;16}: {v:+8.1f} MW&quot;)
+    print(f&quot;予測値              : {gbm.predict(X_te.iloc[[i]])[0]:8.1f} MW&quot;)
+    print(f&quot;実績値              : {y_te.iloc[i]:8.1f} MW&quot;)
+except ImportError:
+    print(&quot;\n（shap 未導入。pip install shap で個別予測の説明が可能）&quot;)
+</code></pre>
+<h3 id="s16">12.3.4 分位点回帰による予測区間</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第12回 デモ4: 確率予測と予備力の設計&quot;&quot;&quot;
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+
+QUANTILES = [0.05, 0.10, 0.50, 0.90, 0.95]
+models, preds = {}, {}
+
+for q in QUANTILES:
+    if HAS_XGB:
+        m = XGBRegressor(objective=&quot;reg:quantileerror&quot;, quantile_alpha=q,
+                         n_estimators=600, learning_rate=0.05, max_depth=6,
+                         random_state=42, n_jobs=-1)
+    else:
+        from sklearn.ensemble import GradientBoostingRegressor
+        m = GradientBoostingRegressor(loss=&quot;quantile&quot;, alpha=q,
+                                      n_estimators=400, learning_rate=0.05,
+                                      max_depth=5, random_state=42)
+    m.fit(X_tr, y_tr)
+    models[q] = m
+    preds[q] = m.predict(X_te)
+
+def pinball(y, yhat, tau):
+    d = y - yhat
+    return np.mean(np.maximum(tau*d, (tau-1)*d))
+
+print(&quot;=== 分位点予測の評価 ===&quot;)
+for q in QUANTILES:
+    below = np.mean(y_te.values &lt; preds[q])*100
+    print(f&quot;τ={q:.2f}: 実績が下回る割合 {below:5.1f}% （理論値 {q*100:.0f}%）  &quot;
+          f&quot;Pinball={pinball(y_te.values, preds[q], q):7.3f}&quot;)
+
+# 予測区間の評価
+for lo, hi, nominal in [(0.05, 0.95, 90), (0.10, 0.90, 80)]:
+    inside = np.mean((y_te.values &gt;= preds[lo]) &amp; (y_te.values &lt;= preds[hi]))*100
+    width  = np.mean(preds[hi] - preds[lo])
+    print(f&quot;\n{nominal}% 予測区間:&quot;)
+    print(f&quot;  PICP（被覆率）= {inside:.1f}%  （名目 {nominal}%）&quot;)
+    print(f&quot;  平均幅        = {width:.1f} MW&quot;)
+    print(f&quot;  PINAW         = {width/y_te.mean()*100:.2f}%&quot;)
+
+# 可視化
+n_show = 24*7
+t = y_te.index[:n_show]
+fig, ax = plt.subplots(figsize=(13, 5.5))
+ax.fill_between(t, preds[0.05][:n_show], preds[0.95][:n_show],
+                alpha=0.20, color=&quot;steelblue&quot;, label=&quot;90% 予測区間&quot;)
+ax.fill_between(t, preds[0.10][:n_show], preds[0.90][:n_show],
+                alpha=0.35, color=&quot;steelblue&quot;, label=&quot;80% 予測区間&quot;)
+ax.plot(t, preds[0.50][:n_show], &quot;b-&quot;, lw=1.8, label=&quot;中央値予測&quot;)
+ax.plot(t, y_te.values[:n_show], &quot;k.&quot;, ms=3.5, label=&quot;実績&quot;)
+ax.set_xlabel(&quot;日時&quot;); ax.set_ylabel(&quot;需要 [MW]&quot;)
+ax.set_title(&quot;分位点回帰による確率予測（1週間）&quot;)
+ax.legend(); ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.savefig(&quot;../図/ch12_quantile.png&quot;, dpi=150)
+
+# --- 予備力設計への応用（第8回・第10回との接続）---
+print(&quot;\n=== 予備力の設計 ===&quot;)
+point_err = y_te.values - preds[0.50]
+print(f&quot;点予測の RMSE          : {np.sqrt(np.mean(point_err**2)):.1f} MW&quot;)
+print(f&quot;固定予備力（3σ）       : {3*np.std(point_err):.1f} MW（毎日同じ）&quot;)
+dynamic = preds[0.50] - preds[0.05]
+print(f&quot;動的予備力（5%分位点）  : 平均 {dynamic.mean():.1f} MW, &quot;
+      f&quot;最小 {dynamic.min():.1f}, 最大 {dynamic.max():.1f} MW&quot;)
+print(f&quot;→ 不確実性の小さい日は予備力を {3*np.std(point_err)-dynamic.min():.0f} MW 削減できる&quot;)
+</code></pre>
+<h3 id="s17">12.3.5 LSTM による多段予測</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第12回 デモ5: LSTM で24時間先まで予測する&quot;&quot;&quot;
+import numpy as np
+import torch
+import torch.nn as nn
+from sklearn.preprocessing import StandardScaler
+
+torch.manual_seed(42)
+DEVICE = &quot;cuda&quot; if torch.cuda.is_available() else &quot;cpu&quot;
+print(f&quot;device = {DEVICE}&quot;)
+
+LOOKBACK, HORIZON = 168, 24        # 過去1週間 → 24時間先
+
+FEATS = [&quot;temp&quot;, &quot;thi&quot;, &quot;sin_h&quot;, &quot;cos_h&quot;, &quot;sin_d&quot;, &quot;cos_d&quot;,
+         &quot;sin_y&quot;, &quot;cos_y&quot;, &quot;is_weekend&quot;]
+
+def make_sequences(X, y, lookback, horizon):
+    Xv, yv = X[FEATS].values, y.values
+    xs, ys = [], []
+    for i in range(lookback, len(Xv) - horizon):
+        xs.append(np.c_[Xv[i-lookback:i], yv[i-lookback:i, None]])
+        ys.append(yv[i:i+horizon])
+    return np.array(xs, dtype=np.float32), np.array(ys, dtype=np.float32)
+
+# 正規化は学習データのみで fit（リーク防止）
+sx, sy = StandardScaler(), StandardScaler()
+sx.fit(X_tr[FEATS]); sy.fit(y_tr.values.reshape(-1, 1))
+
+def scale(Xp, yp):
+    Xs = Xp.copy()
+    Xs[FEATS] = sx.transform(Xp[FEATS])
+    ys = pd.Series(sy.transform(yp.values.reshape(-1,1)).ravel(), index=yp.index)
+    return Xs, ys
+
+Xtr_s, ytr_s = scale(X_tr, y_tr)
+Xte_s, yte_s = scale(X_te, y_te)
+Xa, ya = make_sequences(Xtr_s, ytr_s, LOOKBACK, HORIZON)
+Xb, yb = make_sequences(Xte_s, yte_s, LOOKBACK, HORIZON)
+print(f&quot;学習系列: {Xa.shape}, 評価系列: {Xb.shape}&quot;)
+
+class LSTMForecaster(nn.Module):
+    def __init__(self, n_feat, hidden=96, layers=2, horizon=24):
+        super().__init__()
+        self.lstm = nn.LSTM(n_feat, hidden, layers,
+                            batch_first=True, dropout=0.15)
+        self.head = nn.Sequential(nn.Linear(hidden, 64), nn.ReLU(),
+                                  nn.Linear(64, horizon))
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        return self.head(out[:, -1, :])      # 最終時刻の隠れ状態を使う
+
+model = LSTMForecaster(Xa.shape[2], horizon=HORIZON).to(DEVICE)
+opt = torch.optim.Adam(model.parameters(), lr=1e-3)
+sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, patience=3, factor=0.5)
+lossf = nn.MSELoss()
+
+ds = torch.utils.data.TensorDataset(torch.tensor(Xa), torch.tensor(ya))
+dl = torch.utils.data.DataLoader(ds, batch_size=128, shuffle=True)
+
+for ep in range(25):
+    model.train(); tot = 0.0
+    for xb_, yb_ in dl:
+        xb_, yb_ = xb_.to(DEVICE), yb_.to(DEVICE)
+        opt.zero_grad()
+        loss = lossf(model(xb_), yb_)
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), 1.0)   # 勾配クリップ
+        opt.step()
+        tot += loss.item()*len(xb_)
+    sched.step(tot/len(ds))
+    if (ep+1) % 5 == 0:
+        print(f&quot;  epoch {ep+1:3d}  loss={tot/len(ds):.5f}&quot;)
+
+model.eval()
+with torch.no_grad():
+    pred_s = model(torch.tensor(Xb).to(DEVICE)).cpu().numpy()
+pred = sy.inverse_transform(pred_s)
+true = sy.inverse_transform(yb)
+
+print(&quot;\n=== 予測ホライズン別の精度 ===&quot;)
+print(f&quot;{&#39;h先&#39;:&gt;5} {&#39;MAE[MW]&#39;:&gt;10} {&#39;RMSE[MW]&#39;:&gt;11}&quot;)
+for h in [0, 5, 11, 17, 23]:
+    mae  = np.mean(np.abs(true[:,h]-pred[:,h]))
+    rmse = np.sqrt(np.mean((true[:,h]-pred[:,h])**2))
+    print(f&quot;{h+1:5d} {mae:10.2f} {rmse:11.2f}&quot;)
+print(f&quot;\n全体 RMSE: {np.sqrt(np.mean((true-pred)**2)):.2f} MW&quot;)
+print(&quot;→ 先のホライズンほど精度が落ちるのが正常な挙動&quot;)
+</code></pre>
+<hr>
+<h2 id="s18">12.4 例題</h2>
+<h3 id="s19">例題 12-1（データリークの判定）</h3>
+<p>需要予測モデルの特徴量として次を検討している。
+前日 12 時に翌日 0〜23 時の需要を予測する設定である。
+それぞれリークに当たるか判定せよ。</p>
+<ol>
+<li>予測対象日の実測平均気温</li>
+<li>予測対象日の予報平均気温（前日 11 時発表）</li>
+<li>予測対象日の前日の実測最高気温</li>
+<li>全期間の需要の平均値で標準化した需要</li>
+<li>予測対象時刻の 1 時間前の実測需要</li>
+</ol>
+<p><strong>解答</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="center">#</th>
+<th align="left">判定</th>
+<th align="left">理由</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1</td>
+<td align="left"><strong>リーク</strong></td>
+<td align="left">その日が終わらないと分からない</td>
+</tr>
+<tr>
+<td align="center">2</td>
+<td align="left"><strong>問題なし</strong></td>
+<td align="left">前日 11 時に入手可能</td>
+</tr>
+<tr>
+<td align="center">3</td>
+<td align="left"><strong>問題なし</strong></td>
+<td align="left">前日 12 時時点では前日の気温は既知（ただし当日 12〜24 時は未確定なので厳密には注意）</td>
+</tr>
+<tr>
+<td align="center">4</td>
+<td align="left"><strong>リーク</strong></td>
+<td align="left">全期間＝未来を含む統計量。学習データのみで計算すべき</td>
+</tr>
+<tr>
+<td align="center">5</td>
+<td align="left"><strong>リーク</strong></td>
+<td align="left">前日 12 時には翌日の 1 時間前の値は存在しない</td>
+</tr>
+</tbody></table></div>
+<p><strong>補足</strong>: 5 は「1 時間先予測」という別の設定なら正当な特徴量になる。
+<strong>リークかどうかは予測設定（いつ何を予測するか）で決まる</strong>。
+設定を明確に定義することが先である。</p>
+<h3 id="s20">例題 12-2（分位点回帰と予備力）</h3>
+<p>需要予測で <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi><mo>=</mo><mn>0.5</mn></mrow><annotation encoding="application/x-tex">\tau=0.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.5</span></span></span></span>（中央値）と <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi><mo>=</mo><mn>0.05</mn></mrow><annotation encoding="application/x-tex">\tau=0.05</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.05</span></span></span></span> の分位点予測を行った。
+ある日の予測は中央値 850 MW、5% 分位点 790 MW であった。</p>
+<ol>
+<li>この情報から何が言えるか。</li>
+<li>供給力不足を 5% 以下の確率に抑えるには、どれだけの供給力を準備すべきか。</li>
+<li>別の日に中央値 850 MW、5% 分位点 830 MW であった。予備力はどう変えるべきか。</li>
+</ol>
+<p><strong>解答</strong></p>
+<p><strong>(1)</strong> 需要が 790 MW を下回る確率が 5%、
+言い換えれば<strong>需要が 790 MW 以上になる確率が 95%</strong> である。</p>
+<p><strong>(2)</strong> 注意すべき点がある。供給力不足は<strong>需要が予測より高い</strong>ときに起きる。
+したがって使うべきは上側の分位点（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi><mo>=</mo><mn>0.95</mn></mrow><annotation encoding="application/x-tex">\tau = 0.95</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.95</span></span></span></span>）である。</p>
+<p>下側の 5% 分位点から言えるのは「需要が 790 MW を下回るのは 5%」であり、
+<strong>上振れのリスクはこの情報からは分からない</strong>。</p>
+<p>正しくは <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi><mo>=</mo><mn>0.95</mn></mrow><annotation encoding="application/x-tex">\tau = 0.95</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.95</span></span></span></span> の分位点予測 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mn>0.95</mn></msub></mrow><annotation encoding="application/x-tex">\hat{y}_{0.95}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">0.95</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> を求め、
+それ以上の供給力を準備する。誤差分布が対称なら
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mn>0.95</mn></msub><mo>≈</mo><mn>850</mn><mo>+</mo><mo stretchy="false">(</mo><mn>850</mn><mo>−</mo><mn>790</mn><mo stretchy="false">)</mo><mo>=</mo><mn>910</mn></mrow><annotation encoding="application/x-tex">\hat{y}_{0.95} \approx 850 + (850-790) = 910</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">0.95</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">850</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">850</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">790</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">910</span></span></span></span> MW と推定できるが、
+<strong>需要予測の誤差分布は一般に非対称</strong>（猛暑日に上振れしやすい）なので、
+上側の分位点を直接推定すべきである。</p>
+<p><strong>(3)</strong> 中央値が同じでも区間が狭い（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>850</mn><mo>−</mo><mn>830</mn><mo>=</mo><mn>20</mn></mrow><annotation encoding="application/x-tex">850-830 = 20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">850</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">830</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span> MW）ということは、
+<strong>その日は不確実性が小さい</strong>ことを意味する。したがって<strong>予備力を減らせる</strong>。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mtext>予備力を日ごとに最適化できるのが確率予測の価値</mtext></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\text{予備力を日ごとに最適化できるのが確率予測の価値}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord text"><span class="mord cjk_fallback">予備力を日ごとに最適化できるのが確率予測の価値</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>固定予備力なら常に最悪日に合わせる必要があるが、
+確率予測を使えば不確実性の小さい日は予備力を薄くでき、
+待機火力の燃料費を削減できる（第10回 例題 10-3）。</p>
+<h3 id="s21">例題 12-3（外挿の危険）</h3>
+<p>学習データの最高気温が 34 °C であるモデルに、37 °C を入力した。</p>
+<ol>
+<li>XGBoost（木モデル）はどのような予測を出すか。</li>
+<li>線形回帰はどうか。</li>
+<li>実務ではどう対処すべきか。</li>
+</ol>
+<p><strong>解答</strong></p>
+<p><strong>(1)</strong> 木モデルは<strong>分割のしきい値で予測が決まる</strong>ため、
+34 °C 以上はすべて同じ葉に落ちる。したがって
+<strong>34 °C 相当の予測値を出し、それ以上は増えない</strong>。
+猛暑による需要増を捉えられず、<strong>大幅な過小予測</strong>になる。</p>
+<p><strong>(2)</strong> 線形回帰は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo>=</mo><msub><mi>β</mi><mn>0</mn></msub><mo>+</mo><msub><mi>β</mi><mi>C</mi></msub><mtext>CDD</mtext></mrow><annotation encoding="application/x-tex">y = \beta_0 + \beta_C\text{CDD}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0528em;">β</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0528em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0528em;">β</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0528em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0715em;">C</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord text"><span class="mord">CDD</span></span></span></span></span> の形なので、
+CDD = 37−24 = 13 として<strong>外挿した予測を出す</strong>。
+関係が本当に線形なら妥当だが、
+実際には気温が極端に高いと冷房が飽和する（全部の空調が既に稼働）ため、
+<strong>過大予測</strong>になる可能性もある。</p>
+<p><strong>(3)</strong> 実務的な対処:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">対策</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>ハイブリッド</strong></td>
+<td align="left">学習範囲内は木モデル、範囲外は線形モデルに切り替える</td>
+</tr>
+<tr>
+<td align="left"><strong>物理的な上限を設ける</strong></td>
+<td align="left">契約電力・設備容量から需要の上限を設定</td>
+</tr>
+<tr>
+<td align="left"><strong>入力の範囲監視</strong></td>
+<td align="left">学習範囲外の入力を検知して警告を出す</td>
+</tr>
+<tr>
+<td align="left"><strong>データ拡張</strong></td>
+<td align="left">他地域の猛暑日データを学習に加える</td>
+</tr>
+<tr>
+<td align="left"><strong>人間の判断</strong></td>
+<td align="left">記録更新が予想される日は予測担当者が補正する</td>
+</tr>
+</tbody></table></div>
+<p><strong>最も重要なのは「モデルが外挿している」ことを検知する仕組み</strong>である。
+黙って外れるのが最も危険である。</p>
+<hr>
+<h2 id="s22">12.5 演習問題</h2>
+<h3 id="s23">基礎問題</h3>
+<p><strong>問 12-1</strong> ランダムフォレストと勾配ブースティングの違いを、
+(a) 木の作り方（並列 / 逐次）、(b) 減らそうとしているもの（分散 / バイアス）
+の観点から説明せよ。</p>
+<p><strong>問 12-2</strong> LSTM の 3 つのゲート（忘却・入力・出力）の役割を述べ、
+なぜ勾配消失を防げるのかをセル状態の更新式から説明せよ。</p>
+<p><strong>問 12-3</strong> 次の特徴量がデータリークに当たるか判定せよ。
+設定は「毎日 10 時に翌日 24 時間分を予測」とする。
+(a) 翌日の予報最高気温　(b) 翌日の実測日射量
+(c) 当日 9 時までの需要実績　(d) 当日 15 時の需要実績
+(e) 過去 3 年の同月同日の需要平均</p>
+<p><strong>問 12-4</strong> PICP と PINAW の定義を述べ、
+「PICP が高ければ良いモデル」とは言えない理由を説明せよ。</p>
+<h3 id="s24">応用問題</h3>
+<p><strong>問 12-5</strong> 12.3 節のコードを実行し、以下を実施せよ。</p>
+<p>(a) Ridge・ランダムフォレスト・XGBoost の精度を比較し、表にまとめよ。
+(b) 前週同曜日ベースラインに対する Skill Score をそれぞれ求めよ。
+(c) Permutation Importance の上位 10 特徴量を挙げ、物理的な解釈を与えよ。
+(d) 部分依存プロットで需要-気温カーブを描き、
+   第11回で学んだ V 字（沖縄では片側）の形が再現されているか確認せよ。
+(e) 特徴量からラグ項（lag_24, lag_168 等）をすべて除いて再学習し、
+   精度がどれだけ落ちるか評価せよ。この結果から何が言えるか。</p>
+<p><strong>問 12-6</strong> 沖縄本島系統の<strong>正味需要</strong>を予測するモデルを構築せよ。</p>
+<p>(a) 第10回のモデルで太陽光 300 MW の出力を推定し、
+   正味需要 = 需要 − 太陽光出力 を計算せよ。
+(b) 需要そのものを予測する場合と、正味需要を直接予測する場合を比較せよ。
+   どちらが精度が良いか。理由を考察せよ。
+(c) 「需要を予測し、太陽光を予測し、引き算する」方式と
+   「正味需要を直接予測する」方式の長所・短所を論じよ。
+(d) 分位点回帰で正味需要の 90% 予測区間を求めよ。
+(e) (d) の結果から、第8回で学んだ LFC・ELD に必要な調整力を見積もれ。</p>
+<p><strong>問 12-7</strong> モデルの実運用を想定した検討を行え。</p>
+<p>(a) 直近 1 年を評価期間とし、<strong>月ごとに</strong>精度を評価せよ。
+   季節による精度の違いがあるか確認せよ。
+(b) 学習データを 1 年分・2 年分・3 年分と変えたときの精度を比較せよ。
+   データを増やせば必ず良くなるか。
+(c) モデルの再学習頻度（毎月 / 四半期 / 年 1 回）を検討し、
+   性能劣化の観点から推奨案を示せ。
+(d) 予測が異常値を出したときのフォールバック機構を設計せよ。
+   どのような条件で「異常」と判定し、何に切り替えるか。
+(e) 電力会社の運用担当者に説明することを想定し、
+   このモデルの予測根拠を説明する資料の構成を提案せよ。</p>
+<hr>
+<h2 id="s25">12.6 まとめ</h2>
+<h3 id="s26">キーポイント</h3>
+<ul>
+<li>**決定木 → ランダムフォレスト（分散を減らす、並列）→ 勾配ブースティング
+（バイアスを減らす、逐次）**という発展。
+XGBoost は 2 次近似・正則化・欠損値処理を加えたもの。</li>
+<li><strong>表形式データでは木モデルが深層学習より強いことが多い</strong>。
+データが中規模で特徴量に意味があるほど、その傾向が強い。</li>
+<li><strong>モデルより特徴量が効く</strong>。ラグ・移動統計・気温履歴（蓄熱）・交互作用・
+周期エンコードを設計する。</li>
+<li><strong>データリークが最大の落とし穴</strong>。予測時点で入手できない情報を使わない。
+正規化の統計量も<strong>学習データのみ</strong>で計算する。
+リークがあると検証は完璧、運用は全滅になる。</li>
+<li><strong>LSTM</strong> のセル状態は加算更新 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>t</mi></msub><mo>=</mo><msub><mi>f</mi><mi>t</mi></msub><mo>⊙</mo><msub><mi>c</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo>+</mo><msub><mi>i</mi><mi>t</mi></msub><mo>⊙</mo><msub><mover accent="true"><mi>c</mi><mo>~</mo></mover><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">c_t = f_t\odot c_{t-1}+i_t\odot\tilde{c}_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊙</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7917em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8095em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">i</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊙</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8179em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6679em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">c</span></span><span style="top:-3.35em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">~</span></span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> のため
+勾配が流れやすく、長期依存を学習できる。</li>
+<li><strong>点予測では不十分</strong>。分位点回帰（Pinball loss）で予測区間を出し、
+<strong>PICP（当たる率）と PINAW（幅）の両方</strong>で評価する。
+確率予測により<strong>予備力を日ごとに最適化</strong>でき、直接コスト削減になる。</li>
+<li><strong>解釈</strong>は Permutation Importance と SHAP。SHAP は個別予測も説明できる。</li>
+<li><strong>社会インフラ固有の注意点</strong>: 説明責任、<strong>木モデルの外挿不能</strong>（記録更新時に外す）、
+分布シフト、フォールバック機構。
+実務では<strong>統計モデル＋機械学習のハイブリッド＋妥当性チェック</strong>が現実的。</li>
+</ul>
+<h3 id="s27">次回への橋渡し</h3>
+<p>第10〜12回で「予測」を扱った。予測は<strong>系統の状態を事前に知る</strong>技術である。</p>
+<p>第13回からは AI を<strong>系統の解析と制御そのもの</strong>に適用する。
+第4〜6回で学んだ潮流計算、第7回の安定度計算を、
+グラフニューラルネットワーク（GNN）や強化学習で高速化・自動化する試みを見る。</p>
+<p>系統は「母線とブランチからなるグラフ」（第2回・第4回）だった。
+<strong>この構造をそのままニューラルネットに埋め込む</strong>のが GNN の発想である。</p>
+
+    <div class="pn"><a class="pn-prev" href="ch11.html">← 第11回 電力需要予測</a><a class="pn-next" href="ch13.html">第13回 AI × 系統解析 →</a></div>
+  </main>
+  <aside class="side"><nav class="toc" aria-label="目次"><div class="toc-h">この回の目次</div><a class="lv2" href="#s1">まず直感で（3 分でつかむ）</a><a class="lv2" href="#s2">12.1 導入</a><a class="lv3" href="#s3">学習目標</a><a class="lv3" href="#s4">前提知識（第11回との接続）</a><a class="lv2" href="#s5">12.2 理論</a><a class="lv3" href="#s6">12.2.1 決定木からアンサンブルへ</a><a class="lv3" href="#s7">12.2.2 特徴量エンジニアリング — ここが精度を決める</a><a class="lv3" href="#s8">12.2.3 LSTM — 長期依存を扱う</a><a class="lv3" href="#s9">12.2.4 予測区間の推定 — 点予測では足りない</a><a class="lv3" href="#s10">12.2.5 モデルの解釈</a><a class="lv3" href="#s11">12.2.6 電力系統への機械学習適用の注意点</a><a class="lv2" href="#s12">12.3 シミュレーション</a><a class="lv3" href="#s13">12.3.1 データ準備と特徴量生成</a><a class="lv3" href="#s14">12.3.2 モデルの比較</a><a class="lv3" href="#s15">12.3.3 特徴量重要度と SHAP</a><a class="lv3" href="#s16">12.3.4 分位点回帰による予測区間</a><a class="lv3" href="#s17">12.3.5 LSTM による多段予測</a><a class="lv2" href="#s18">12.4 例題</a><a class="lv3" href="#s19">例題 12-1（データリークの判定）</a><a class="lv3" href="#s20">例題 12-2（分位点回帰と予備力）</a><a class="lv3" href="#s21">例題 12-3（外挿の危険）</a><a class="lv2" href="#s22">12.5 演習問題</a><a class="lv3" href="#s23">基礎問題</a><a class="lv3" href="#s24">応用問題</a><a class="lv2" href="#s25">12.6 まとめ</a><a class="lv3" href="#s26">キーポイント</a><a class="lv3" href="#s27">次回への橋渡し</a></nav></aside>
+</div>
+<footer class="bottom">教科書：加藤・田岡『電力システム工学の基礎』 ／ 電力エネルギーシステム解析の基礎と応用 ／ 数式描画：KaTeX（同梱・MIT）</footer>
+<script>
+// 目次の現在位置ハイライト（外部依存なし・file:// で動く）
+(function(){
+  var links=[].slice.call(document.querySelectorAll('.toc a')); if(!links.length) return;
+  var heads=links.map(function(a){return document.getElementById(a.getAttribute('href').slice(1));});
+  function upd(){ var y=window.scrollY+120, i=0; for(var k=0;k<heads.length;k++){ if(heads[k]&&heads[k].offsetTop<=y) i=k; }
+    links.forEach(function(a,k){ a.classList.toggle('on',k===i); }); }
+  window.addEventListener('scroll',upd,{passive:true}); upd();
+})();
+</script>
+</body>
+</html>

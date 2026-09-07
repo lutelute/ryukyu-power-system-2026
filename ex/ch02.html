@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第2回 演習 — 電力システムの構成と送電損失</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第2回: 線電流・送電損失・電圧階級・変圧器・供給予備率。教科書（加藤・田岡 第2章）の記号に合わせる。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+const SQ3 = Math.sqrt(3);
+
+EX.page({
+  ch: 2,
+  intro: '「なぜ高電圧で送るのか」を数字で確かめます。線電流 I = P/(√3 V cos φ) と損失 3I²R の 2 本の式だけで、電圧階級・変圧器・予備率の問題まで解けます。',
+  problems: [
+    {
+      id: 'current-loss', title: '線電流と送電損失', tags: ['2.2', '損失の式'],
+      gen(rng) {
+        const P = pick(rng, [50, 100, 150, 200]);
+        const V = pick(rng, [66, 154, 275]);
+        const pf = pick(rng, [0.85, 0.9, 0.95]);
+        const r = pick(rng, [0.05, 0.08, 0.1]);
+        const L = pick(rng, [50, 100, 150]);
+        const R = r * L;
+        const I = P * 1e6 / (SQ3 * V * 1e3 * pf);
+        const loss = 3 * I * I * R / 1e6;
+        const pct = loss / P * 100;
+        return {
+          given: [['送電電力 P', P + ' MW'], ['線間電圧 V', V + ' kV'], ['力率 cos φ', String(pf)], ['線路抵抗', r + ' Ω/km × ' + L + ' km = ' + fmt(R) + ' Ω']],
+          q: '(a) 線電流 <b>I</b> を求めよ。<br>(b) 三相の送電損失 <b>P<sub>loss</sub></b> を MW で求めよ。<br>(c) 損失率 <b>P<sub>loss</sub>/P</b> を % で求めよ。',
+          answers: [
+            { key: 'I', label: '(a) I', unit: 'A', value: I },
+            { key: 'loss', label: '(b) P_loss', unit: 'MW', value: loss },
+            { key: 'pct', label: '(c) 損失率', unit: '%', value: pct },
+          ],
+          steps: [
+            '三相電力 P = √3 V I cos φ を I について解く: ' + eq('I = P / (√3 V cos φ) = ' + P + '×10⁶ / (1.732 × ' + V + '×10³ × ' + pf + ') = ' + fmt(I) + ' A') + '。',
+            '3 相分の抵抗損: ' + eq('P<sub>loss</sub> = 3 I² R = 3 × ' + fmt(I) + '² × ' + fmt(R) + ' = ' + fmt(loss) + ' MW') + '。',
+            '損失率: ' + eq(fmt(loss) + ' / ' + P + ' = ' + fmt(pct) + ' %') + '。日本全体の送配電損失は約 4〜5%。',
+          ],
+          insight: '損失は I² に比例し、I は 1/V に比例する。だから同じ P を運ぶなら電圧 2 倍で損失 1/4。',
+        };
+      },
+    },
+    {
+      id: 'voltage-compare', title: '電圧階級を上げると損失はどれだけ減るか', tags: ['2.2', 'なぜ高電圧か'],
+      gen(rng) {
+        const P = pick(rng, [100, 200, 300]);
+        const V1 = pick(rng, [66, 77, 110]);
+        const V2 = pick(rng, [275, 500]);
+        const pf = pick(rng, [0.9, 0.95]);
+        const R = pick(rng, [5, 8, 10, 15]);
+        const loss = V => 3 * Math.pow(P * 1e6 / (SQ3 * V * 1e3 * pf), 2) * R / 1e6;
+        const l1 = loss(V1), l2 = loss(V2);
+        const ratio = l1 / l2;
+        return {
+          given: [['送電電力 P', P + ' MW'], ['力率', String(pf)], ['線路抵抗 R', R + ' Ω'], ['電圧階級', V1 + ' kV と ' + V2 + ' kV']],
+          q: '同じ P・R・力率で電圧階級だけ変える。<br>(a) ' + V1 + ' kV のときの損失 <b>P<sub>loss,1</sub></b><br>(b) ' + V2 + ' kV のときの損失 <b>P<sub>loss,2</sub></b><br>(c) 損失の比 <b>P<sub>loss,1</sub> / P<sub>loss,2</sub></b>',
+          answers: [
+            { key: 'l1', label: '(a) P_loss,1', unit: 'MW', value: l1 },
+            { key: 'l2', label: '(b) P_loss,2', unit: 'MW', value: l2 },
+            { key: 'ratio', label: '(c) 比', unit: '倍', value: ratio },
+          ],
+          steps: [
+            '損失の式を V で書く: ' + eq('P<sub>loss</sub> = R P² / (V² cos²φ)') + '。V 以外は共通。',
+            eq('P<sub>loss,1</sub> = ' + fmt(l1) + ' MW,  P<sub>loss,2</sub> = ' + fmt(l2) + ' MW') + '。',
+            '比は電圧比の 2 乗: ' + eq('(' + V2 + '/' + V1 + ')² = ' + fmt(Math.pow(V2 / V1, 2)) + ' ≈ ' + fmt(ratio)) + '。',
+          ],
+          insight: '66 kV で 100 MW を 100 km 送ると損失が 2 割を超える。500 kV なら 1% 未満。送電網が階層になっている理由。',
+        };
+      },
+    },
+    {
+      id: 'transformer', title: '変圧器の巻数比と電流', tags: ['2.3', '変電'],
+      gen(rng) {
+        const V1 = pick(rng, [275, 154, 500]);
+        const V2 = pick(rng, [66, 77, 154]).valueOf();
+        const V2c = V2 >= V1 ? 66 : V2;
+        const S = pick(rng, [100, 200, 300, 500]);
+        const a = V1 / V2c;
+        const I1 = S * 1e6 / (SQ3 * V1 * 1e3);
+        const I2 = S * 1e6 / (SQ3 * V2c * 1e3);
+        return {
+          given: [['一次側（高圧）線間電圧', V1 + ' kV'], ['二次側（低圧）線間電圧', V2c + ' kV'], ['通過電力 S', S + ' MVA']],
+          q: '(a) 巻数比 <b>a = V<sub>1</sub>/V<sub>2</sub></b><br>(b) 一次側の線電流 <b>I<sub>1</sub></b><br>(c) 二次側の線電流 <b>I<sub>2</sub></b>',
+          answers: [
+            { key: 'a', label: '(a) 巻数比 a', unit: '', value: a },
+            { key: 'I1', label: '(b) I_1', unit: 'A', value: I1 },
+            { key: 'I2', label: '(c) I_2', unit: 'A', value: I2 },
+          ],
+          steps: [
+            eq('a = ' + V1 + ' / ' + V2c + ' = ' + fmt(a)) + '。',
+            '電力は保存されるので ' + eq('I<sub>1</sub> = S / (√3 V<sub>1</sub>) = ' + fmt(I1) + ' A') + '。',
+            eq('I<sub>2</sub> = S / (√3 V<sub>2</sub>) = ' + fmt(I2) + ' A = a × I<sub>1</sub>') + '。電圧を下げた分だけ電流が増える。',
+          ],
+          insight: '変圧器は電圧を自在に変えられるから、高電圧で運んで低電圧で使える。交流が主流になった理由そのもの。',
+        };
+      },
+    },
+    {
+      id: 'reserve', title: '供給予備率と N-1', tags: ['2.5', '信頼度'],
+      gen(rng) {
+        const D = pick(rng, [1200, 1500, 1800, 2000]);
+        const margin = pick(rng, [8, 10, 12, 15]);
+        const S = Math.round(D * (1 + margin / 100));
+        const Gmax = pick(rng, [150, 200, 250, 300]);
+        const res1 = (S - D) / D * 100;
+        const res2 = (S - Gmax - D) / D * 100;
+        return {
+          given: [['最大需要 D', D + ' MW'], ['供給力 S（全機運転）', S + ' MW'], ['最大の発電機 G<sub>max</sub>', Gmax + ' MW']],
+          q: '(a) 供給予備率 <b>(S − D)/D</b> を % で求めよ。<br>(b) 最大の発電機が停止（N-1）したときの予備率を求めよ（負なら供給不足）。',
+          answers: [
+            { key: 'r1', label: '(a) 予備率', unit: '%', value: res1, abs: 0.1 },
+            { key: 'r2', label: '(b) N-1 後の予備率', unit: '%', value: res2, abs: 0.1 },
+          ],
+          steps: [
+            eq('(S − D)/D = (' + S + ' − ' + D + ') / ' + D + ' = ' + fmt(res1) + ' %') + '。',
+            '最大機が抜けると供給力は ' + (S - Gmax) + ' MW: ' + eq('(' + (S - Gmax) + ' − ' + D + ') / ' + D + ' = ' + fmt(res2) + ' %') + '。',
+            (res2 < 0 ? '負なので、最大機 1 台の停止で需要を賄えない。沖縄のような小系統では 1 台の比率が大きく、この条件が厳しい。' : '正なので N-1 でも供給できる。ただし周波数の落ち込み（第8回）は別に評価する。'),
+          ],
+          insight: '「1 台落ちても足りるか」（N-1）は系統計画の最低条件。系統が小さいほど 1 台の重みが大きい。',
+        };
+      },
+    },
+    {
+      id: 'required-voltage', title: '損失率を目標以下にする電圧', tags: ['2.2', '逆算'],
+      gen(rng) {
+        const P = pick(rng, [100, 200, 400, 600]);
+        const R = pick(rng, [5, 10, 20]);
+        const pf = pick(rng, [0.9, 0.95]);
+        const target = pick(rng, [1, 2, 3, 5]);
+        const V = Math.sqrt(R * P * 1e6 / (target / 100 * pf * pf)) / 1e3;
+        const stdV = [66, 77, 110, 154, 187, 220, 275, 500].find(v => v >= V) || 500;
+        return {
+          given: [['送電電力 P', P + ' MW'], ['線路抵抗 R', R + ' Ω'], ['力率', String(pf)], ['損失率の目標', target + ' % 以下']],
+          q: '損失率 P<sub>loss</sub>/P を目標以下にするために必要な<b>最低の線間電圧 V</b> を kV で求めよ。（参考：その上で日本の標準電圧階級 ' + stdV + ' kV を選ぶ）',
+          answers: [
+            { key: 'V', label: '必要な V', unit: 'kV', value: V },
+          ],
+          steps: [
+            '損失率: ' + eq('P<sub>loss</sub>/P = R P / (V² cos²φ)') + '。これが目標 r 以下になる V を解く。',
+            eq('V = √(R P / (r cos²φ)) = √(' + R + ' × ' + P + '×10⁶ / (' + (target / 100) + ' × ' + pf + '²)) = ' + fmt(V) + ' kV') + '。',
+            '標準電圧階級で直上は ' + stdV + ' kV。実際の選定は距離・将来の増設・機器コストも含めて決める。',
+          ],
+          insight: '「電力が大きいほど・遠いほど高い電圧」の根拠は、この逆算 1 本で説明できる。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

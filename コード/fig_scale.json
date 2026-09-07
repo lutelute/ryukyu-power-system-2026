@@ -1,0 +1,794 @@
+{
+ "ch01_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch01_betz.png": [
+  7.1,
+  4.2
+ ],
+ "ch01_carnot_curve.png": [
+  7.1,
+  4.2
+ ],
+ "ch01_carnot_ts.png": [
+  7.1,
+  4.2
+ ],
+ "ch01_chain.png": [
+  7.1,
+  4.2
+ ],
+ "ch01_hydro.png": [
+  7.1,
+  4.2
+ ],
+ "ch01_methods.png": [
+  7.1,
+  4.2
+ ],
+ "ch01_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch01_pv_spectrum.png": [
+  7.1,
+  4.2
+ ],
+ "ch01_quality.png": [
+  12.8,
+  5.9
+ ],
+ "ch01_units.png": [
+  12.8,
+  5.9
+ ],
+ "ch01_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch01_wind.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_hierarchy.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_loss_pf.png": [
+  7.1,
+  4.2
+ ],
+ "ch02_loss_voltage.png": [
+  7.1,
+  4.2
+ ],
+ "ch02_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_okinawa.png": [
+  7.1,
+  4.2
+ ],
+ "ch02_parallel.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_reserve.png": [
+  7.1,
+  4.2
+ ],
+ "ch02_sld.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_topology.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_transformer.png": [
+  7.1,
+  4.2
+ ],
+ "ch02_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch03_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_ferranti.png": [
+  7.1,
+  4.2
+ ],
+ "ch03_inst_power.png": [
+  7.1,
+  4.2
+ ],
+ "ch03_loss_pf.png": [
+  7.1,
+  4.2
+ ],
+ "ch03_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_pd_qv.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_per_unit.png": [
+  7.1,
+  4.2
+ ],
+ "ch03_pf_correction.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_pi_circuit.png": [
+  7.1,
+  4.2
+ ],
+ "ch03_triangle.png": [
+  7.1,
+  4.2
+ ],
+ "ch03_twobus.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch04_ac_vs_dc.png": [
+  7.1,
+  4.2
+ ],
+ "ch04_add_line.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_bus_types.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_dcpf3.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_injection.png": [
+  7.1,
+  4.2
+ ],
+ "ch04_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_nonlinear.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_spy.png": [
+  7.1,
+  4.2
+ ],
+ "ch04_unknowns.png": [
+  7.1,
+  4.2
+ ],
+ "ch04_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch04_ybus3.png": [
+  7.1,
+  4.2
+ ],
+ "ch05_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_fdlf_flow.png": [
+  7.1,
+  4.2
+ ],
+ "ch05_gs_vs_nr.png": [
+  7.1,
+  4.2
+ ],
+ "ch05_initial_guess.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_jacobian_blocks.png": [
+  7.1,
+  4.2
+ ],
+ "ch05_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_newton1d.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_order.png": [
+  7.1,
+  4.2
+ ],
+ "ch05_qlimit.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_tolerance.png": [
+  7.1,
+  4.2
+ ],
+ "ch05_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch05_xr_ratio.png": [
+  7.1,
+  4.2
+ ],
+ "ch06_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_approx.png": [
+  7.1,
+  4.2
+ ],
+ "ch06_devices.png": [
+  7.1,
+  4.2
+ ],
+ "ch06_hosting.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_ieee14.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_profile.png": [
+  7.1,
+  4.2
+ ],
+ "ch06_pvcurve.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_sensitivity.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_sign.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_tables.png": [
+  7.1,
+  4.2
+ ],
+ "ch06_verify.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch07_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch07_damping.png": [
+  7.1,
+  4.2
+ ],
+ "ch07_equal_area.png": [
+  7.1,
+  4.2
+ ],
+ "ch07_inertia.png": [
+  12.8,
+  5.9
+ ],
+ "ch07_measures.png": [
+  7.1,
+  4.2
+ ],
+ "ch07_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch07_phase.png": [
+  7.1,
+  4.2
+ ],
+ "ch07_sweep.png": [
+  7.1,
+  4.2
+ ],
+ "ch07_swing.png": [
+  7.1,
+  4.2
+ ],
+ "ch07_system.png": [
+  12.8,
+  5.9
+ ],
+ "ch07_three_curves.png": [
+  7.1,
+  4.2
+ ],
+ "ch07_timescale.png": [
+  7.1,
+  4.2
+ ],
+ "ch07_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch08_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_cases.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_compare.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_deriv_kdf.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_deriv_tie.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_dfdp.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_droop.png": [
+  7.1,
+  4.2
+ ],
+ "ch08_eq_rocof.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_example_droop.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_example_trip.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_hierarchy.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_intersection.png": [
+  7.1,
+  4.2
+ ],
+ "ch08_lfc_gain.png": [
+  7.1,
+  4.2
+ ],
+ "ch08_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_rocof.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_stages.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_tie.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_timescales.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_unit.png": [
+  12.8,
+  5.9
+ ],
+ "ch08_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch09_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch09_delay.png": [
+  7.1,
+  4.2
+ ],
+ "ch09_dq.png": [
+  12.8,
+  5.9
+ ],
+ "ch09_gfl_gfm.png": [
+  12.8,
+  5.9
+ ],
+ "ch09_islanding.png": [
+  12.8,
+  5.9
+ ],
+ "ch09_lcl.png": [
+  7.1,
+  4.2
+ ],
+ "ch09_modulation.png": [
+  7.1,
+  4.2
+ ],
+ "ch09_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch09_pwm.png": [
+  7.1,
+  4.2
+ ],
+ "ch09_spectrum.png": [
+  12.8,
+  5.9
+ ],
+ "ch09_synthetic_inertia.png": [
+  12.8,
+  5.9
+ ],
+ "ch09_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch09_voltvar.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_clearsky.png": [
+  7.1,
+  4.2
+ ],
+ "ch10_curtail.png": [
+  7.1,
+  4.2
+ ],
+ "ch10_ensemble.png": [
+  7.1,
+  4.2
+ ],
+ "ch10_metrics.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_pipeline.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_pv_day.png": [
+  7.1,
+  4.2
+ ],
+ "ch10_pv_temp.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_shear.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_smoothing.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch10_weibull.png": [
+  7.1,
+  4.2
+ ],
+ "ch11_acf.png": [
+  7.1,
+  4.2
+ ],
+ "ch11_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_coefficients.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_decompose.png": [
+  7.1,
+  4.2
+ ],
+ "ch11_degree_thi.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_metrics.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_regression.png": [
+  7.1,
+  4.2
+ ],
+ "ch11_reserve.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_residual.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_split.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_temp_scatter.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch12_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch12_boosting.png": [
+  7.1,
+  4.2
+ ],
+ "ch12_compare.png": [
+  7.1,
+  4.2
+ ],
+ "ch12_extrapolation.png": [
+  7.1,
+  4.2
+ ],
+ "ch12_importance.png": [
+  7.1,
+  4.2
+ ],
+ "ch12_leak.png": [
+  12.8,
+  5.9
+ ],
+ "ch12_learning_curve.png": [
+  12.8,
+  5.9
+ ],
+ "ch12_linear_vs_tree.png": [
+  12.8,
+  5.9
+ ],
+ "ch12_lstm.png": [
+  12.8,
+  5.9
+ ],
+ "ch12_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch12_quantile.png": [
+  7.1,
+  4.2
+ ],
+ "ch12_split.png": [
+  12.8,
+  5.9
+ ],
+ "ch12_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch13_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_autoencoder.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_bad_data.png": [
+  7.1,
+  4.2
+ ],
+ "ch13_gnn.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_graph.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_oversmooth.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_pca.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_pinn.png": [
+  7.1,
+  4.2
+ ],
+ "ch13_pipeline.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_rl.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_state_estimation.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch14_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_carbon.png": [
+  7.1,
+  4.2
+ ],
+ "ch14_congestion.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_cost_curves.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_dispatch_curve.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_ems.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_equal_lambda.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_lambda_iteration.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_lmp.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_merit_order.png": [
+  7.1,
+  4.2
+ ],
+ "ch14_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_price_curve.png": [
+  7.1,
+  4.2
+ ],
+ "ch14_viz.png": [
+  7.6,
+  3.9
+ ],
+ "ch15_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_battery.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_curves.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_duck.png": [
+  7.1,
+  4.2
+ ],
+ "ch15_freq_response.png": [
+  7.1,
+  4.2
+ ],
+ "ch15_hk.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_limits.png": [
+  7.1,
+  4.2
+ ],
+ "ch15_map.png": [
+  7.1,
+  4.2
+ ],
+ "ch15_measure_map.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_measures.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_myth.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_system.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_viz.png": [
+  7.6,
+  3.9
+ ]
+}

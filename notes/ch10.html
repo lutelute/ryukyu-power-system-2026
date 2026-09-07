@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第10回: 気象予測の基礎と電力への応用 — 講義ノート</title>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="notes.css">
+</head>
+<body>
+<header class="top">
+  <a class="home" href="../index.html">▲ 地図（トップ）</a>
+  <nav class="days"><span class="">Day 1 基礎と潮流計算入門</span><span class="">Day 2 潮流とダイナミクス</span><span class="on">Day 3 インバータと予測</span><span class="">Day 4 AI と統合演習</span></nav>
+  <nav class="rounds"><a href="ch01.html" class="" title="第1回 エネルギー変換">1</a><a href="ch02.html" class="" title="第2回 電力システムの構成">2</a><a href="ch03.html" class="" title="第3回 P と Q の分離">3</a><a href="ch04.html" class="" title="第4回 Y行列と直流法潮流">4</a><a href="ch05.html" class="" title="第5回 ニュートン・ラフソン法">5</a><a href="ch06.html" class="" title="第6回 電圧と無効電力">6</a><a href="ch07.html" class="" title="第7回 等面積法と安定度">7</a><a href="ch08.html" class="" title="第8回 周波数と需給バランス">8</a><a href="ch09.html" class="" title="第9回 インバータと系統連系">9</a><a href="ch10.html" class="on" title="第10回 気象と再エネ出力">10</a><a href="ch11.html" class="" title="第11回 電力需要予測">11</a><a href="ch12.html" class="" title="第12回 機械学習で予測する">12</a><a href="ch13.html" class="" title="第13回 AI × 系統解析">13</a><a href="ch14.html" class="" title="第14回 経済負荷配分と OPF">14</a><a href="ch15.html" class="" title="第15回 沖縄系統・統合演習">15</a></nav>
+</header>
+<div class="wrap">
+  <main class="doc">
+    <div class="chips"><span class="chip day">Day 3 インバータと予測</span><a class="chip viz" href="../viz/weather.html">🖥 動く図で見る</a><a class="chip ex" href="../ex/ch10.html">✍ 演習で確かめる</a><a class="chip" href="symbols.html">記号表</a></div>
+    <h1>第10回: 気象予測の基礎と電力への応用</h1>
+<p><strong>Day 3 / コマ10</strong> ｜ 電力エネルギーシステム解析の基礎と応用</p>
+<blockquote class="callout textbook">
+<p><strong>教科書対応</strong>: 本回以降（第10〜15回）は加藤・田岡『電力システム工学の基礎』の範囲外。
+本講義の独自部分である。ただし第8回の<strong>需給バランス</strong>が動機になっている。</p>
+</blockquote>
+<blockquote class="callout viz">
+<p><strong>🖥 動くインフォグラフ</strong>：<a href="../viz/weather.html"><code>viz/weather.html</code></a> — 日射→出力、ハブ高さ補正、平滑化効果の実験。
+ブラウザで「次へ ▶」を押しながら、この回の核心を実計算で追えます（<code>index.html</code> から全回に飛べます）。</p>
+</blockquote>
+<!-- intuition:start（tools/sync-intuition.mjs が スライド/ch10.md から生成。直接編集せずスライドを直す）-->
+<blockquote class="callout ex">
+<p><strong>✍ 演習</strong>：<a href="../ex/ch10.html"><code>ex/ch10.html</code></a> — 学籍番号ごとに数値が変わる問題。採点・途中式つき。
+<strong>📊 スライド</strong>：<code>スライド/ch10.pptx</code>（講義用）</p>
+</blockquote>
+<hr>
+<h2 id="s1">まず直感で（3 分でつかむ）</h2>
+<blockquote class="callout key">
+<p><strong>📌 一言でいうと</strong>：再エネの出力予測は「気象を予測し、物理式で MW に翻訳する」2 段階。誤差は両方から来て、風力では 3 乗で増える。</p>
+</blockquote>
+<blockquote class="callout analogy">
+<p><strong>🪄 たとえ話：天気予報を「通訳」する</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">通訳</th>
+<th align="left">再エネ予測</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">脚本（明日の空）を <strong>別の言葉に訳す</strong></td>
+<td align="left">数値予報 → <strong>変換モデル</strong> → MW</td>
+</tr>
+<tr>
+<td align="left">誤訳の原因は <strong>脚本の誤り</strong> と <strong>通訳の癖</strong></td>
+<td align="left"><strong>予報誤差</strong> と <strong>モデル誤差</strong>（温度・汚れ）</td>
+</tr>
+<tr>
+<td align="left">ビルの屋上ほど <strong>風が強い</strong></td>
+<td align="left"><strong>べき法則</strong>でハブ高さへ補正</td>
+</tr>
+<tr>
+<td align="left">通訳は 1 対 1 で訳す</td>
+<td align="left">風力は <strong>v³</strong>。小さな誤りが 3 倍に</td>
+</tr>
+<tr>
+<td align="left">大勢に聞けば <strong>平均は当たりやすい</strong></td>
+<td align="left"><strong>平滑化効果</strong>：多地点集約で誤差が減る</td>
+</tr>
+</tbody></table></div>
+<p>崩れる点：通訳は言葉を 1 対 1 で置き換えるが、風力は 3 乗則で誤差を増幅する。だから風力予測は太陽光より難しい。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：2018年10月 九州で日本初の再エネ出力制御</strong>
+晴天で需要の軽い休日、太陽光の出力が需要に迫り、揚水と連系線を使い切っても <strong>余った</strong>。太陽光に一時停止を指示する出力制御が国内で初めて実施された。予測が当たったからこそ、前日に指示が出せた。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：台風と雲 — 沖縄の 2 つの急変</strong>
+台風では風車がカットアウト風速（約 25 m/s）で一斉に停止し、出力が数分でゼロになる。日射の強い沖縄では雲の通過で太陽光が数分で数割変わる。どちらも「いつ」を当てる予測が要る。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 この回の式で読むと</strong>：予測は「当てる」ためだけでなく「備える量を決める」ためにある。第8回の予備力につながる。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ MAPE を使わないのか</strong>
+太陽光は夜間の実績が 0 で、百分率誤差が発散する。定格で割った nRMSE なら常に意味を持ち、規模の違う設備も比較できる。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ集めると誤差が減るのか</strong>
+地点ごとの誤差が独立なら、N 地点の合計の誤差は 1/√N に縮む。実際は雲や前線で誤差が相関するので、σ₁√ρ という下限が残る。</p>
+</blockquote>
+<blockquote class="callout warn">
+<p><strong>⚠ 風力は v³</strong>
+風速 10% の誤りが出力 33% の誤りになる。高さ補正と地形補正を省略しない。</p>
+</blockquote>
+<p><strong>この回の地図</strong>：Ⅰ 数値気象予報（NWP）の枠組みと予測の流れ → Ⅱ 日射 → 太陽光出力（温度で目減りする） → Ⅲ 風速 → 風力出力（べき法則とパワーカーブ） → Ⅳ 誤差の評価、平滑化効果、アンサンブル、出力制御</p>
+<!-- intuition:end -->
+<hr>
+<h2 id="s2">10.1 導入</h2>
+<h3 id="s3">学習目標</h3>
+<ol>
+<li><strong>数値気象予報（NWP）</strong>の枠組み（支配方程式・格子・データ同化）を説明できる。</li>
+<li>日本で利用可能な気象モデル（GSM/MSM/LFM）と気象データの入手方法を説明できる。</li>
+<li><strong>日射量から太陽光発電量</strong>を推定するモデルを構築できる。</li>
+<li><strong>風速から風力発電量</strong>を推定でき、ハブ高さ補正ができる。</li>
+<li>気象予測の<strong>不確実性</strong>を定量化し、アンサンブル予報の意義を説明できる。</li>
+<li>沖縄の気象特性が再エネ予測にもたらす固有の課題を論じられる。</li>
+</ol>
+<h3 id="s4">なぜ電力工学で気象を学ぶのか</h3>
+<p>第8回で、需給バランスを保つことが周波数維持の本質であると学んだ。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>P</mi><mo>=</mo><mi>K</mi><mi mathvariant="normal">Δ</mi><mi>F</mi></mrow><annotation encoding="application/x-tex">\Delta P = K\Delta F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">F</span></span></span></span></span></p>
+<p>従来、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>P</mi></mrow><annotation encoding="application/x-tex">\Delta P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span> の不確実性は<strong>需要側</strong>にしかなかった。
+発電は制御できるものだったからである。</p>
+<p>しかし太陽光・風力は<strong>発電量が天候で決まり、制御できない</strong>。
+つまり<strong>供給側にも不確実性が入った</strong>。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mtext>再エネの発電量予測 = 需給計画の前提条件</mtext></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\text{再エネの発電量予測 = 需給計画の前提条件}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord text"><span class="mord cjk_fallback">再エネの発電量予測</span><span class="mord"> = </span><span class="mord cjk_fallback">需給計画の前提条件</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>予測を外せば、その分を火力の待機（予備力）で埋める必要がある。
+<strong>予測精度は直接コストに跳ね返る</strong>。</p>
+<hr>
+<h2 id="s5">10.2 理論</h2>
+<h3 id="s6">10.2.1 数値気象予報（NWP）の枠組み</h3>
+<p>大気の運動は物理法則で記述できる。これを数値的に解くのが NWP である。</p>
+<p><strong>支配方程式（プリミティブ方程式系）</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">式</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">運動方程式（ナビエ・ストークス）</td>
+<td align="left">風の運動。コリオリ力・気圧傾度力・摩擦</td>
+</tr>
+<tr>
+<td align="left">連続の式</td>
+<td align="left">質量保存</td>
+</tr>
+<tr>
+<td align="left">熱力学の式</td>
+<td align="left">エネルギー保存</td>
+</tr>
+<tr>
+<td align="left">状態方程式</td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mi>ρ</mi><mi>R</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">p = \rho R T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">ρR</span><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span></span></td>
+</tr>
+<tr>
+<td align="left">水蒸気の保存式</td>
+<td align="left">水循環・雲・降水</td>
+</tr>
+</tbody></table></div>
+<p>これらを<strong>3 次元格子上で離散化</strong>し、時間積分する。</p>
+<p><strong>予報の 3 要素</strong>:</p>
+<ol>
+<li><strong>モデル</strong> — 方程式系と離散化、物理過程のパラメタリゼーション</li>
+<li><strong>初期値</strong> — 観測データから作る現在の大気状態</li>
+<li><strong>境界条件</strong> — 領域モデルの場合、外側からの流入</li>
+</ol>
+<p><strong>データ同化</strong>: 観測（地上・ラジオゾンデ・航空機・衛星・レーダー）と
+前回の予報値を統計的に融合し、最良の初期値を作る。
+4 次元変分法（4D-Var）やアンサンブルカルマンフィルタが使われる。</p>
+<blockquote>
+<p><strong>ここが重要 — カオス性</strong>: 大気は初期値鋭敏性を持つ非線形系（ローレンツの発見）。
+初期値のわずかな誤差が指数関数的に増大する。
+このため<strong>決定論的予報には原理的な限界</strong>があり、
+実用的な予報可能期間は 1〜2 週間程度とされる。</p>
+</blockquote>
+<!-- fig:ch10_pipeline.png -->
+<p><img src="../%E5%9B%B3/ch10_pipeline.png" alt="図 10.1">
+<em>図 10.1　再エネ出力予測の 2 段構え。数値予報で空を予測し、地点・ハブ高さへ補正し、物理モデルで MW に翻訳して、nRMSE で評価する。誤差は「空の予測」と「翻訳の式」の両方から来る。</em></p>
+<!-- /fig -->
+
+<h3 id="s7">10.2.2 日本で利用できる数値予報モデル</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">モデル</th>
+<th align="left">格子間隔</th>
+<th align="left">予報期間</th>
+<th align="left">更新頻度</th>
+<th align="left">主な用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>GSM</strong>（全球モデル）</td>
+<td align="left">約 20 km</td>
+<td align="left">264 時間</td>
+<td align="left">1日4回</td>
+<td align="left">週間予報、翌々日以降の需給計画</td>
+</tr>
+<tr>
+<td align="left"><strong>MSM</strong>（メソモデル）</td>
+<td align="left">5 km</td>
+<td align="left">78 時間</td>
+<td align="left">1日8回</td>
+<td align="left"><strong>翌日の再エネ予測の主力</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>LFM</strong>（局地モデル）</td>
+<td align="left">2 km</td>
+<td align="left">18 時間</td>
+<td align="left">1日24回</td>
+<td align="left">当日運用、急変の把握</td>
+</tr>
+<tr>
+<td align="left"><strong>MEPS</strong>（メソアンサンブル）</td>
+<td align="left">5 km × 21 メンバー</td>
+<td align="left">39 時間</td>
+<td align="left">1日4回</td>
+<td align="left"><strong>不確実性の定量化</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>電力運用の時間軸との対応</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">業務</th>
+<th align="left">時間軸</th>
+<th align="left">使うモデル</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">週間需給計画</td>
+<td align="left">1〜7 日前</td>
+<td align="left">GSM</td>
+</tr>
+<tr>
+<td align="left"><strong>翌日計画（スポット市場入札）</strong></td>
+<td align="left">前日</td>
+<td align="left"><strong>MSM、MEPS</strong></td>
+</tr>
+<tr>
+<td align="left">当日調整（時間前市場）</td>
+<td align="left">数時間前</td>
+<td align="left">LFM</td>
+</tr>
+<tr>
+<td align="left">リアルタイム（LFC、第8回）</td>
+<td align="left">数分前</td>
+<td align="left">実測値の外挿</td>
+</tr>
+</tbody></table></div>
+<h3 id="s8">10.2.3 気象データの入手</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">データ源</th>
+<th align="left">内容</th>
+<th align="left">用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">気象庁 アメダス</td>
+<td align="left">実測（気温・風速・日照時間）</td>
+<td align="left">実績値・モデル検証</td>
+</tr>
+<tr>
+<td align="left">気象庁 GPV（数値予報 GPV）</td>
+<td align="left">予報値（格子点値）</td>
+<td align="left">予測の入力</td>
+</tr>
+<tr>
+<td align="left"><strong>ERA5</strong>（ECMWF 再解析）</td>
+<td align="left">過去 80 年、1 時間・31 km</td>
+<td align="left"><strong>学習データの作成</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>Open-Meteo</strong></td>
+<td align="left">無料 API、登録不要</td>
+<td align="left">演習・試作</td>
+</tr>
+<tr>
+<td align="left">NEDO 日射量データベース</td>
+<td align="left">日本の日射量統計</td>
+<td align="left">設備設計</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>再解析データ（ERA5）の重要性</strong>: 過去の観測をすべて使い、
+現在のモデルで再計算した「最良推定の過去の大気」。
+機械学習（第12回）の<strong>教師データ</strong>として不可欠である。</p>
+</blockquote>
+<h3 id="s9">10.2.4 日射量から太陽光発電量へ</h3>
+<p><strong>日射量の 3 成分</strong>:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><msub><mi>G</mi><mtext>GHI</mtext></msub><mo>=</mo><msub><mi>G</mi><mtext>DNI</mtext></msub><mi>cos</mi><mo>⁡</mo><msub><mi>θ</mi><mi>z</mi></msub><mo>+</mo><msub><mi>G</mi><mtext>DHI</mtext></msub></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{G_\text{GHI} = G_\text{DNI}\cos\theta_z + G_\text{DHI}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.5244em;vertical-align:-0.49em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0344em;"><span style="top:-3.5244em;"><span class="pstrut" style="height:3.5244em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">GHI</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">DNI</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">DHI</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.0344em;"><span class="pstrut" style="height:3.5244em;"></span><span class="stretchy fbox" style="height:1.5244em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.49em;"><span></span></span></span></span></span></span></span></span></span></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">記号</th>
+<th align="left">名称</th>
+<th align="left">意味</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>G</mi><mtext>GHI</mtext></msub></mrow><annotation encoding="application/x-tex">G_\text{GHI}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">GHI</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">全天日射量（Global Horizontal Irradiance）</td>
+<td align="left">水平面が受ける全日射</td>
+</tr>
+<tr>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>G</mi><mtext>DNI</mtext></msub></mrow><annotation encoding="application/x-tex">G_\text{DNI}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">DNI</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">直達日射量（Direct Normal）</td>
+<td align="left">太陽から直接来る成分</td>
+</tr>
+<tr>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>G</mi><mtext>DHI</mtext></msub></mrow><annotation encoding="application/x-tex">G_\text{DHI}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">DHI</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">散乱日射量（Diffuse Horizontal）</td>
+<td align="left">大気で散乱された成分</td>
+</tr>
+<tr>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>θ</mi><mi>z</mi></msub></mrow><annotation encoding="application/x-tex">\theta_z</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">太陽天頂角</td>
+<td align="left">天頂からの角度</td>
+</tr>
+</tbody></table></div>
+<p><strong>傾斜面日射量への変換</strong>: パネルは傾いているので、傾斜面が受ける日射量
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>G</mi><mtext>POA</mtext></msub></mrow><annotation encoding="application/x-tex">G_\text{POA}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">POA</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>（Plane of Array）に変換する必要がある。
+簡易には<strong>アイソトロピックモデル</strong>を使う。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>G</mi><mtext>POA</mtext></msub><mo>=</mo><msub><mi>G</mi><mtext>DNI</mtext></msub><mi>cos</mi><mo>⁡</mo><msub><mi>θ</mi><mi>i</mi></msub><mo>+</mo><msub><mi>G</mi><mtext>DHI</mtext></msub><mfrac><mrow><mn>1</mn><mo>+</mo><mi>cos</mi><mo>⁡</mo><mi>β</mi></mrow><mn>2</mn></mfrac><mo>+</mo><msub><mi>G</mi><mtext>GHI</mtext></msub><mtext> </mtext><msub><mi>ρ</mi><mi>g</mi></msub><mfrac><mrow><mn>1</mn><mo>−</mo><mi>cos</mi><mo>⁡</mo><mi>β</mi></mrow><mn>2</mn></mfrac></mrow><annotation encoding="application/x-tex">G_\text{POA} = G_\text{DNI}\cos\theta_i + G_\text{DHI}\frac{1+\cos\beta}{2}
++ G_\text{GHI}\,\rho_g\frac{1-\cos\beta}{2}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">POA</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">DNI</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">DHI</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0528em;">β</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">GHI</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">ρ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0528em;">β</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>θ</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\theta_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> は入射角、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi></mrow><annotation encoding="application/x-tex">\beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0528em;">β</span></span></span></span> はパネル傾斜角、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>ρ</mi><mi>g</mi></msub></mrow><annotation encoding="application/x-tex">\rho_g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">ρ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> は地表面アルベド（通常 0.2）。</p>
+<p><strong>発電量モデル（PVWatts 型）</strong>:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><msub><mi>P</mi><mtext>PV</mtext></msub><mo>=</mo><msub><mi>P</mi><mtext>rated</mtext></msub><mo>⋅</mo><mfrac><msub><mi>G</mi><mtext>POA</mtext></msub><mn>1000</mn></mfrac><mo>⋅</mo><mo fence="true" stretchy="true" minsize="1.2em" maxsize="1.2em">[</mo><mn>1</mn><mo>+</mo><mi>γ</mi><mo stretchy="false">(</mo><msub><mi>T</mi><mtext>cell</mtext></msub><mo>−</mo><mn>25</mn><mo stretchy="false">)</mo><mo fence="true" stretchy="true" minsize="1.2em" maxsize="1.2em">]</mo><mo>⋅</mo><msub><mi>η</mi><mtext>sys</mtext></msub></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{P_\text{PV} = P_\text{rated}\cdot\frac{G_\text{POA}}{1000}\cdot
+\bigl[1 + \gamma(T_\text{cell} - 25)\bigr]\cdot\eta_\text{sys}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.7263em;vertical-align:-1.026em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.7003em;"><span style="top:-4.7263em;"><span class="pstrut" style="height:4.7263em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">PV</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">rated</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1000</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">POA</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mopen"><span class="delimsizing size1">[</span></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cell</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">25</span><span class="mclose">)</span><span class="mclose"><span class="delimsizing size1">]</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">η</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.7003em;"><span class="pstrut" style="height:4.7263em;"></span><span class="stretchy fbox" style="height:2.7263em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.026em;"><span></span></span></span></span></span></span></span></span></span></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">記号</th>
+<th align="left">意味</th>
+<th align="left">典型値</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mtext>rated</mtext></msub></mrow><annotation encoding="application/x-tex">P_\text{rated}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">rated</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">定格出力（STC: 1000 W/m²、25 °C）</td>
+<td align="left">—</td>
+</tr>
+<tr>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi></mrow><annotation encoding="application/x-tex">\gamma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span></span></span></span></td>
+<td align="left"><strong>温度係数</strong></td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>0.003</mn><mo>∼</mo><mo>−</mo><mn>0.005</mn></mrow><annotation encoding="application/x-tex">-0.003\sim-0.005</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">0.003</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">0.005</span></span></span></span> /°C（結晶シリコン）</td>
+</tr>
+<tr>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mtext>cell</mtext></msub></mrow><annotation encoding="application/x-tex">T_\text{cell}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cell</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">セル温度</td>
+<td align="left">—</td>
+</tr>
+<tr>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>η</mi><mtext>sys</mtext></msub></mrow><annotation encoding="application/x-tex">\eta_\text{sys}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">η</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td align="left">システム効率（配線・PCS・汚れ）</td>
+<td align="left">0.80〜0.85</td>
+</tr>
+</tbody></table></div>
+<p><strong>セル温度の推定（NOCT モデル）</strong>:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>T</mi><mtext>cell</mtext></msub><mo>=</mo><msub><mi>T</mi><mi>a</mi></msub><mo>+</mo><mfrac><mrow><mtext>NOCT</mtext><mo>−</mo><mn>20</mn></mrow><mn>800</mn></mfrac><msub><mi>G</mi><mtext>POA</mtext></msub></mrow><annotation encoding="application/x-tex">T_\text{cell} = T_a + \frac{\text{NOCT}-20}{800}G_\text{POA}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cell</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">a</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.0463em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">800</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">NOCT</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">20</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">POA</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p>NOCT（公称動作セル温度）は 45 °C 程度。</p>
+<blockquote>
+<p><strong>ここが重要 — 沖縄で効く温度の効き</strong>: 温度係数が負なので、
+<strong>気温が高いほど効率が下がる</strong>。
+気温 35 °C・日射 1000 W/m² のとき <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mtext>cell</mtext></msub><mo>=</mo><mn>35</mn><mo>+</mo><mfrac><mn>25</mn><mn>800</mn></mfrac><mo>×</mo><mn>1000</mn><mo>=</mo><mn>66</mn></mrow><annotation encoding="application/x-tex">T_\text{cell} = 35 + \frac{25}{800}\times1000 = 66</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cell</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">35</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.1901em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">800</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">25</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1000</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">66</span></span></span></span> °C。
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi><mo>=</mo><mo>−</mo><mn>0.004</mn></mrow><annotation encoding="application/x-tex">\gamma = -0.004</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">0.004</span></span></span></span> とすると出力低下は
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>0.004</mn><mo>×</mo><mo stretchy="false">(</mo><mn>66</mn><mo>−</mo><mn>25</mn><mo stretchy="false">)</mo><mo>=</mo><mo>−</mo><mn>0.164</mn></mrow><annotation encoding="application/x-tex">-0.004\times(66-25) = -0.164</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">0.004</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">66</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">25</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">0.164</span></span></span></span>、つまり <strong>16.4% の損失</strong>である。
+亜熱帯の沖縄では、同じ日射量でも本土より発電量が伸びにくい。</p>
+</blockquote>
+<!-- fig:ch10_clearsky.png -->
+<p><img src="../%E5%9B%B3/ch10_clearsky.png" alt="図 10.2">
+<em>図 10.2　那覇（北緯 26.21°）の晴天日射量。太陽位置から計算した理論値で、夏至は最大 1,034 W/m²（日積算 8.6 kWh/m²）、冬至でも 649 W/m²（4.2 kWh/m²）ある。実際の日射はこの曲線に雲の透過率を掛けたものになる。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch10_pv_temp.png -->
+<p><img src="../%E5%9B%B3/ch10_pv_temp.png" alt="図 10.3">
+<em>図 10.3　太陽光の温度損失。出力は日射にほぼ比例するが、セル温度が高いほど目減りする（左）。セル温度は気温より 20〜30 °C 高く、沖縄の真夏（気温 32 °C・G = 800）ではセル 57 °C、出力は定格 2 MW に対して 1.14 MW になる。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch10_pv_day.png -->
+<p><img src="../%E5%9B%B3/ch10_pv_day.png" alt="図 10.4">
+<em>図 10.4　同じ日の快晴時（薄い面）と雲がある場合（太線）の出力。日量は 12.1 → 9.2 MWh に減り、最大変化率は 0.09 MW/分（定格の 4%/分）に達する。分単位の急変は予報では追えない。</em></p>
+<!-- /fig -->
+
+<h3 id="s10">10.2.5 風速から風力発電量へ</h3>
+<p><strong>第1回で導いた式を思い出す</strong>:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>ρ</mi><mi>A</mi><msubsup><mi>u</mi><mi>w</mi><mn>3</mn></msubsup><msub><mi>C</mi><mi>p</mi></msub></mrow><annotation encoding="application/x-tex">P = \frac{1}{2}\rho A u_w^3 C_p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord mathnormal">ρ</span><span class="mord mathnormal">A</span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0269em;">w</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>ハブ高さへの風速補正</strong>: 気象データの風速は通常<strong>地上 10 m</strong> の値だが、
+風車のハブ高さは 80〜120 m である。補正には<strong>べき法則</strong>を使う。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mi>u</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mo>=</mo><mi>u</mi><mo stretchy="false">(</mo><msub><mi>z</mi><mtext>ref</mtext></msub><mo stretchy="false">)</mo><msup><mrow><mo fence="true">(</mo><mfrac><mi>z</mi><msub><mi>z</mi><mtext>ref</mtext></msub></mfrac><mo fence="true">)</mo></mrow><mi>α</mi></msup></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{u(z) = u(z_\text{ref})\left(\frac{z}{z_\text{ref}}\right)^{\alpha}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:3.1343em;vertical-align:-1.29em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8443em;"><span style="top:-5.1343em;"><span class="pstrut" style="height:5.1343em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord mathnormal">u</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathnormal">u</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">ref</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1076em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">ref</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.044em;">z</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.5043em;"><span style="top:-3.9029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0037em;">α</span></span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.8443em;"><span class="pstrut" style="height:5.1343em;"></span><span class="stretchy fbox" style="height:3.1343em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.29em;"><span></span></span></span></span></span></span></span></span></span></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">地表面</th>
+<th align="left">べき指数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">海上・平坦な開けた土地</td>
+<td align="left">0.10〜0.14</td>
+</tr>
+<tr>
+<td align="left">農地・低い草地</td>
+<td align="left">0.16〜0.20</td>
+</tr>
+<tr>
+<td align="left">樹林・郊外</td>
+<td align="left">0.20〜0.28</td>
+</tr>
+<tr>
+<td align="left">市街地</td>
+<td align="left">0.30〜0.40</td>
+</tr>
+</tbody></table></div>
+<p><strong>数値例</strong>: 地上 10 m で 6 m/s、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>=</mo><mn>0.14</mn></mrow><annotation encoding="application/x-tex">\alpha = 0.14</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.14</span></span></span></span>（海上）、ハブ高さ 90 m のとき</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>u</mi><mo>=</mo><mn>6</mn><mo>×</mo><msup><mrow><mo fence="true">(</mo><mfrac><mn>90</mn><mn>10</mn></mfrac><mo fence="true">)</mo></mrow><mn>0.14</mn></msup><mo>=</mo><mn>6</mn><mo>×</mo><msup><mn>9</mn><mn>0.14</mn></msup><mo>=</mo><mn>6</mn><mo>×</mo><mn>1.359</mn><mo>=</mo><mn>8.15</mn><mtext> m/s</mtext></mrow><annotation encoding="application/x-tex">u = 6\times\left(\frac{90}{10}\right)^{0.14} = 6\times9^{0.14} = 6\times1.359 = 8.15\ \text{m/s}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">6</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.604em;vertical-align:-0.95em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">10</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">90</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.654em;"><span style="top:-3.9029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">0.14</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">6</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8641em;"></span><span class="mord"><span class="mord">9</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">0.14</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">6</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.359</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">8.15</span><span class="mspace"> </span><span class="mord text"><span class="mord">m/s</span></span></span></span></span></span></p>
+<p>出力は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>u</mi><mn>3</mn></msup></mrow><annotation encoding="application/x-tex">u^3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span></span></span></span> に比例するので <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>8.15</mn><mi mathvariant="normal">/</mi><mn>6</mn><msup><mo stretchy="false">)</mo><mn>3</mn></msup><mo>=</mo><mn>2.51</mn></mrow><annotation encoding="application/x-tex">(8.15/6)^3 = 2.51</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">8.15/6</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2.51</span></span></span></span> 倍になる。
+<strong>ハブ高さ補正を忘れると発電量を大幅に過小評価する</strong>。</p>
+<p><strong>パワーカーブ</strong>: 実際の風車は理論式どおりではなく、実測のパワーカーブを使う。</p>
+<pre><code>  P [MW]
+   ↑
+ 定格├──────────────────┐
+    │              ／      │
+    │          ／          │
+    │      ／              │
+    │  ／                  │
+    └─┴────────┴──────────┴──→ u [m/s]
+      3       12          25
+   カットイン  定格風速   カットアウト
+</code></pre>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">領域</th>
+<th align="left">風速</th>
+<th align="left">挙動</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">カットイン以下</td>
+<td align="left">&lt; 3 m/s</td>
+<td align="left">発電しない</td>
+</tr>
+<tr>
+<td align="left">部分負荷</td>
+<td align="left">3〜12 m/s</td>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>u</mi><mn>3</mn></msup></mrow><annotation encoding="application/x-tex">u^3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span></span></span></span> に比例（最大出力追従制御）</td>
+</tr>
+<tr>
+<td align="left">定格</td>
+<td align="left">12〜25 m/s</td>
+<td align="left"><strong>ピッチ制御で定格出力に維持</strong></td>
+</tr>
+<tr>
+<td align="left">カットアウト以上</td>
+<td align="left">&gt; 25 m/s</td>
+<td align="left"><strong>保護のため停止</strong></td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>予測誤差が最大になるのはどこか</strong>: パワーカーブの<strong>傾きが最大</strong>の領域
+（定格風速の手前、8〜12 m/s）である。ここでは
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mrow><mi mathvariant="normal">∂</mi><mi>P</mi></mrow><mrow><mi mathvariant="normal">∂</mi><mi>u</mi></mrow></mfrac><mo>=</mo><mfrac><mn>3</mn><mn>2</mn></mfrac><mi>ρ</mi><mi>A</mi><msup><mi>u</mi><mn>2</mn></msup><msub><mi>C</mi><mi>p</mi></msub></mrow><annotation encoding="application/x-tex">\frac{\partial P}{\partial u} = \frac{3}{2}\rho A u^2 C_p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord" style="margin-right:0.0556em;">∂</span><span class="mord mathnormal">u</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord" style="margin-right:0.0556em;">∂</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord mathnormal">ρ</span><span class="mord mathnormal">A</span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span>
+が大きく、<strong>風速のわずかな誤差が大きな出力誤差になる</strong>。
+また<strong>カットアウト付近</strong>では、25 m/s を超えるか否かで
+出力が定格から 0 へ<strong>不連続に変わる</strong>ため、極めて危険である。</p>
+</blockquote>
+<!-- fig:ch10_shear.png -->
+<p><img src="../%E5%9B%B3/ch10_shear.png" alt="図 10.5">
+<em>図 10.5　べき法則による高さ補正。地上 10 m で 6 m/s のとき、α = 0.14 ならハブ高さ 80 m で 8.0 m/s になり、出力は 3 乗で 2.4 倍になる。予報値をそのまま使うと事業性の評価が根本から狂う。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch10_weibull.png -->
+<p><img src="../%E5%9B%B3/ch10_weibull.png" alt="図 10.6">
+<em>図 10.6　パワーカーブと風速のワイブル分布（k = 2、c = 7 m/s）。両者を掛けて積分した年間の期待出力は 0.67 MW で、定格 3 MW に対する設備利用率は 22%。定格風速に達する時間は意外に短い。</em></p>
+<!-- /fig -->
+
+<h3 id="s11">10.2.6 予測誤差の評価と正規化</h3>
+<p>第11回で詳しく扱うが、ここで再エネ予測固有の注意点を述べる。</p>
+<p><strong>MAPE を使ってはいけない場面</strong>:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>MAPE</mtext><mo>=</mo><mfrac><mn>100</mn><mi>T</mi></mfrac><munder><mo>∑</mo><mi>t</mi></munder><mrow><mo fence="true">∣</mo><mfrac><mrow><msub><mi>y</mi><mi>t</mi></msub><mo>−</mo><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mi>t</mi></msub></mrow><msub><mi>y</mi><mi>t</mi></msub></mfrac><mo fence="true">∣</mo></mrow></mrow><annotation encoding="application/x-tex">\text{MAPE} = \frac{100}{T}\sum_t\left|\frac{y_t-\hat{y}_t}{y_t}\right|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">MAPE</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.7em;vertical-align:-1.25em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">100</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.9em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.25em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.45em;"><span style="top:-3.45em;"><span class="pstrut" style="height:4.4em;"></span><span style="width:0.333em;height:2.4em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.333em" height="2.4em" viewBox="0 0 333 2400"><path d="M145 15 v585 v1200 v585 c2.667,10,9.667,15,21,15
+c10,0,16.667,-5,20,-15 v-585 v-1200 v-585 c-2.667,-10,-9.667,-15,-21,-15
+c-10,0,-16.667,5,-20,15z M188 15 H145 v585 v1200 v585 h43z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.95em;"><span></span></span></span></span></span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8804em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.45em;"><span style="top:-3.45em;"><span class="pstrut" style="height:4.4em;"></span><span style="width:0.333em;height:2.4em;"><svg xmlns="http://www.w3.org/2000/svg" width="0.333em" height="2.4em" viewBox="0 0 333 2400"><path d="M145 15 v585 v1200 v585 c2.667,10,9.667,15,21,15
+c10,0,16.667,-5,20,-15 v-585 v-1200 v-585 c-2.667,-10,-9.667,-15,-21,-15
+c-10,0,-16.667,5,-20,15z M188 15 H145 v585 v1200 v585 h43z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.95em;"><span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p>太陽光は<strong>夜間 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>t</mi></msub><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">y_t = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></strong> になるため MAPE が発散する。
+昼夜を通した評価には使えない。</p>
+<p><strong>再エネ予測の標準的な指標</strong>は、<strong>定格容量で正規化</strong>した誤差である。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mtext>nRMSE</mtext><mo>=</mo><mfrac><mn>1</mn><msub><mi>P</mi><mtext>rated</mtext></msub></mfrac><msqrt><mrow><mfrac><mn>1</mn><mi>T</mi></mfrac><munderover><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mn>1</mn></mrow><mi>T</mi></munderover><mo stretchy="false">(</mo><msub><mi>y</mi><mi>t</mi></msub><mo>−</mo><msub><mover accent="true"><mi>y</mi><mo>^</mo></mover><mi>t</mi></msub><msup><mo stretchy="false">)</mo><mn>2</mn></msup></mrow></msqrt><mo>×</mo><mn>100</mn><mtext> </mtext><mo stretchy="false">[</mo><mi mathvariant="normal">%</mi><mo stretchy="false">]</mo></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\text{nRMSE} = \frac{1}{P_\text{rated}}\sqrt{\frac{1}{T}\sum_{t=1}^{T}(y_t-\hat{y}_t)^2}\times100\ [\%]}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:4.0032em;vertical-align:-1.6071em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.3961em;"><span style="top:-6.0032em;"><span class="pstrut" style="height:6.0032em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord text"><span class="mord">nRMSE</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">rated</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.0561em;"><span class="svg-align" style="top:-5.2832em;"><span class="pstrut" style="height:5.2832em;"></span><span class="mord" style="padding-left:1.056em;"><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8283em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2671em;"><span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">^</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1944em;"><span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span><span style="top:-4.0161em;"><span class="pstrut" style="height:5.2832em;"></span><span class="hide-tail" style="min-width:0.742em;height:3.3632em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="3.3632em" viewBox="0 0 400000 3363" preserveAspectRatio="xMinYMin slice"><path d="M702 80H40000040
+H742v3229l-4 4-4 4c-.667.7 -2 1.5-4 2.5s-4.167 1.833-6.5 2.5-5.5 1-9.5 1
+h-12l-28-84c-16.667-52-96.667 -294.333-240-727l-212 -643 -85 170
+c-4-3.333-8.333-7.667-13 -13l-13-13l77-155 77-156c66 199.333 139 419.667
+219 661 l218 661zM702 80H400000v40H742z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2671em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">100</span><span class="mspace"> </span><span class="mopen">[</span><span class="mord">%</span><span class="mclose">]</span></span></span></span></span><span style="top:-4.3961em;"><span class="pstrut" style="height:6.0032em;"></span><span class="stretchy fbox" style="height:4.0032em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.6071em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>実用上の目安</strong>（翌日予測、単一サイト）:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">電源</th>
+<th align="left">nRMSE の目安</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">太陽光（単一サイト）</td>
+<td align="left">8〜15%</td>
+</tr>
+<tr>
+<td align="left">太陽光（広域集約）</td>
+<td align="left">4〜8%</td>
+</tr>
+<tr>
+<td align="left">風力（単一サイト）</td>
+<td align="left">12〜20%</td>
+</tr>
+<tr>
+<td align="left">風力（広域集約）</td>
+<td align="left">8〜12%</td>
+</tr>
+</tbody></table></div>
+<p><strong>平滑化効果（smoothing effect）</strong>: 多数のサイトを集約すると、
+個々の誤差が打ち消し合って相対誤差が小さくなる。
+サイトが独立なら誤差は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><msqrt><mi>N</mi></msqrt></mrow><annotation encoding="application/x-tex">1/\sqrt{N}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1767em;vertical-align:-0.25em;"></span><span class="mord">1/</span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9267em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span><span style="top:-2.8867em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1133em;"><span></span></span></span></span></span></span></span></span> で減るが、
+実際には気象の空間相関があるため、そこまでは下がらない。</p>
+<blockquote>
+<p><strong>沖縄の不利な点</strong>: 系統が小さく、<strong>地理的な広がりも限られる</strong>ため、
+平滑化効果が本土より働きにくい。同じ島の中では雲の動きが相関するからである。</p>
+</blockquote>
+<!-- fig:ch10_metrics.png -->
+<p><img src="../%E5%9B%B3/ch10_metrics.png" alt="図 10.7">
+<em>図 10.7　予測誤差の評価。MAE 0.058 MW、RMSE 0.093 MW、定格で正規化した nRMSE は 4.6%。夜間は実績がほぼ 0 になるため MAPE が発散し（右図）、太陽光の評価には使えない。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch10_smoothing.png -->
+<p><img src="../%E5%9B%B3/ch10_smoothing.png" alt="図 10.8">
+<em>図 10.8　平滑化効果。誤差が独立なら地点数 N に対して 1/√N で減るが（9 地点で 15% → 5.0%）、地点間に相関 ρ があると σ₁√ρ が下限として残る。同じ雲・同じ前線が効く狭い地域では平滑化に期待できない。</em></p>
+<!-- /fig -->
+
+<h3 id="s12">10.2.7 アンサンブル予報と確率予測</h3>
+<p>カオス性（10.2.1 節）のため、単一の決定論的予報には限界がある。
+そこで初期値やモデル物理をわずかに変えた<strong>複数のシミュレーション</strong>を走らせる。</p>
+<p><strong>アンサンブル予報の使い方</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">使い方</th>
+<th align="left">内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>アンサンブル平均</strong></td>
+<td align="left">メンバーの平均。単独予報より精度が良いことが多い</td>
+</tr>
+<tr>
+<td align="left"><strong>スプレッド</strong></td>
+<td align="left">メンバーのばらつき。<strong>予測の不確実性の指標</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>確率予測</strong></td>
+<td align="left">「発電量が X MW を下回る確率 20%」のような表現</td>
+</tr>
+<tr>
+<td align="left"><strong>分位点予測</strong></td>
+<td align="left">10%、50%、90% 分位点を出す</td>
+</tr>
+</tbody></table></div>
+<p><strong>なぜ確率予測が電力で重要か</strong>: 第8回で見たとおり、
+需給計画では<strong>予備力をどれだけ持つか</strong>を決める必要がある。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>必要予備力</mtext><mo>=</mo><mi>f</mi><mo stretchy="false">(</mo><mtext>予測誤差の分布</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{必要予備力} = f(\text{予測誤差の分布})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">必要予備力</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mopen">(</span><span class="mord text"><span class="mord cjk_fallback">予測誤差の分布</span></span><span class="mclose">)</span></span></span></span></span></p>
+<p>点予測（1 つの数値）だけでは予備力を決められない。
+<strong>「どれくらい外れうるか」</strong>の情報が要る。
+スプレッドが大きい日は予備力を厚くし、小さい日は薄くする、という運用ができる。</p>
+<!-- fig:ch10_ensemble.png -->
+<p><img src="../%E5%9B%B3/ch10_ensemble.png" alt="図 10.9">
+<em>図 10.9　アンサンブル予報。初期値をわずかに変えた 21 メンバーの予報は先になるほど広がり、24 時間先で ±0.5 m/s、48 時間先で ±0.9 m/s になる。この広がり（スプレッド）が予測の不確実性を表す。</em></p>
+<!-- /fig -->
+
+<h3 id="s13">10.2.8 沖縄の気象特性と再エネ予測</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">特性</th>
+<th align="left">再エネ予測への影響</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>台風の常襲</strong></td>
+<td align="left">風車のカットアウト（25 m/s 超）が頻発。出力が定格→0 に急変</td>
+</tr>
+<tr>
+<td align="left"><strong>亜熱帯・高温</strong></td>
+<td align="left">太陽光の温度損失が大きい（10.2.4 節で 16% 試算）</td>
+</tr>
+<tr>
+<td align="left"><strong>海洋性気候・積雲</strong></td>
+<td align="left">積雲の発達・移動が速く、<strong>日射量の短時間変動が大きい</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>島嶼で地理的広がりが小</strong></td>
+<td align="left"><strong>平滑化効果が働きにくい</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>梅雨・秋雨</strong></td>
+<td align="left">長期間の低日射</td>
+</tr>
+<tr>
+<td align="left">塩害</td>
+<td align="left">設備劣化（予測ではなく保守の問題）</td>
+</tr>
+</tbody></table></div>
+<p><strong>特に重要なのは日射の短時間変動（ランピング）</strong>である。
+積雲が太陽を横切ると、<strong>数十秒で出力が 50% 以上変動</strong>することがある。
+これは NWP（格子 2〜5 km、更新 1〜3 時間）では原理的に捉えられない。</p>
+<p><strong>対策</strong>:</p>
+<ul>
+<li><strong>全天カメラ</strong>による雲の移動追跡（数分先の予測）</li>
+<li><strong>衛星画像</strong>からの雲移動ベクトル（数十分先）</li>
+<li>蓄電池による平滑化（第9回の FFR と同じ発想）</li>
+</ul>
+<!-- fig:ch10_curtail.png -->
+<p><img src="../%E5%9B%B3/ch10_curtail.png" alt="図 10.10">
+<em>図 10.10　休日の軽負荷日における出力制御。火力の最低出力を差し引いた残りが太陽光の居場所で、それを超えた分（最大 227 MW、日量 1,191 MWh）が制御される。予測が当たるからこそ前日に指示できる。</em></p>
+<!-- /fig -->
+
+<hr>
+<h2 id="s14">10.3 シミュレーション</h2>
+<h3 id="s15">10.3.1 太陽光発電量モデルの実装</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第10回 デモ1: 日射量・気温から太陽光発電量を推定する&quot;&quot;&quot;
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+
+# ---------- 太陽位置（簡易 NOAA アルゴリズム） ----------
+def solar_position(doy, hour, lat_deg, lon_deg, tz=9.0):
+    &quot;&quot;&quot;戻り値: 天頂角[deg], 方位角[deg]&quot;&quot;&quot;
+    lat = np.deg2rad(lat_deg)
+    decl = np.deg2rad(23.45)*np.sin(2*np.pi*(284+doy)/365)     # 赤緯
+    B = 2*np.pi*(doy-81)/364
+    EoT = 9.87*np.sin(2*B) - 7.53*np.cos(B) - 1.5*np.sin(B)    # 均時差[min]
+    solar_time = hour + (4*(lon_deg - 15*tz) + EoT)/60
+    omega = np.deg2rad(15*(solar_time - 12))                    # 時角
+    cos_z = (np.sin(lat)*np.sin(decl)
+             + np.cos(lat)*np.cos(decl)*np.cos(omega))
+    cos_z = np.clip(cos_z, -1, 1)
+    return np.rad2deg(np.arccos(cos_z)), np.rad2deg(omega)
+
+# ---------- 発電量モデル ----------
+def pv_power(G_poa, T_air, P_rated=1000.0,
+             gamma=-0.004, noct=45.0, eta_sys=0.82):
+    &quot;&quot;&quot;PVWatts 型モデル。G_poa[W/m2], T_air[degC] -&gt; 出力[kW]&quot;&quot;&quot;
+    T_cell = T_air + (noct - 20)/800*G_poa
+    P = P_rated*(G_poa/1000)*(1 + gamma*(T_cell - 25))*eta_sys
+    return np.maximum(P, 0.0), T_cell
+
+# ---------- 那覇の晴天日をシミュレート ----------
+LAT, LON = 26.21, 127.68        # 那覇
+doy = 196                        # 7月15日
+hours = np.arange(0, 24, 0.25)
+
+zenith, _ = solar_position(doy, hours, LAT, LON)
+# 晴天時の全天日射（簡易 Haurwitz モデル）
+cos_z = np.cos(np.deg2rad(zenith))
+G_clear = np.where(cos_z &gt; 0, 1098*cos_z*np.exp(-0.059/np.maximum(cos_z, 1e-6)), 0)
+
+# 気温の日変化（那覇の7月：最低27度、最高32度）
+T_air = 29.5 - 2.5*np.cos(2*np.pi*(hours-14)/24)
+
+P_naha, T_cell = pv_power(G_clear, T_air)
+# 比較: 福井（気温が低い）
+T_fukui = 26.0 - 4.0*np.cos(2*np.pi*(hours-14)/24)
+P_fukui, T_cell_f = pv_power(G_clear, T_fukui)
+
+fig, axes = plt.subplots(3, 1, figsize=(9, 9), sharex=True)
+axes[0].plot(hours, G_clear, color=&quot;#f4a261&quot;, lw=2)
+axes[0].set_ylabel(&quot;日射量 [W/m²]&quot;); axes[0].set_title(&quot;那覇 7/15 晴天日のシミュレーション&quot;)
+axes[0].grid(alpha=0.3)
+
+axes[1].plot(hours, T_air, label=&quot;外気温（那覇）&quot;)
+axes[1].plot(hours, T_cell, label=&quot;セル温度（那覇）&quot;)
+axes[1].plot(hours, T_fukui, &quot;--&quot;, label=&quot;外気温（福井）&quot;)
+axes[1].axhline(25, color=&quot;gray&quot;, ls=&quot;:&quot;, label=&quot;STC 基準 25°C&quot;)
+axes[1].set_ylabel(&quot;温度 [°C]&quot;); axes[1].legend(fontsize=8); axes[1].grid(alpha=0.3)
+
+axes[2].plot(hours, P_naha, lw=2, label=&quot;那覇&quot;)
+axes[2].plot(hours, P_fukui, &quot;--&quot;, lw=2, label=&quot;福井（同じ日射量と仮定）&quot;)
+axes[2].set_xlabel(&quot;時刻 [h]&quot;); axes[2].set_ylabel(&quot;出力 [kW]&quot;)
+axes[2].legend(); axes[2].grid(alpha=0.3)
+plt.tight_layout()
+plt.savefig(&quot;../図/ch10_pv_model.png&quot;, dpi=150)
+
+E_naha = np.trapz(P_naha, hours)
+E_fukui = np.trapz(P_fukui, hours)
+print(f&quot;日積算発電量（1 MW 設備）:&quot;)
+print(f&quot;  那覇: {E_naha:.1f} kWh   セル温度最高 {T_cell.max():.1f} °C&quot;)
+print(f&quot;  福井: {E_fukui:.1f} kWh   セル温度最高 {T_cell_f.max():.1f} °C&quot;)
+print(f&quot;  高温による損失: {(1-E_naha/E_fukui)*100:.1f} %&quot;)
+</code></pre>
+<h3 id="s16">10.3.2 風力発電のパワーカーブと予測誤差の感度</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第10回 デモ2: パワーカーブと風速誤差の伝播&quot;&quot;&quot;
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+
+P_RATED, U_IN, U_RATED, U_OUT = 3.0, 3.0, 12.0, 25.0
+
+def power_curve(u):
+    u = np.asarray(u, dtype=float)
+    P = np.zeros_like(u)
+    mid = (u &gt;= U_IN) &amp; (u &lt; U_RATED)
+    P[mid] = P_RATED*((u[mid]**3 - U_IN**3)/(U_RATED**3 - U_IN**3))
+    P[(u &gt;= U_RATED) &amp; (u &lt;= U_OUT)] = P_RATED
+    return P
+
+def wind_shear(u10, z=90.0, z_ref=10.0, alpha=0.14):
+    return u10*(z/z_ref)**alpha
+
+u = np.linspace(0, 30, 600)
+P = power_curve(u)
+dPdu = np.gradient(P, u)
+
+fig, axes = plt.subplots(1, 2, figsize=(13, 4.8))
+axes[0].plot(u, P, lw=2.5, color=&quot;#264653&quot;)
+for x, lab in [(U_IN, &quot;カットイン&quot;), (U_RATED, &quot;定格&quot;), (U_OUT, &quot;カットアウト&quot;)]:
+    axes[0].axvline(x, color=&quot;gray&quot;, ls=&quot;:&quot;, alpha=0.8)
+    axes[0].text(x, 3.15, lab, ha=&quot;center&quot;, fontsize=8)
+axes[0].set_xlabel(&quot;ハブ高さ風速 [m/s]&quot;); axes[0].set_ylabel(&quot;出力 [MW]&quot;)
+axes[0].set_title(&quot;パワーカーブ&quot;); axes[0].grid(alpha=0.3); axes[0].set_ylim(0, 3.4)
+
+axes[1].plot(u, np.abs(dPdu)*1000, lw=2, color=&quot;#e63946&quot;)
+axes[1].set_xlabel(&quot;風速 [m/s]&quot;); axes[1].set_ylabel(&quot;$|dP/du|$ [kW / (m/s)]&quot;)
+axes[1].set_title(&quot;風速誤差 1 m/s あたりの出力誤差&quot;)
+axes[1].grid(alpha=0.3)
+peak = u[np.argmax(np.abs(dPdu))]
+axes[1].axvline(peak, color=&quot;k&quot;, ls=&quot;--&quot;, alpha=0.7)
+axes[1].text(peak+0.4, np.max(np.abs(dPdu))*900, f&quot;最大 {peak:.1f} m/s&quot;, fontsize=9)
+plt.tight_layout()
+plt.savefig(&quot;../図/ch10_power_curve.png&quot;, dpi=150)
+
+print(&quot;=== ハブ高さ補正の効果 ===&quot;)
+for u10 in [4, 6, 8, 10]:
+    u_hub = wind_shear(u10)
+    print(f&quot;地上10m {u10:2d} m/s → ハブ90m {u_hub:5.2f} m/s | &quot;
+          f&quot;出力 {power_curve(u10):.3f} → {power_curve(u_hub):.3f} MW&quot;)
+
+print(&quot;\n=== 風速予測誤差 ±1 m/s の出力誤差 ===&quot;)
+for u0 in [5, 8, 11, 14, 24.5]:
+    e = (power_curve(u0+1) - power_curve(u0-1))/2
+    print(f&quot;風速 {u0:4.1f} m/s: 出力誤差 ±{abs(e)*1000:6.1f} kW &quot;
+          f&quot;（定格の {abs(e)/P_RATED*100:5.1f}%）&quot;)
+</code></pre>
+<p><strong>期待される結論</strong>: 風速 11 m/s 付近で誤差が最大になる。
+また 24.5 m/s ではカットアウトを跨ぐため誤差が極端に大きくなる。</p>
+<h3 id="s17">10.3.3 気象データの取得（Open-Meteo API）</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第10回 デモ3: 実際の気象予報データを取得する&quot;&quot;&quot;
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+
+def fetch_forecast(lat, lon, days=3):
+    &quot;&quot;&quot;Open-Meteo から予報を取得（無料・登録不要）&quot;&quot;&quot;
+    url = &quot;https://api.open-meteo.com/v1/forecast&quot;
+    params = {
+        &quot;latitude&quot;: lat, &quot;longitude&quot;: lon,
+        &quot;hourly&quot;: (&quot;temperature_2m,shortwave_radiation,direct_normal_irradiance,&quot;
+                   &quot;diffuse_radiation,wind_speed_10m,wind_speed_100m,cloud_cover&quot;),
+        &quot;timezone&quot;: &quot;Asia/Tokyo&quot;, &quot;forecast_days&quot;: days,
+    }
+    r = requests.get(url, params=params, timeout=30)
+    r.raise_for_status()
+    df = pd.DataFrame(r.json()[&quot;hourly&quot;])
+    df[&quot;time&quot;] = pd.to_datetime(df[&quot;time&quot;])
+    return df.set_index(&quot;time&quot;)
+
+# 那覇
+df = fetch_forecast(26.21, 127.68)
+print(df.head(12).round(2))
+
+fig, axes = plt.subplots(3, 1, figsize=(11, 8), sharex=True)
+axes[0].plot(df.index, df[&quot;shortwave_radiation&quot;], color=&quot;#f4a261&quot;, label=&quot;全天日射 GHI&quot;)
+axes[0].plot(df.index, df[&quot;diffuse_radiation&quot;], color=&quot;#8ecae6&quot;, label=&quot;散乱日射 DHI&quot;)
+axes[0].set_ylabel(&quot;日射量 [W/m²]&quot;); axes[0].legend(); axes[0].grid(alpha=0.3)
+axes[0].set_title(&quot;那覇の気象予報（Open-Meteo）&quot;)
+
+ax2 = axes[1]
+ax2.plot(df.index, df[&quot;temperature_2m&quot;], color=&quot;#e63946&quot;, label=&quot;気温&quot;)
+ax2.set_ylabel(&quot;気温 [°C]&quot;); ax2.legend(loc=&quot;upper left&quot;); ax2.grid(alpha=0.3)
+ax2b = ax2.twinx()
+ax2b.fill_between(df.index, df[&quot;cloud_cover&quot;], alpha=0.2, color=&quot;gray&quot;, label=&quot;雲量&quot;)
+ax2b.set_ylabel(&quot;雲量 [%]&quot;)
+
+axes[2].plot(df.index, df[&quot;wind_speed_10m&quot;], label=&quot;風速 10 m&quot;)
+axes[2].plot(df.index, df[&quot;wind_speed_100m&quot;], label=&quot;風速 100 m&quot;)
+axes[2].set_ylabel(&quot;風速 [m/s]&quot;); axes[2].legend(); axes[2].grid(alpha=0.3)
+plt.tight_layout()
+plt.savefig(&quot;../図/ch10_weather_forecast.png&quot;, dpi=150)
+
+# 発電量に換算
+G = df[&quot;shortwave_radiation&quot;].values
+T = df[&quot;temperature_2m&quot;].values
+P_pv, _ = pv_power(G, T, P_rated=1000.0)
+print(f&quot;\n1 MW 太陽光の予測発電量: {P_pv.sum()/1000*1:.1f} MWh（{len(df)}時間）&quot;)
+</code></pre>
+<blockquote>
+<p><strong>注意</strong>: この API は演習用である。実務では気象庁 GPV や
+気象事業者の予報を使う。API の仕様は変わることがあるので、
+動かない場合は Open-Meteo のドキュメントを確認すること。</p>
+</blockquote>
+<h3 id="s18">10.3.4 平滑化効果の検証</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第10回 デモ4: サイト集約による予測誤差の低減&quot;&quot;&quot;
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+rng = np.random.default_rng(0)
+
+def aggregate_nrmse(n_sites, corr, sigma=0.12, n_trial=4000):
+    &quot;&quot;&quot;空間相関 corr を持つ n_sites の平均誤差の標準偏差&quot;&quot;&quot;
+    # 等相関モデル: 共通成分 + 独立成分
+    common = rng.normal(0, np.sqrt(corr), (n_trial, 1))
+    indep  = rng.normal(0, np.sqrt(1-corr), (n_trial, n_sites))
+    err = sigma*(common + indep)          # 各サイトの誤差
+    return err.mean(axis=1).std()
+
+n_range = np.arange(1, 101)
+fig, ax = plt.subplots(figsize=(8.5, 5))
+for corr, label, color in [(0.0, &quot;相関なし（理想）&quot;, &quot;#2a9d8f&quot;),
+                            (0.3, &quot;相関 0.3（広域・本土）&quot;, &quot;#e9c46a&quot;),
+                            (0.7, &quot;相関 0.7（島嶼・沖縄）&quot;, &quot;#e63946&quot;)]:
+    vals = [aggregate_nrmse(n, corr)*100 for n in n_range]
+    ax.plot(n_range, vals, lw=2, color=color, label=label)
+
+ax.plot(n_range, 12/np.sqrt(n_range), &quot;k:&quot;, label=&quot;$1/\\sqrt{N}$ 則&quot;)
+ax.set_xlabel(&quot;集約するサイト数 $N$&quot;); ax.set_ylabel(&quot;nRMSE [%]&quot;)
+ax.set_title(&quot;平滑化効果 — 空間相関があると誤差は下がりにくい&quot;)
+ax.legend(); ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.savefig(&quot;../図/ch10_smoothing.png&quot;, dpi=150)
+
+print(f&quot;{&#39;サイト数&#39;:&gt;8} {&#39;相関0.0&#39;:&gt;10} {&#39;相関0.3&#39;:&gt;10} {&#39;相関0.7&#39;:&gt;10}&quot;)
+for n in [1, 5, 10, 50, 100]:
+    row = [aggregate_nrmse(n, c)*100 for c in (0.0, 0.3, 0.7)]
+    print(f&quot;{n:8d} {row[0]:10.2f} {row[1]:10.2f} {row[2]:10.2f}&quot;)
+</code></pre>
+<p><strong>期待される結論</strong>: 相関 0 なら <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><msqrt><mi>N</mi></msqrt></mrow><annotation encoding="application/x-tex">1/\sqrt{N}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1767em;vertical-align:-0.25em;"></span><span class="mord">1/</span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9267em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span><span style="top:-2.8867em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1133em;"><span></span></span></span></span></span></span></span></span> で減るが、
+相関 0.7（島嶼部を想定）では<strong>サイトをいくら増やしても
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>σ</mi><msqrt><mtext>corr</mtext></msqrt></mrow><annotation encoding="application/x-tex">\sigma\sqrt{\text{corr}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.04em;vertical-align:-0.2397em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8003em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord text"><span class="mord">corr</span></span></span></span><span style="top:-2.7603em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2397em;"><span></span></span></span></span></span></span></span></span> より下がらない</strong>。
+沖縄で平滑化効果が期待しにくい理由が定量的に示される。</p>
+<hr>
+<h2 id="s19">10.4 例題</h2>
+<h3 id="s20">例題 10-1（太陽光の温度損失）</h3>
+<p>定格 1 MW の太陽光発電所がある。温度係数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi><mo>=</mo><mo>−</mo><mn>0.0042</mn></mrow><annotation encoding="application/x-tex">\gamma = -0.0042</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">0.0042</span></span></span></span>/°C、
+NOCT = 45 °C、システム効率 0.82。</p>
+<p>日射量 950 W/m²、気温 33 °C のときの出力を求めよ。
+また気温 20 °C の場合と比較せよ。</p>
+<p><strong>解答</strong></p>
+<p><strong>セル温度</strong>:
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>T</mi><mtext>cell</mtext></msub><mo>=</mo><mn>33</mn><mo>+</mo><mfrac><mrow><mn>45</mn><mo>−</mo><mn>20</mn></mrow><mn>800</mn></mfrac><mo>×</mo><mn>950</mn><mo>=</mo><mn>33</mn><mo>+</mo><mn>29.7</mn><mo>=</mo><mn>62.7</mn><mtext> </mtext><mi mathvariant="normal">°</mi><mtext>C</mtext></mrow><annotation encoding="application/x-tex">T_\text{cell} = 33 + \frac{45-20}{800}\times950 = 33 + 29.7 = 62.7\ °\text{C}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cell</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">33</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">800</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">45</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">20</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">950</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">33</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">29.7</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord">62.7</span><span class="mspace"> </span><span class="mord">°</span><span class="mord text"><span class="mord">C</span></span></span></span></span></span></p>
+<p><strong>出力</strong>:
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo>=</mo><mn>1000</mn><mo>×</mo><mfrac><mn>950</mn><mn>1000</mn></mfrac><mo>×</mo><mo stretchy="false">[</mo><mn>1</mn><mo>−</mo><mn>0.0042</mn><mo stretchy="false">(</mo><mn>62.7</mn><mo>−</mo><mn>25</mn><mo stretchy="false">)</mo><mo stretchy="false">]</mo><mo>×</mo><mn>0.82</mn></mrow><annotation encoding="application/x-tex">P = 1000\times\frac{950}{1000}\times[1 - 0.0042(62.7-25)]\times0.82</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1000</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1000</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">950</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0.0042</span><span class="mopen">(</span><span class="mord">62.7</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">25</span><span class="mclose">)]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.82</span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo>=</mo><mn>1000</mn><mo>×</mo><mn>0.95</mn><mo>×</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mn>0.158</mn><mo stretchy="false">)</mo><mo>×</mo><mn>0.82</mn><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>656</mn><mtext> kW</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">= 1000\times0.95\times(1-0.158)\times0.82 = \boxed{656\ \text{kW}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1000</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.95</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0.158</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.82</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3744em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0344em;"><span style="top:-3.3744em;"><span class="pstrut" style="height:3.3744em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">656</span><span class="mspace"> </span><span class="mord text"><span class="mord">kW</span></span></span></span></span></span><span style="top:-3.0344em;"><span class="pstrut" style="height:3.3744em;"></span><span class="stretchy fbox" style="height:1.3744em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>気温 20 °C の場合</strong>:
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>T</mi><mtext>cell</mtext></msub><mo>=</mo><mn>20</mn><mo>+</mo><mn>29.7</mn><mo>=</mo><mn>49.7</mn><mtext> </mtext><mi mathvariant="normal">°</mi><mtext>C</mtext></mrow><annotation encoding="application/x-tex">T_\text{cell} = 20 + 29.7 = 49.7\ °\text{C}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cell</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">20</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">29.7</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord">49.7</span><span class="mspace"> </span><span class="mord">°</span><span class="mord text"><span class="mord">C</span></span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo>=</mo><mn>1000</mn><mo>×</mo><mn>0.95</mn><mo>×</mo><mo stretchy="false">[</mo><mn>1</mn><mo>−</mo><mn>0.0042</mn><mo stretchy="false">(</mo><mn>49.7</mn><mo>−</mo><mn>25</mn><mo stretchy="false">)</mo><mo stretchy="false">]</mo><mo>×</mo><mn>0.82</mn><mo>=</mo><mn>1000</mn><mo>×</mo><mn>0.95</mn><mo>×</mo><mn>0.896</mn><mo>×</mo><mn>0.82</mn><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>698</mn><mtext> kW</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">P = 1000\times0.95\times[1-0.0042(49.7-25)]\times0.82 = 1000\times0.95\times0.896\times0.82 = \boxed{698\ \text{kW}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1000</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.95</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0.0042</span><span class="mopen">(</span><span class="mord">49.7</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">25</span><span class="mclose">)]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.82</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1000</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.95</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.896</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.82</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3744em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0344em;"><span style="top:-3.3744em;"><span class="pstrut" style="height:3.3744em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">698</span><span class="mspace"> </span><span class="mord text"><span class="mord">kW</span></span></span></span></span></span><span style="top:-3.0344em;"><span class="pstrut" style="height:3.3744em;"></span><span class="stretchy fbox" style="height:1.3744em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>比較</strong>: 気温が 13 °C 高いだけで出力が <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>698</mn><mo>−</mo><mn>656</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mn>698</mn><mo>=</mo><mn>6.0</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">(698-656)/698 = 6.0\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">698</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">656</span><span class="mclose">)</span><span class="mord">/698</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">6.0%</span></span></span></span> 低下する。
+沖縄のような高温地域では<strong>設備利用率が本土より低くなる</strong>要因である。</p>
+<h3 id="s21">例題 10-2（ハブ高さ補正）</h3>
+<p>気象予報で地上 10 m の風速が 7.0 m/s と予測された。
+ハブ高さ 100 m、海上（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>=</mo><mn>0.12</mn></mrow><annotation encoding="application/x-tex">\alpha = 0.12</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.12</span></span></span></span>）の風車について答えよ。</p>
+<ol>
+<li>ハブ高さの風速を求めよ。</li>
+<li>ロータ直径 100 m、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>C</mi><mi>p</mi></msub><mo>=</mo><mn>0.45</mn></mrow><annotation encoding="application/x-tex">C_p = 0.45</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">p</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.45</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi><mo>=</mo><mn>1.225</mn></mrow><annotation encoding="application/x-tex">\rho = 1.225</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">ρ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.225</span></span></span></span> kg/m³ として出力を求めよ。</li>
+<li>ハブ高さ補正を忘れた場合、出力を何 % 過小評価するか。</li>
+</ol>
+<p><strong>解答</strong></p>
+<p><strong>(1)</strong>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>u</mi><mtext>hub</mtext></msub><mo>=</mo><mn>7.0</mn><mo>×</mo><msup><mrow><mo fence="true">(</mo><mfrac><mn>100</mn><mn>10</mn></mfrac><mo fence="true">)</mo></mrow><mn>0.12</mn></msup><mo>=</mo><mn>7.0</mn><mo>×</mo><msup><mn>10</mn><mn>0.12</mn></msup><mo>=</mo><mn>7.0</mn><mo>×</mo><mn>1.318</mn><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>9.23</mn><mtext> m/s</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">u_\text{hub} = 7.0\times\left(\frac{100}{10}\right)^{0.12} = 7.0\times10^{0.12} = 7.0\times1.318 = \boxed{9.23\ \text{m/s}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">hub</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">7.0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.604em;vertical-align:-0.95em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">10</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">100</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.654em;"><span style="top:-3.9029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">0.12</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">7.0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8641em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">0.12</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">7.0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.318</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.68em;vertical-align:-0.59em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.09em;"><span style="top:-3.68em;"><span class="pstrut" style="height:3.68em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">9.23</span><span class="mspace"> </span><span class="mord text"><span class="mord">m/s</span></span></span></span></span></span><span style="top:-3.09em;"><span class="pstrut" style="height:3.68em;"></span><span class="stretchy fbox" style="height:1.68em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.59em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>(2)</strong> 受風面積 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi><mo>=</mo><mi>π</mi><mo>×</mo><msup><mn>50</mn><mn>2</mn></msup><mo>=</mo><mn>7854</mn></mrow><annotation encoding="application/x-tex">A = \pi\times50^2 = 7854</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">π</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">5</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">7854</span></span></span></span> m²。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>×</mo><mn>1.225</mn><mo>×</mo><mn>7854</mn><mo>×</mo><msup><mn>9.23</mn><mn>3</mn></msup><mo>×</mo><mn>0.45</mn></mrow><annotation encoding="application/x-tex">P = \frac{1}{2}\times1.225\times7854\times9.23^3\times0.45</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.225</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">7854</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9474em;vertical-align:-0.0833em;"></span><span class="mord">9.2</span><span class="mord"><span class="mord">3</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.45</span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo>=</mo><mn>0.5</mn><mo>×</mo><mn>1.225</mn><mo>×</mo><mn>7854</mn><mo>×</mo><mn>786.3</mn><mo>×</mo><mn>0.45</mn><mo>=</mo><mn>1.703</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup><mtext> W</mtext><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>1.70</mn><mtext> MW</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">= 0.5\times1.225\times7854\times786.3\times0.45 = 1.703\times10^6\ \text{W} = \boxed{1.70\ \text{MW}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.5</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.225</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">7854</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">786.3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.45</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.703</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8641em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span><span class="mspace"> </span><span class="mord text"><span class="mord">W</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">1.70</span><span class="mspace"> </span><span class="mord text"><span class="mord">MW</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>(3)</strong> 補正なし（7.0 m/s）だと</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msup><mi>P</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo>=</mo><mn>0.5</mn><mo>×</mo><mn>1.225</mn><mo>×</mo><mn>7854</mn><mo>×</mo><mn>343</mn><mo>×</mo><mn>0.45</mn><mo>=</mo><mn>0.743</mn><mtext> MW</mtext></mrow><annotation encoding="application/x-tex">P&#x27; = 0.5\times1.225\times7854\times343\times0.45 = 0.743\ \text{MW}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8019em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8019em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.5</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.225</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">7854</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">343</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.45</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">0.743</span><span class="mspace"> </span><span class="mord text"><span class="mord">MW</span></span></span></span></span></span></p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mrow><mn>1.70</mn><mo>−</mo><mn>0.74</mn></mrow><mn>1.70</mn></mfrac><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>56</mn><mtext> </mtext><mi mathvariant="normal">%</mi><mtext> の過小評価</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\frac{1.70-0.74}{1.70} = \boxed{56\ \%\ \text{の過小評価}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1.70</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1.70</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.74</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4856em;vertical-align:-0.3956em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.09em;"><span style="top:-3.4856em;"><span class="pstrut" style="height:3.4856em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">56</span><span class="mspace"> </span><span class="mord">%</span><span class="mspace"> </span><span class="mord text"><span class="mord cjk_fallback">の過小評価</span></span></span></span></span></span><span style="top:-3.09em;"><span class="pstrut" style="height:3.4856em;"></span><span class="stretchy fbox" style="height:1.4856em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3956em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>出力が風速の 3 乗に比例するため、<strong>わずかな風速の差が巨大な出力差</strong>になる。</p>
+<h3 id="s22">例題 10-3（予測誤差と予備力）</h3>
+<p>ある系統に太陽光 500 MW が接続されている。
+翌日予測の nRMSE が 8%、誤差が正規分布に従うとする。</p>
+<ol>
+<li>予測誤差の標準偏差 [MW] を求めよ。</li>
+<li>99.7%（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3</mn><mi>σ</mi></mrow><annotation encoding="application/x-tex">3\sigma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span></span></span></span>）の確率で不足しないために必要な予備力を求めよ。</li>
+<li>広域集約により nRMSE が 5% に改善した場合、予備力はどれだけ減るか。</li>
+<li>予備力を火力の待機で確保する場合、(3) の改善の経済的意義を論じよ。</li>
+</ol>
+<p><strong>解答</strong></p>
+<p><strong>(1)</strong>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>σ</mi><mo>=</mo><mn>0.08</mn><mo>×</mo><mn>500</mn><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>40</mn><mtext> MW</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\sigma = 0.08\times500 = \boxed{40\ \text{MW}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.08</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">500</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">40</span><span class="mspace"> </span><span class="mord text"><span class="mord">MW</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>(2)</strong>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>3</mn><mi>σ</mi><mo>=</mo><mn>3</mn><mo>×</mo><mn>40</mn><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>120</mn><mtext> MW</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">3\sigma = 3\times40 = \boxed{120\ \text{MW}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">120</span><span class="mspace"> </span><span class="mord text"><span class="mord">MW</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>(3)</strong>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msup><mi>σ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo>=</mo><mn>0.05</mn><mo>×</mo><mn>500</mn><mo>=</mo><mn>25</mn><mtext> MW</mtext><mo separator="true">,</mo><mspace width="2em"/><mn>3</mn><msup><mi>σ</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo>=</mo><mn>75</mn><mtext> MW</mtext></mrow><annotation encoding="application/x-tex">\sigma&#x27; = 0.05\times500 = 25\ \text{MW}, \qquad 3\sigma&#x27; = 75\ \text{MW}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8019em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8019em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.05</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">500</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.9963em;vertical-align:-0.1944em;"></span><span class="mord">25</span><span class="mspace"> </span><span class="mord text"><span class="mord">MW</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">3</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8019em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">75</span><span class="mspace"> </span><span class="mord text"><span class="mord">MW</span></span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>削減量</mtext><mo>=</mo><mn>120</mn><mo>−</mo><mn>75</mn><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>45</mn><mtext> MW</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\text{削減量} = 120 - 75 = \boxed{45\ \text{MW}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">削減量</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">120</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">75</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">45</span><span class="mspace"> </span><span class="mord text"><span class="mord">MW</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>(4)</strong> 火力を 45 MW 分だけ待機させずに済む。待機（部分負荷運転）は</p>
+<ul>
+<li>燃料を消費するが発電しない → <strong>効率が悪い</strong></li>
+<li>起動・停止の回数が増えると設備が傷む</li>
+</ul>
+<p>一般に部分負荷運転のコストを 3,000 円/MWh 程度とすると、
+年間で <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>45</mn><mo>×</mo><mn>8760</mn><mo>×</mo><mn>3000</mn><mo>=</mo><mn>11.8</mn></mrow><annotation encoding="application/x-tex">45 \times 8760 \times 3000 = 11.8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">45</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">8760</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3000</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">11.8</span></span></span></span> 億円/年の削減になる。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mtext>予測精度の改善は、そのまま運用コストの削減になる</mtext></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{\text{予測精度の改善は、そのまま運用コストの削減になる}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord text"><span class="mord cjk_fallback">予測精度の改善は、そのまま運用コストの削減になる</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>これが電力会社が予測技術に投資する理由である。</p>
+<hr>
+<h2 id="s23">10.5 演習問題</h2>
+<h3 id="s24">基礎問題</h3>
+<p><strong>問 10-1</strong> 数値気象予報（NWP）の 3 要素（モデル・初期値・境界条件）を説明せよ。
+また、なぜ予報可能期間に原理的な限界があるのか述べよ。</p>
+<p><strong>問 10-2</strong> GSM、MSM、LFM の格子間隔・予報期間・主な用途を表にまとめ、
+翌日の再エネ予測にはどれが適するか理由とともに答えよ。</p>
+<p><strong>問 10-3</strong> 定格 2 MW の太陽光発電所について、
+日射量 800 W/m²、気温 30 °C、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi><mo>=</mo><mo>−</mo><mn>0.004</mn></mrow><annotation encoding="application/x-tex">\gamma=-0.004</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">0.004</span></span></span></span>/°C、NOCT=45 °C、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>η</mi><mtext>sys</mtext></msub><mo>=</mo><mn>0.80</mn></mrow><annotation encoding="application/x-tex">\eta_\text{sys}=0.80</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">η</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.80</span></span></span></span>
+として出力を求めよ。</p>
+<p><strong>問 10-4</strong> 太陽光発電の予測精度評価に MAPE を使うべきでない理由を述べ、
+代わりに何を使うべきか答えよ。</p>
+<h3 id="s25">応用問題</h3>
+<p><strong>問 10-5</strong> 沖縄本島に定格 50 MW の太陽光発電所を建設する計画がある。</p>
+<p>(a) Open-Meteo API で那覇の 1 週間の気象予報を取得せよ。
+(b) 10.3.1 節のモデルで発電量を推定し、日別の発電電力量 [MWh] を求めよ。
+(c) 設備利用率を計算し、日本の太陽光の平均（約 14%）と比較せよ。
+(d) 気温を一律 5 °C 下げた仮想ケースを計算し、温度の影響を定量化せよ。
+(e) セル温度を下げる技術的手段を 2 つ挙げ、それぞれの費用対効果を論じよ。</p>
+<p><strong>問 10-6</strong> 沖縄本島北部に風力発電所（3 MW × 10 基、ハブ高さ 80 m）を計画する。</p>
+<p>(a) 地上 10 m の風速が 6.5 m/s、海岸部（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>=</mo><mn>0.14</mn></mrow><annotation encoding="application/x-tex">\alpha=0.14</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.14</span></span></span></span>）のとき、
+   ハブ高さ風速と 1 基あたりの出力を求めよ（10.3.2 節のパワーカーブを使う）。
+(b) 台風接近により風速が 30 m/s に達した。発電所の出力はいくらか。
+(c) 風速予測が 24 m/s だったが実際は 26 m/s だった場合の予測誤差 [MW] を求めよ。
+   この誤差が系統運用に与える影響を、第8回の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>P</mi><mo>=</mo><mi>K</mi><mi mathvariant="normal">Δ</mi><mi>F</mi></mrow><annotation encoding="application/x-tex">\Delta P = K\Delta F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">F</span></span></span></span> を用いて論じよ。
+   （沖縄本島系統の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>150</mn></mrow><annotation encoding="application/x-tex">K = 150</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">150</span></span></span></span> MW/Hz とする）
+(d) このようなカットアウト付近のリスクに対する運用上の対策を 2 つ提案せよ。</p>
+<p><strong>問 10-7</strong> 予測の不確実性と予備力について検討する。</p>
+<p>(a) 太陽光 300 MW、風力 100 MW が接続された系統がある。
+   太陽光の nRMSE 10%、風力の nRMSE 15%、両者の誤差が独立とするとき、
+   合計の予測誤差の標準偏差 [MW] を求めよ。
+(b) 誤差が相関係数 0.4 で相関している場合はどうなるか。
+(c) <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>σ</mi></mrow><annotation encoding="application/x-tex">2\sigma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span></span></span></span> の予備力を確保する場合の必要量を (a)(b) それぞれで求めよ。
+(d) アンサンブル予報を用いると、日ごとに予備力を変えられる。
+   このメリットを定量的に論じよ（スプレッドが大きい日と小さい日の例を作ってよい）。</p>
+<hr>
+<h2 id="s26">10.6 まとめ</h2>
+<h3 id="s27">キーポイント</h3>
+<ul>
+<li>再エネの導入により、<strong>需給バランスの不確実性が供給側にも入った</strong>。
+第8回の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>P</mi><mo>=</mo><mi>K</mi><mi mathvariant="normal">Δ</mi><mi>F</mi></mrow><annotation encoding="application/x-tex">\Delta P = K\Delta F</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">F</span></span></span></span> の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>P</mi></mrow><annotation encoding="application/x-tex">\Delta P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span> を決めるのが気象予測である。</li>
+<li><strong>NWP</strong> は物理方程式を格子上で解く。3 要素は<strong>モデル・初期値・境界条件</strong>。
+大気のカオス性により<strong>予報可能期間には原理的限界</strong>がある（1〜2 週間）。</li>
+<li>日本では <strong>GSM</strong>（20 km、週間）、<strong>MSM</strong>（5 km、翌日の主力）、
+<strong>LFM</strong>（2 km、当日）、<strong>MEPS</strong>（アンサンブル）が使える。</li>
+<li><strong>太陽光</strong>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo>=</mo><msub><mi>P</mi><mtext>rated</mtext></msub><mstyle scriptlevel="0" displaystyle="true"><mfrac><msub><mi>G</mi><mtext>POA</mtext></msub><mn>1000</mn></mfrac></mstyle><mo stretchy="false">[</mo><mn>1</mn><mo>+</mo><mi>γ</mi><mo stretchy="false">(</mo><msub><mi>T</mi><mtext>cell</mtext></msub><mo>−</mo><mn>25</mn><mo stretchy="false">)</mo><mo stretchy="false">]</mo><msub><mi>η</mi><mtext>sys</mtext></msub></mrow><annotation encoding="application/x-tex">P = P_\text{rated}\dfrac{G_\text{POA}}{1000}[1+\gamma(T_\text{cell}-25)]\eta_\text{sys}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0463em;vertical-align:-0.686em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">rated</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1000</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">G</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">POA</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mopen">[</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0556em;">γ</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">cell</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord">25</span><span class="mclose">)]</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">η</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>。
+温度係数が負なので<strong>高温の沖縄では出力が伸びにくい</strong>（試算で 16% 損失）。</li>
+<li><strong>風力</strong>: 気象データの地上 10 m 風速を<strong>べき法則でハブ高さに補正</strong>すること。
+忘れると 50% 以上の過小評価になる。
+予測誤差が最大なのは<strong>パワーカーブの傾きが最大の領域</strong>と<strong>カットアウト付近</strong>。</li>
+<li><strong>評価指標</strong>: 太陽光は夜間 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">y=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> で MAPE が発散するため、
+<strong>定格容量で正規化した nRMSE</strong> を使う。</li>
+<li><strong>平滑化効果</strong>: サイト集約で誤差は減るが、空間相関があると <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><msqrt><mi>N</mi></msqrt></mrow><annotation encoding="application/x-tex">1/\sqrt N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1767em;vertical-align:-0.25em;"></span><span class="mord">1/</span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9267em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.109em;padding-left:0.833em;">N</span></span><span style="top:-2.8867em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1133em;"><span></span></span></span></span></span></span></span></span> ほどには減らない。
+<strong>島嶼部の沖縄では平滑化が効きにくい</strong>。</li>
+<li><strong>アンサンブル予報</strong>により不確実性（スプレッド）を定量化でき、
+<strong>予備力を日ごとに最適化</strong>できる。予測精度の改善は直接コスト削減になる。</li>
+</ul>
+<h3 id="s28">次回への橋渡し</h3>
+<p>第10回では<strong>供給側</strong>（再エネ発電量）の予測を扱った。
+第11回では<strong>需要側</strong>の予測を扱う。</p>
+<p>需要予測は再エネ予測より歴史が古く、統計的手法が確立されている。
+季節性・週日性・時間帯別のパターン、気温との非線形な関係（冷暖房需要）を
+回帰分析と ARIMA モデルで扱う。</p>
+<p>第12回では、両者を機械学習で統一的に扱う。</p>
+
+    <div class="pn"><a class="pn-prev" href="ch09.html">← 第9回 インバータと系統連系</a><a class="pn-next" href="ch11.html">第11回 電力需要予測 →</a></div>
+  </main>
+  <aside class="side"><nav class="toc" aria-label="目次"><div class="toc-h">この回の目次</div><a class="lv2" href="#s1">まず直感で（3 分でつかむ）</a><a class="lv2" href="#s2">10.1 導入</a><a class="lv3" href="#s3">学習目標</a><a class="lv3" href="#s4">なぜ電力工学で気象を学ぶのか</a><a class="lv2" href="#s5">10.2 理論</a><a class="lv3" href="#s6">10.2.1 数値気象予報（NWP）の枠組み</a><a class="lv3" href="#s7">10.2.2 日本で利用できる数値予報モデル</a><a class="lv3" href="#s8">10.2.3 気象データの入手</a><a class="lv3" href="#s9">10.2.4 日射量から太陽光発電量へ</a><a class="lv3" href="#s10">10.2.5 風速から風力発電量へ</a><a class="lv3" href="#s11">10.2.6 予測誤差の評価と正規化</a><a class="lv3" href="#s12">10.2.7 アンサンブル予報と確率予測</a><a class="lv3" href="#s13">10.2.8 沖縄の気象特性と再エネ予測</a><a class="lv2" href="#s14">10.3 シミュレーション</a><a class="lv3" href="#s15">10.3.1 太陽光発電量モデルの実装</a><a class="lv3" href="#s16">10.3.2 風力発電のパワーカーブと予測誤差の感度</a><a class="lv3" href="#s17">10.3.3 気象データの取得（Open-Meteo API）</a><a class="lv3" href="#s18">10.3.4 平滑化効果の検証</a><a class="lv2" href="#s19">10.4 例題</a><a class="lv3" href="#s20">例題 10-1（太陽光の温度損失）</a><a class="lv3" href="#s21">例題 10-2（ハブ高さ補正）</a><a class="lv3" href="#s22">例題 10-3（予測誤差と予備力）</a><a class="lv2" href="#s23">10.5 演習問題</a><a class="lv3" href="#s24">基礎問題</a><a class="lv3" href="#s25">応用問題</a><a class="lv2" href="#s26">10.6 まとめ</a><a class="lv3" href="#s27">キーポイント</a><a class="lv3" href="#s28">次回への橋渡し</a></nav></aside>
+</div>
+<footer class="bottom">教科書：加藤・田岡『電力システム工学の基礎』 ／ 電力エネルギーシステム解析の基礎と応用 ／ 数式描画：KaTeX（同梱・MIT）</footer>
+<script>
+// 目次の現在位置ハイライト（外部依存なし・file:// で動く）
+(function(){
+  var links=[].slice.call(document.querySelectorAll('.toc a')); if(!links.length) return;
+  var heads=links.map(function(a){return document.getElementById(a.getAttribute('href').slice(1));});
+  function upd(){ var y=window.scrollY+120, i=0; for(var k=0;k<heads.length;k++){ if(heads[k]&&heads[k].offsetTop<=y) i=k; }
+    links.forEach(function(a,k){ a.classList.toggle('on',k===i); }); }
+  window.addEventListener('scroll',upd,{passive:true}); upd();
+})();
+</script>
+</body>
+</html>

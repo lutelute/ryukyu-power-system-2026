@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第5回 ニュートン・ラフソン法 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第5回 ニュートン・ラフソン法 — 誤差の「桁」が毎回倍になる</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch05.html">📖 講義ノート（第5回）</a><a class="e" href="../ex/ch05.html">✍ 演習で確かめる</a></div>
+  <div class="lead">電力方程式は非線形なので一発では解けず、<b>推定 → 修正</b>を繰り返します。この回は 1 変数で感覚をつかんでから、3 母線系統で<b>ガウス・ザイデル法とニュートン・ラフソン法を本当に反復</b>し、収束の速さを比べます。数値はすべてこのページ内で計算しています。前提は<a href="ybus.html">第4回</a>、次は<a href="voltage.html">第6回 電圧と無効電力</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>反復法の中身を知らないと、「収束しない」が系統の限界（電圧崩壊）なのか数値の問題なのか区別できません。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>いまの推定のまわりで方程式を直線に近似して解き、推定を直す。それを 3〜5 回。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>pandapower / MATPOWER / PSS®E の潮流計算の標準解法。EMS の状態推定も同じ構造。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>反復 ν <input type="range" id="nuRange" min="0" max="4" step="1" value="0"> <span id="nuVal">0</span></label>
+      <label>GS 加速係数 <input type="range" id="accRange" min="1.0" max="1.8" step="0.1" value="1.6"> <span id="accVal">1.6</span></label>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>ニュートン法の反復回数は系統の大きさに<b>ほとんど依存しない</b> — 14 母線でも 1 万母線でも 3〜5 回。だから実務の標準になりました。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>反復回数が少ないニュートン法のほうが、いつでも計算が速い。</div>
+    <div class="row"><span class="o">✓</span>1 反復のコストはニュートン法のほうが桁違いに重い（ヤコビアン構築＋連立方程式）。総時間で勝つのは<b>2 次収束で反復が 3〜5 回に収まるから</b>で、悪条件では発散もします。</div>
+    <div class="row"><span class="x">✗</span>潮流計算が収束しなければ、その系統は物理的に電圧崩壊する。</div>
+    <div class="row"><span class="o">✓</span>「解が存在しない」と「解はあるが見つけられない（初期値が悪い）」の 2 通りがあります。区別には継続法などが必要で、収束失敗を即「崩壊」と読むのは早計です。</div>
+  </div>
+  <details><summary>もっと詳しく：ヤコビアンの要素・高速デカップル法・Q 限界処理</summary><div class="det">
+    修正方程式は [Δ<b>P</b>; Δ<b>Q</b>] = [<b>H</b> <b>N</b>; <b>M</b> <b>L</b>] [Δ<b>θ</b>; Δ<b>V</b>/<b>V</b>]。対角要素は <i>H<sub>ii</sub></i> = −<i>Q<sub>i</sub></i> − <i>B<sub>ii</sub>V<sub>i</sub></i>²、<i>L<sub>ii</sub></i> = <i>Q<sub>i</sub></i> − <i>B<sub>ii</sub>V<sub>i</sub></i>² のように P, Q で書けるので、ミスマッチ計算の結果を再利用できます。
+    高速デカップル法（Stott）は <i>X</i>≫<i>R</i>・cos θ≈1 を使って <b>N</b>≈<b>M</b>≈0 とし、係数行列を定数化して LU 分解を 1 回で済ませます。反復は 10〜20 回に増えますが 1 反復が軽く、N-1 の大量計算で威力を発揮します。
+    PV 指定ノードの Q が発電機の限界を超えたら Q を限界値に固定して PQ に切り替えます。切替が多発する系統は無効電力の余裕が乏しく、電圧崩壊の前兆です。
+    <b>限界：</b>このページの実装は密行列・3 母線のデモです。実系統では疎行列ソルバーと、Q 限界の切替・切り戻しが必要です。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+/* ---- 系統（第5回ノートと同じ 3 母線） ---- */
+const LINES = [{ a: 0, b: 1, r: .02, x: .06, bh: .03 }, { a: 0, b: 2, r: .08, x: .24, bh: .025 }, { a: 1, b: 2, r: .06, x: .18, bh: .02 }];
+const TYPE = [0, 1, 2], PS = [0, .5, -1.0], QS = [0, 0, -.4], VM = [1.05, 1.02, 1.0];
+function buildY() { const G = [[0,0,0],[0,0,0],[0,0,0]], B = [[0,0,0],[0,0,0],[0,0,0]];
+  LINES.forEach(l => { const d = l.r * l.r + l.x * l.x, g = l.r / d, b = -l.x / d; G[l.a][l.b] -= g; G[l.b][l.a] -= g; B[l.a][l.b] -= b; B[l.b][l.a] -= b; G[l.a][l.a] += g; G[l.b][l.b] += g; B[l.a][l.a] += b + l.bh; B[l.b][l.b] += b + l.bh; });
+  return { G, B }; }
+const { G, B } = buildY();
+function calcPQ(V, th) { const P = [0, 0, 0], Q = [0, 0, 0]; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { const t = th[i] - th[j]; P[i] += V[i] * V[j] * (G[i][j] * Math.cos(t) + B[i][j] * Math.sin(t)); Q[i] += V[i] * V[j] * (G[i][j] * Math.sin(t) - B[i][j] * Math.cos(t)); } return { P, Q }; }
+function solve3(A, b) { const M = A.map((r, i) => [...r, b[i]]); for (let c = 0; c < 3; c++) { let p = c; for (let r = c + 1; r < 3; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r; [M[c], M[p]] = [M[p], M[c]]; for (let r = 0; r < 3; r++) { if (r === c) continue; const f = M[r][c] / M[c][c]; for (let k = c; k < 4; k++) M[r][k] -= f * M[c][k]; } } return M.map((r, i) => r[3] / r[i]); }
+function jacobian(V, th, P, Q) { const pvpq = [1, 2], pq = [2]; const H = [[0,0],[0,0]], N = [[0],[0]], Mm = [[0,0]], L = [[0]];
+  pvpq.forEach((i, a) => { pvpq.forEach((j, b) => { H[a][b] = i === j ? -Q[i] - B[i][i] * V[i] ** 2 : V[i] * V[j] * (G[i][j] * Math.sin(th[i] - th[j]) - B[i][j] * Math.cos(th[i] - th[j])); });
+    pq.forEach((j, b) => { N[a][b] = i === j ? P[i] + G[i][i] * V[i] ** 2 : V[i] * V[j] * (G[i][j] * Math.cos(th[i] - th[j]) + B[i][j] * Math.sin(th[i] - th[j])); }); });
+  pq.forEach((i, a) => { pvpq.forEach((j, b) => { Mm[a][b] = i === j ? P[i] - G[i][i] * V[i] ** 2 : -V[i] * V[j] * (G[i][j] * Math.cos(th[i] - th[j]) + B[i][j] * Math.sin(th[i] - th[j])); });
+    pq.forEach((j, b) => { L[a][b] = i === j ? Q[i] - B[i][i] * V[i] ** 2 : V[i] * V[j] * (G[i][j] * Math.sin(th[i] - th[j]) - B[i][j] * Math.cos(th[i] - th[j])); }); });
+  return { H, N, M: Mm, L, J: [[H[0][0], H[0][1], N[0][0]], [H[1][0], H[1][1], N[1][0]], [Mm[0][0], Mm[0][1], L[0][0]]] }; }
+function nrRun(maxIt = 20, tol = 1e-8) { const V = [...VM], th = [0, 0, 0], states = [];
+  for (let it = 0; it <= maxIt; it++) { const { P, Q } = calcPQ(V, th); const mis = [PS[1] - P[1], PS[2] - P[2], QS[2] - Q[2]]; const err = Math.max(...mis.map(Math.abs)); const jac = jacobian(V, th, P, Q);
+    states.push({ V: [...V], th: [...th], err, P: [...P], Q: [...Q], mis, jac }); if (err < tol) break;
+    const dx = solve3(jac.J, mis); th[1] += dx[0]; th[2] += dx[1]; V[2] *= (1 + dx[2]); }
+  return states; }
+/* ---- ガウス・ザイデル（複素数を手で扱う） ---- */
+const C = (re, im) => ({ re, im }); const cadd = (a, b) => C(a.re + b.re, a.im + b.im), csub = (a, b) => C(a.re - b.re, a.im - b.im), cmul = (a, b) => C(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re), cconj = a => C(a.re, -a.im), cabs = a => Math.hypot(a.re, a.im), cdiv = (a, b) => { const d = b.re * b.re + b.im * b.im; return C((a.re * b.re + a.im * b.im) / d, (a.im * b.re - a.re * b.im) / d); };
+const Yc = (i, j) => C(G[i][j], B[i][j]);
+function gsRun(accel = 1.6, maxIt = 3000, tol = 1e-8) { const V = [C(VM[0], 0), C(VM[1], 0), C(1, 0)], Q = [...QS], hist = [];
+  for (let it = 0; it < maxIt; it++) { const Vp = V.map(v => C(v.re, v.im));
+    for (let i = 1; i < 3; i++) { let yv = C(0, 0); for (let j = 0; j < 3; j++) yv = cadd(yv, cmul(Yc(i, j), V[j]));
+      if (TYPE[i] === 1) Q[i] = -cmul(cconj(V[i]), yv).im;
+      const sum = csub(yv, cmul(Yc(i, i), V[i])); let vn = cdiv(csub(cdiv(C(PS[i], -Q[i]), cconj(V[i])), sum), Yc(i, i)); vn = cadd(V[i], C(accel * (vn.re - V[i].re), accel * (vn.im - V[i].im)));
+      if (TYPE[i] === 1) { const m = cabs(vn); vn = C(VM[i] * vn.re / m, VM[i] * vn.im / m); } V[i] = vn; }
+    const err = Math.max(...V.map((v, k) => cabs(csub(v, Vp[k])))); hist.push(err); if (err < tol) break; }
+  return { V, hist, iters: hist.length }; }
+/* ---- 1 変数：x² − 2 = 0 ---- */
+function newton1(x0 = 1.0, n = 6) { const xs = [x0]; for (let k = 0; k < n; k++) xs.push(xs[k] - (xs[k] ** 2 - 2) / (2 * xs[k])); return xs; }
+function fixed1(x0 = 1.0, n = 40) { const xs = [x0]; for (let k = 0; k < n; k++) xs.push(xs[k] - 0.3 * (xs[k] ** 2 - 2)); return xs; }   // 単純反復（1 次）
+let NU = 0, ACC = 1.6; const NR = nrRun(); let GS = gsRun(ACC);
+const fe = x => x.toExponential(1), f4 = x => x.toFixed(4), f5 = x => x.toFixed(5), deg = r => (r * 180 / Math.PI).toFixed(3);
+const stateAt = () => NR[Math.min(NU, NR.length - 1)];
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 1 変数で感覚', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ 潮流へ適用', c: 'var(--loss)', start: 5 }, { t: 'Ⅳ 対比・まとめ', c: 'var(--accent)', start: 11 } ];
+const SLIDES = [
+  { legend: '電力方程式の非線形項：V の積（青）と cos/sin（橙）',
+    html() { return '<h3>問題：電力方程式は「一発」では解けない</h3><div class="eq curr"><i>P<sub>i</sub></i> = <i>V<sub>i</sub></i> Σ <i>V<sub>j</sub></i>(<i>G<sub>ij</sub></i>cos θ<sub>ij</sub> + <i>B<sub>ij</sub></i>sin θ<sub>ij</sub>)　← 未知数の積と三角関数<span class="read">読み：未知数 V どうしの掛け算と、未知数 θ の三角関数が入っている。解析的に解く公式はありません。</span></div><div class="desc">第4回で立てた方程式は、電流を未知数にすれば線形ですが、実際に与えられるのは「この工場は 50 MW 使う」という<b>電力</b>です。<i>S</i> = <i>VI</i>* の非線形性は避けられません。そこで<b>反復</b>で解きます。反復には速いものと遅いものがあり、その違いがこの回の主題です。</div>'; },
+    draw() { drawNonlinear(); caption('積と三角関数 → 公式では解けない'); } },
+  { legend: '反復の骨格：推定 → 誤差（ミスマッチ）→ 修正 → 推定 …',
+    html() { return '<h3>反復の考え方：当てて、ずれを測って、直す</h3><div class="eq curr">Δ<i>P<sub>i</sub></i> = <i>P<sub>i</sub></i><sup>sch</sup> − <i>P<sub>i</sub></i>(<i>V</i>, θ)　→ この「ミスマッチ」が 0 になるまで直す<span class="read">読み：指定した電力と、いまの推定電圧から計算した電力の差。これが全ノードで小さくなれば解けたことになります。</span></div><div class="desc">どう「直す」かで手法が分かれます。<b>ガウス・ザイデル法</b>は式を 1 本ずつ解き直して代入する素朴な方法、<b>ニュートン・ラフソン法</b>は全部の式を同時に直線近似して連立で直す方法です。まず 1 変数で、2 つの直し方の速さの差を体感します。</div>'; },
+    draw() { drawLoop(); caption('ずれを 0 に近づける。速さが命'); } },
+
+  { legend: 'x²−2=0：曲線と、いまの点での接線。接線と x 軸の交点が次の推定',
+    mini: () => { const xs = newton1(); return '<div>ν=' + NU + ' x=<b>' + f5(xs[Math.min(NU, xs.length - 1)]) + '</b></div><div>√2=<b>1.41421</b></div>'; },
+    html() { const xs = newton1(), k = Math.min(NU, xs.length - 1); return '<h3>1 変数のニュートン法：接線で「次の推定」を決める</h3><div class="eq curr"><i>x</i><sup>(ν+1)</sup> = <i>x</i><sup>(ν)</sup> − <span class="frac"><span><i>f</i>(<i>x</i><sup>(ν)</sup>)</span><span><i>f</i>′(<i>x</i><sup>(ν)</sup>)</span></span>　　<i>x</i><sup>(' + k + ')</sup> = <b class="res">' + f5(xs[k]) + '</b><span class="read">読み：いまの点で曲線を接線に置き換え、接線が 0 になる点へ移る。f′ は傾き（多変数ではヤコビアン）。</span></div><div class="desc">右下の「反復 ν」スライダを 0 から進めてください。x = 1.0 から始めて、1.5 → 1.4167 → 1.41422 → 1.41421356 と、<b>1 回ごとに正しい桁が倍</b>になります。図の接線が曲線とほぼ重なるほど、次の一手が正確になります。</div>'; },
+    draw() { drawTangent(); caption('接線 → 交点 → 次の点。3 回で 8 桁'); } },
+  { legend: '反復ごとの誤差 |x−√2|（対数）。緑=ニュートン法、橙=単純反復',
+    html() { const xs = newton1(), fx = fixed1(); const e = k => Math.abs(xs[Math.min(k, xs.length - 1)] - Math.SQRT2); return '<h3>2 次収束：誤差の「指数」が倍々で減る</h3><div class="eq curr">|<i>e</i><sup>(ν+1)</sup>| ≤ <i>C</i> |<i>e</i><sup>(ν)</sup>|²　　誤差：' + [0, 1, 2, 3, 4].map(k => fe(e(k))).join(' → ') + '<span class="read">読み：誤差が 10⁻¹ → 10⁻² → 10⁻³ → 10⁻⁶ → 10⁻¹² のように、指数が毎回ほぼ 2 倍になる。これが「2 次収束」。</span></div><div class="desc">比較の橙は単純反復 <i>x</i> ← <i>x</i> − 0.3(<i>x</i>²−2) で、誤差が毎回<b>一定の比率</b>でしか減りません（1 次収束）。同じ 10⁻⁸ に届くのにニュートン法が <b>' + xs.findIndex(x => Math.abs(x - Math.SQRT2) < 1e-8) + ' 回</b>、単純反復は <b>' + fx.findIndex(x => Math.abs(x - Math.SQRT2) < 1e-8) + ' 回</b>。対数グラフでは 1 次が直線、2 次が急降下になります。</div>'; },
+    draw() { drawConv1(); caption('対数軸：直線=1次、急降下=2次'); } },
+  { legend: '直線近似の危うさ：初期値が遠いと接線が見当違いの場所を指す',
+    html() { return '<h3>弱点：初期値が悪いと外れる — だからフラットスタート</h3><div class="eq curr">初期値：<i>V<sub>i</sub></i><sup>(0)</sup> = 1.0 p.u.,　θ<sub>i</sub><sup>(0)</sup> = 0　（PV・スラックは指定値）<span class="read">読み：全ノードを「平ら」な状態から始める標準的な初期値。単位法のおかげで、正常運転の解はこのすぐ近くにあります。</span></div><div class="desc">ニュートン法は「いまの点の傾き」しか見ないので、遠い初期値からは見当違いの方向へ飛ぶことがあります。潮流計算では<b>単位法で解が 1.0 の近くに来る</b>ことを利用して、全部 1.0∠0 から始めます（フラットスタート）。重負荷や逆潮流が大きい系統では、それでも発散することがあります。</div>'; },
+    draw() { drawFlatStart(); caption('正常な解は 1.0∠0 の「すぐ隣」'); } },
+
+  { legend: '3 母線系統：スラック V=1.05、PV V=1.02 P=0.5、PQ P=−1.0 Q=−0.4',
+    html() { return '<h3>題材：3 母線系統（未知数 3 個）</h3><div class="eq curr">未知数：θ<sub>2</sub>, θ<sub>3</sub>, <i>V</i><sub>3</sub>　（<i>N</i><sub>PV</sub> + 2<i>N</i><sub>PQ</sub> = 1 + 2 = 3）　→ ヤコビアンは 3×3<span class="read">読み：スラックは V, θ 既知。PV は θ だけ未知。PQ は θ と V が未知。合計 3 つの未知数を 3 本の式で決めます。</span></div><div class="desc">第4回のノード種別がそのまま未知数の数になります。線路は <i>R</i> ありの現実的な値（<i>X</i>/<i>R</i> = 3）にしてあります。この 3 未知数のまわりで方程式を直線化した <b>3×3 のヤコビアン</b>を毎回組み、連立を解いて直します。</div>'; },
+    draw() { drawSystem(); caption('未知数 = 1 + 2×1 = 3'); } },
+  { legend: '反復 ν でのミスマッチ ΔP₂, ΔP₃, ΔQ₃。0 に近づけば解',
+    mini: () => { const s = stateAt(); return '<div>ν=<b>' + NU + '</b></div><div>最大ミスマッチ <b>' + fe(s.err) + '</b></div>'; },
+    html() { const s = stateAt(); return '<h3>ミスマッチ：ν = ' + NU + ' 回目の「ずれ」</h3><div class="eq curr">Δ<i>P</i><sub>2</sub> = <b class="res">' + fe(s.mis[0]) + '</b>,　Δ<i>P</i><sub>3</sub> = <b class="res">' + fe(s.mis[1]) + '</b>,　Δ<i>Q</i><sub>3</sub> = <b class="res">' + fe(s.mis[2]) + '</b><span class="read">読み：指定値 − 現在の推定から計算した値。フラットスタート（ν=0）ではノード 3 の負荷 −1.0 がそのまま残っています。</span></div><div class="desc">スライダで ν を進めてください。ν=0 の最大ミスマッチ ' + fe(NR[0].err) + ' が、ν=1 で ' + fe(NR[1].err) + '、ν=2 で ' + fe(NR[2].err) + ' と減っていきます。<b>収束判定は「最大ミスマッチ &lt; 10⁻⁸」</b>のように書きます。次のスライドで、この修正量を決めるヤコビアンを見ます。</div>'; },
+    draw() { drawMismatch(); caption('ν=' + NU + '：最大ミスマッチ ' + fe(stateAt().err)); } },
+  { legend: 'ヤコビアン 3×3 の実値（ν=' + '現在' + '）。H=∂P/∂θ, N=V∂P/∂V, M=∂Q/∂θ, L=V∂Q/∂V',
+    mini: () => { const j = stateAt().jac; return '<div>|H| <b>' + f4(Math.abs(j.H[0][0])) + '</b></div><div>|N| <b>' + f4(Math.abs(j.N[0][0])) + '</b></div>'; },
+    html() { const j = stateAt().jac; return '<h3>ヤコビアン：どの未知数を動かすとどの式がどれだけ動くか</h3><div class="eq curr">[Δ<b>P</b>; Δ<b>Q</b>] = [<b>H</b> <b>N</b>; <b>M</b> <b>L</b>] [Δ<b>θ</b>; Δ<b>V</b>/<b>V</b>]　　<i>H</i><sub>22</sub> = −<i>Q</i><sub>2</sub> − <i>B</i><sub>22</sub><i>V</i><sub>2</sub>² = <b class="res">' + f4(j.H[0][0]) + '</b><span class="read">読み：H は「θ を動かすと P がどれだけ動くか」。対角は P, Q そのもので書けるので、ミスマッチ計算の結果を使い回せます。</span></div><div class="desc">図の色の濃さが値の大きさです。<b>対角ブロック H, L が大きく、非対角 N, M が小さい</b>ことに注目してください。これは第3回の「P は θ、Q は V」の分離がヤコビアンに現れたもので、第 12 スライドの高速デカップル法の根拠になります。</div>'; },
+    draw() { drawJacobian(); caption('H, L が濃く N, M が薄い = P-δ / Q-V の分離'); } },
+  { legend: '修正方程式を解いて更新：θ ← θ+Δθ、V ← V(1+ΔV/V)',
+    mini: () => { const s = stateAt(); return '<div>V₃ <b>' + f5(s.V[2]) + '</b></div><div>θ₃ <b>' + deg(s.th[2]) + '°</b></div>'; },
+    html() { const s = stateAt(); return '<h3>更新：ν = ' + NU + ' の推定値</h3><div class="eq curr"><i>V</i><sub>3</sub><sup>(' + NU + ')</sup> = <b class="res">' + f5(s.V[2]) + '</b>,　θ<sub>2</sub> = <b class="res">' + deg(s.th[1]) + '°</b>,　θ<sub>3</sub> = <b class="res">' + deg(s.th[2]) + '°</b><span class="read">読み：3×3 の連立を解いて得た修正量を足す。V は「比率」で更新するので V·(1+ΔV/V)。</span></div><div class="desc">ν を進めると、<i>V</i><sub>3</sub> が 1.0 → ' + f5(NR[1].V[2]) + ' → ' + f5(NR[2].V[2]) + ' → ' + f5(NR[NR.length - 1].V[2]) + ' と落ち着いていきます。最初の 1 回でほぼ答えに届き、あとは<b>桁を詰めているだけ</b>です。これが 2 次収束の見え方です。</div>'; },
+    draw() { drawUpdate(); caption('1 回目でほぼ到達、残りは桁を詰める'); } },
+  { legend: '収束履歴（対数）。ν=0〜' + (NR.length - 1) + ' の最大ミスマッチ',
+    mini: () => '<div>反復 <b>' + (NR.length - 1) + '</b> 回</div><div>最終 <b>' + fe(NR[NR.length - 1].err) + '</b></div>',
+    html() { return '<h3>収束履歴：' + NR.map(s => fe(s.err)).join(' → ') + '</h3><div class="eq curr">指数の推移：' + NR.map(s => Math.floor(Math.log10(Math.max(s.err, 1e-300)))).join(' → ') + '　（ほぼ倍々）<span class="read">読み：桁数が 0 → −1 → −3 → −7 → −15 と、毎回おおよそ 2 倍のペースで減る。これが 2 次収束の証拠です。</span></div><div class="desc">' + (NR.length - 1) + ' 回で機械精度（10⁻¹⁵ 台）に到達しました。第6回で pandapower と照合すると、この解は 10⁻¹⁶ の精度で一致します。<b>系統が 14 母線でも 1 万母線でも、この回数はほとんど変わりません</b>。</div>'; },
+    draw() { drawConvNR(); caption('指数が倍々で減る：2 次収束'); } },
+  { legend: '解：各母線の電圧の大きさと位相角',
+    html() { const s = NR[NR.length - 1]; return '<h3>解：V₃ = ' + f5(s.V[2]) + ' p.u., θ₃ = ' + deg(s.th[2]) + '°</h3><div class="eq curr">' + [0, 1, 2].map(i => '母線' + (i + 1) + '：' + f5(s.V[i]) + '∠' + deg(s.th[i]) + '°').join('　') + '<span class="read">読み：負荷母線 3 の電圧が最も低く、位相も最も遅れている。電力は位相の進んだ母線から遅れた母線へ流れる（第3回）。</span></div><div class="desc">スラックの注入電力は事後計算で <i>P</i><sub>1</sub> = <b>' + f4(s.P[0]) + '</b>、PV 母線の無効電力は <i>Q</i><sub>2</sub> = <b>' + f4(s.Q[1]) + '</b>。合計 <i>P</i> = ' + f4(s.P[0] + s.P[1] + s.P[2]) + ' が損失です。ここから線路潮流・損失・電圧逸脱の判定がすべて出せます。</div>'; },
+    draw() { drawSystem(NR[NR.length - 1]); caption('負荷母線が最も低く・最も遅れる'); } },
+
+  { legend: 'A/B：ガウス・ザイデル法（橙）vs ニュートン法（緑）。同じ系統・同じ判定 10⁻⁸',
+    mini: () => '<div>GS <b>' + GS.iters + '</b> 回</div><div>NR <b>' + (NR.length - 1) + '</b> 回</div><div>比 <b>' + (GS.iters / (NR.length - 1)).toFixed(1) + '×</b></div>',
+    html() { return '<h3>A/B：ガウス・ザイデル法 ' + GS.iters + ' 回 vs ニュートン法 ' + (NR.length - 1) + ' 回</h3><div class="eq curr">GS（加速係数 ' + ACC.toFixed(1) + '）：<b class="res">' + GS.iters + '</b> 回　／　NR：<b class="res">' + (NR.length - 1) + '</b> 回　（解の差 |ΔV| = ' + fe(Math.max(...GS.V.map((v, k) => Math.abs(cabs(v) - NR[NR.length - 1].V[k])))) + '）<span class="read">読み：両手法とも同じ解に到達する。違うのは到達までの回数と、対数グラフの形（直線 vs 急降下）。</span></div><div class="desc">右下の加速係数スライダで GS の速さが変わります（1.0 で ' + gsRun(1.0).iters + ' 回、1.6 で ' + gsRun(1.6).iters + ' 回）。それでも 1 次収束は<b>母線数に比例して反復が増える</b>ため、実務ではニュートン法の初期値作りにしか使われません。</div>'; },
+    draw() { drawAB(); caption('橙=直線（1次） / 緑=急降下（2次）'); } },
+  { legend: 'ヤコビアン各ブロックの大きさ（解での実測）。N は H の 1/10 以下だが、M は L の 1/2 程度（X/R=3 のため）',
+    html() { const j = NR[NR.length - 1].jac; const nh = Math.hypot(j.H[0][0], j.H[0][1], j.H[1][0], j.H[1][1]), nn = Math.hypot(j.N[0][0], j.N[1][0]), nm = Math.hypot(j.M[0][0], j.M[0][1]), nl = Math.abs(j.L[0][0]); return '<h3>高速デカップル法の根拠：N, M ≈ 0 と置いてよい</h3><div class="eq curr">‖<b>H</b>‖ = <b class="res">' + f4(nh) + '</b>,　‖<b>L</b>‖ = <b class="res">' + f4(nl) + '</b>　≫　‖<b>N</b>‖ = <b class="res">' + f4(nn) + '</b>,　‖<b>M</b>‖ = <b class="res">' + f4(nm) + '</b><span class="read">読み：P は θ に、Q は V に強く依存し、交差の感度は小さい。第3回の分離が数値で確認できる。</span></div><div class="desc">実測では ‖N‖/‖H‖ = <b>' + (nn / nh).toFixed(2) + '</b> と小さい一方、‖M‖/‖L‖ = <b>' + (nm / nl).toFixed(2) + '</b> はそれほど小さくありません。<b>この系統は X/R = 3 で「X ≫ R」が弱い</b>からです。架空送電線（X/R = 5〜15）ならどちらも 0.1 以下に落ちます。そこで <b>N</b> = <b>M</b> = 0 と近似し、さらに cos θ ≈ 1、<i>X</i> ≫ <i>R</i> を使うと係数行列が<b>定数</b>になります。LU 分解を最初の 1 回で済ませ、あとは代入だけ。反復は 10〜20 回に増えますが 1 反復が軽く、<b>N-1 事故解析のように数千ケース回すときに効きます</b>（第15回）。配電系統（<i>R</i> ≈ <i>X</i>）では使えません。</div>'; },
+    draw() { drawJacobian(true); caption('交差ブロックを捨てる → 定数行列 → LU は 1 回'); } },
+  { legend: 'PV 母線の Q 限界：Q が上限を超えたら固定して PQ に切り替える',
+    html() { const s = NR[NR.length - 1]; return '<h3>まとめ：反復は 3〜5 回、そして Q 限界に注意</h3><div class="eq curr">PV 母線の <i>Q</i><sub>2</sub> = ' + f4(s.Q[1]) + '　→ もし <i>Q</i><sub>2</sub> &gt; <i>Q</i><sub>max</sub> なら <i>Q</i><sub>2</sub> ← <i>Q</i><sub>max</sub> として PQ に切替<span class="read">読み：発電機が励磁の限界に達すると電圧を保てない。その母線は「電圧指定」から「無効電力指定」に変わり、電圧は指定値より下がる。</span></div><div class="desc">ニュートン法（2 次収束・規模非依存）、フラットスタート、高速デカップル法、Q 限界処理 — これで潮流計算の道具が揃いました。<b>PV→PQ 切替が多発する系統は無効電力の余裕が乏しく、電圧崩壊の前兆</b>です。次回はこの計算を pandapower で実際の系統に適用し、電圧と無効電力の物理を掘り下げます。</div>'; },
+    draw() { drawQlimit(); caption('Q 限界 → PV から PQ へ → 電圧が下がる'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawNonlinear() { txt('P₂ = V₂ [ V₁(G₂₁cosθ₂₁+B₂₁sinθ₂₁) + V₂G₂₂ + V₃(G₂₃cosθ₂₃+B₂₃sinθ₂₃) ]', CW / 2, 120, { align: 'center', size: 9.5, mono: true }); rect(60, 100, 50, 28, getCSS('--upd'), .25); rect(150, 100, 100, 28, getCSS('--warm'), .25); txt('未知数の積', 85, 160, { align: 'center', size: 11, color: getCSS('--upd'), bold: true }); txt('未知数の三角関数', 200, 160, { align: 'center', size: 11, color: getCSS('--warm'), bold: true });
+  const L = 60, R = 320, T = 200, B = 340; axes(L, T, R, B, 'θ', 'P'); const pts = []; for (let k = 0; k <= 100; k++) { const t = -Math.PI + k / 100 * 2 * Math.PI; pts.push([L + k / 100 * (R - L), B - (Math.sin(t) + 1) / 2 * (B - T)]); } line(pts, getCSS('--warm'), 2.5); txt('直線ではない → 連立一次方程式にならない', CW / 2, 365, { align: 'center', size: 10.5 }); }
+function drawLoop() { const c = getCSS('--text'); const boxes = [['推定 V, θ', 180, 80, '--upd'], ['ミスマッチ ΔP, ΔQ', 180, 170, '--neg'], ['修正量 Δθ, ΔV', 180, 260, '--accent']]; boxes.forEach(([t, x, y, col]) => { rect(x - 80, y - 20, 160, 40, getCSS(col), .18); line([[x - 80, y - 20], [x + 80, y - 20], [x + 80, y + 20], [x - 80, y + 20], [x - 80, y - 20]], c, 1); txt(t, x, y + 4, { align: 'center', size: 11.5, bold: true }); }); [[100, 190], [190, 280]].forEach(([a, b]) => { line([[180, a - 90 + 20], [180, b - 90 - 20]], c, 2); txt('▼', 180, b - 90 - 22, { align: 'center', size: 10 }); }); line([[260, 260], [300, 260], [300, 80], [260, 80]], c, 2, [4, 3]); txt('◀', 262, 84, { align: 'center', size: 10 }); txt('ν ← ν+1', 320, 175, { align: 'center', size: 10, mono: true, color: getCSS('--muted') }); txt('|ΔP|, |ΔQ| < ε になるまで', CW / 2, 330, { align: 'center', size: 10.5 }); }
+function drawTangent() { const L = 45, R = 335, T = 40, B = 300; axes(L, T, R, B, 'x', 'f(x)=x²−2'); const xOf = x => L + (x - .8) / 1.0 * (R - L), yOf = y => B - (y + 1.5) / 3.0 * (B - T); const pts = []; for (let x = .8; x <= 1.8; x += .01) pts.push([xOf(x), yOf(x * x - 2)]); line([[L, yOf(0)], [R, yOf(0)]], getCSS('--faint'), 1); line(pts, getCSS('--upd'), 2.5); const xs = newton1(), k = Math.min(NU, xs.length - 1); for (let i = 0; i <= k; i++) { const x = xs[i], y = x * x - 2; dot(xOf(x), yOf(y), 5, getCSS(i === k ? '--neg' : '--faint')); if (i === k) { const sl = 2 * x, x1 = x - y / sl; line([[xOf(x - .5), yOf(y - .5 * sl)], [xOf(x + .5), yOf(y + .5 * sl)]], getCSS('--neg'), 1.5, [4, 3]); line([[xOf(x), yOf(y)], [xOf(x), yOf(0)]], getCSS('--faint'), 1, [2, 2]); dot(xOf(x1), yOf(0), 5, getCSS('--accent')); txt('次 ' + f5(x1), xOf(x1), yOf(0) + 16, { align: 'center', size: 10, mono: true, color: getCSS('--accent') }); } } dot(xOf(Math.SQRT2), yOf(0), 4, getCSS('--text')); txt('√2', xOf(Math.SQRT2), yOf(0) - 10, { align: 'center', size: 10 }); [1.0, 1.2, 1.4, 1.6].forEach(x => txt(x.toFixed(1), xOf(x), B + 14, { align: 'center', size: 9, mono: true })); txt('ν=' + k + '：x=' + f5(xs[k]) + '  誤差 ' + fe(Math.abs(xs[k] - Math.SQRT2)), CW / 2, 340, { align: 'center', size: 10.5, mono: true }); }
+function drawConv1() { const L = 60, R = 335, T = 40, B = 320; axes(L, T, R, B, 'ν', '|誤差|'); const xs = newton1(1, 6), fx = fixed1(1, 40); const yOf = e => B - (Math.log10(Math.max(e, 1e-16)) + 16) / 16 * (B - T), xOf = k => L + k / 40 * (R - L); const p1 = fx.map((x, k) => [xOf(k), yOf(Math.abs(x - Math.SQRT2))]), p2 = xs.map((x, k) => [xOf(k), yOf(Math.abs(x - Math.SQRT2))]); line(p1, getCSS('--warm'), 2); line(p2, getCSS('--accent'), 2.5); p2.forEach(p => dot(p[0], p[1], 4, getCSS('--accent'))); [0, 10, 20, 30, 40].forEach(k => txt(k, xOf(k), B + 14, { align: 'center', size: 9, mono: true })); [1, 1e-4, 1e-8, 1e-12, 1e-16].forEach(e => txt(e.toExponential(0), L - 4, yOf(e) + 4, { align: 'right', size: 9, mono: true })); line([[L, yOf(1e-8)], [R, yOf(1e-8)]], getCSS('--neg'), 1, [4, 3]); txt('ニュートン（2次）', xOf(6), yOf(1e-13), { size: 10, color: getCSS('--accent'), bold: true }); txt('単純反復（1次）', xOf(22), yOf(1e-5), { size: 10, color: getCSS('--warm'), bold: true }); }
+function drawFlatStart() { const cx = 180, cy = 190; ctx.save(); ctx.strokeStyle = getCSS('--faint'); ctx.beginPath(); ctx.arc(cx, cy, 110, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(cx, cy, 95, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); txt('1.05', cx + 118, cy + 4, { size: 9, mono: true }); txt('0.95', cx + 60, cy - 60, { size: 9, mono: true }); dot(cx + 102, cy, 7, getCSS('--upd')); txt('フラットスタート 1.0∠0', cx + 102, cy - 14, { align: 'center', size: 10, color: getCSS('--upd'), bold: true }); const s = NR[NR.length - 1]; s.V.forEach((v, i) => { const r = v * 102, a = s.th[i]; dot(cx + r * Math.cos(a), cy - r * Math.sin(a), 5, getCSS('--accent')); txt('解' + (i + 1), cx + r * Math.cos(a) + 8, cy - r * Math.sin(a) + 12, { size: 9.5, color: getCSS('--accent') }); }); rect(cx + 92, cy - 22, 30, 44, getCSS('--accent'), .12); txt('正常な解はこの小さな帯の中', CW / 2, 335, { align: 'center', size: 10.5 }); txt('（単位法だから 1.0 付近に揃う）', CW / 2, 355, { align: 'center', size: 10, color: getCSS('--muted') }); }
+const NP = [[70, 110], [290, 110], [180, 280]];
+function drawSystem(sol) { const c = getCSS('--text'); LINES.forEach(l => { const [x0, y0] = NP[l.a], [x1, y1] = NP[l.b]; line([[x0, y0], [x1, y1]], c, 2); txt(l.r + '+j' + l.x, (x0 + x1) / 2 + (l.a === 0 && l.b === 1 ? 0 : (l.b === 2 && l.a === 0 ? -34 : 34)), (y0 + y1) / 2 + (l.a === 0 && l.b === 1 ? -8 : 4), { align: 'center', size: 9.5, mono: true, color: getCSS('--muted') }); }); const lab = ['スラック\nV=1.05', 'PV\nP=0.5, V=1.02', 'PQ\nP=−1.0, Q=−0.4']; NP.forEach(([x, y], i) => { dot(x, y, 15, getCSS(['--neg', '--upd', '--accent'][i]), c); txt(i + 1, x, y + 4, { align: 'center', size: 11, bold: true, color: '#fff' }); const ls = lab[i].split('\n'); txt(ls[0], x + (i === 0 ? -46 : (i === 1 ? 46 : 0)), y + (i === 2 ? 32 : -22), { align: 'center', size: 10, bold: true }); txt(ls[1], x + (i === 0 ? -46 : (i === 1 ? 46 : 0)), y + (i === 2 ? 47 : -8), { align: 'center', size: 9, mono: true, color: getCSS('--muted') }); if (sol) txt(f5(sol.V[i]) + '∠' + deg(sol.th[i]) + '°', x, y + (i === 2 ? 65 : 34), { align: 'center', size: 10, mono: true, color: getCSS('--accent'), bold: true }); }); }
+function drawMismatch() { const s = stateAt(); const L = 80, T = 60, R = 330, B = 300; axes(L, T, R, B, '', '|ミスマッチ|（対数）'); const yOf = e => B - (Math.log10(Math.max(e, 1e-16)) + 16) / 16 * (B - T); ['ΔP₂', 'ΔP₃', 'ΔQ₃'].forEach((n, i) => { const e = Math.abs(s.mis[i]), x = L + 25 + i * 80; rect(x, yOf(e), 50, B - yOf(e), getCSS('--neg'), .8); txt(n, x + 25, B + 14, { align: 'center', size: 10.5, mono: true }); txt(fe(e), x + 25, yOf(e) - 6, { align: 'center', size: 9.5, mono: true, bold: true }); }); [1, 1e-4, 1e-8, 1e-12, 1e-16].forEach(e => txt(e.toExponential(0), L - 4, yOf(e) + 4, { align: 'right', size: 9, mono: true })); line([[L, yOf(1e-8)], [R, yOf(1e-8)]], getCSS('--accent'), 1.5, [4, 3]); txt('収束判定 10⁻⁸', R, yOf(1e-8) - 5, { align: 'right', size: 9.5, color: getCSS('--accent') }); txt('ν = ' + NU, CW / 2, 340, { align: 'center', size: 12, mono: true, bold: true }); }
+function drawJacobian(highlight) { const j = stateAt().jac, J = j.J; const x0 = 70, y0 = 80, cw = 75, chh = 65, vmax = 20; const labelsR = ['ΔP₂', 'ΔP₃', 'ΔQ₃'], labelsC = ['Δθ₂', 'Δθ₃', 'ΔV₃/V₃']; for (let i = 0; i < 3; i++) for (let jj = 0; jj < 3; jj++) { const v = J[i][jj], x = x0 + jj * cw, y = y0 + i * chh; const isDiag = (i < 2 && jj < 2) || (i === 2 && jj === 2); rect(x, y, cw - 4, chh - 4, getCSS(isDiag ? '--upd' : '--warm'), Math.min(.9, .1 + Math.abs(v) / vmax * .9)); txt(v.toFixed(3), x + cw / 2 - 2, y + chh / 2 + 4, { align: 'center', size: 11, mono: true, bold: isDiag }); } labelsR.forEach((t, i) => txt(t, x0 - 8, y0 + i * chh + chh / 2 + 4, { align: 'right', size: 10, mono: true })); labelsC.forEach((t, i) => txt(t, x0 + i * cw + cw / 2 - 2, y0 - 8, { align: 'center', size: 10, mono: true })); txt('H', x0 + cw - 2, y0 + 2 * chh - 12, { align: 'center', size: 13, bold: true, color: getCSS('--upd') }); txt('N', x0 + 2 * cw + cw / 2 - 2, y0 - 26, { align: 'center', size: 13, bold: true, color: getCSS('--warm') }); txt('M', x0 - 30, y0 + 2 * chh + chh / 2 + 4, { align: 'center', size: 13, bold: true, color: getCSS('--warm') }); txt('L', x0 + 2 * cw + cw / 2 - 2, y0 + 3 * chh + 10, { align: 'center', size: 13, bold: true, color: getCSS('--upd') }); if (highlight) { rect(x0 + 2 * cw, y0, cw - 4, 2 * chh - 4, getCSS('--neg'), .15); rect(x0, y0 + 2 * chh, 2 * cw - 4, chh - 4, getCSS('--neg'), .15); txt('≈ 0 と置く', x0 + 2 * cw + cw / 2 - 2, y0 + chh - 12, { align: 'center', size: 10, color: getCSS('--neg'), bold: true }); } txt('ν=' + NU + '　紫=対角ブロック / 橙=交差ブロック', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawUpdate() { const L = 60, R = 335, T = 50, B = 320; axes(L, T, R, B, 'ν', 'V₃ [p.u.]'); const xOf = k => L + k / 4 * (R - L), yOf = v => B - (v - .94) / .08 * (B - T); const pts = NR.map((s, k) => [xOf(k), yOf(s.V[2])]); line(pts, getCSS('--accent'), 2.5); NR.forEach((s, k) => { dot(xOf(k), yOf(s.V[2]), k === NU ? 8 : 4, getCSS(k === NU ? '--neg' : '--accent')); txt(f5(s.V[2]), xOf(k), yOf(s.V[2]) - 12, { align: 'center', size: 9, mono: true }); }); [0, 1, 2, 3, 4].forEach(k => txt(k, xOf(k), B + 14, { align: 'center', size: 9, mono: true })); [.94, .96, .98, 1.0, 1.02].forEach(v => txt(v.toFixed(2), L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); line([[L, yOf(NR[NR.length - 1].V[2])], [R, yOf(NR[NR.length - 1].V[2])]], getCSS('--faint'), 1, [4, 3]); txt('解 ' + f5(NR[NR.length - 1].V[2]), R, yOf(NR[NR.length - 1].V[2]) + 14, { align: 'right', size: 9.5, mono: true, color: getCSS('--muted') }); }
+function drawConvNR() { const L = 60, R = 335, T = 40, B = 320; axes(L, T, R, B, 'ν', '最大ミスマッチ'); const yOf = e => B - (Math.log10(Math.max(e, 1e-16)) + 16) / 16 * (B - T), xOf = k => L + 20 + k / 5 * (R - L - 40); const pts = NR.map((s, k) => [xOf(k), yOf(s.err)]); line(pts, getCSS('--accent'), 2.5); NR.forEach((s, k) => { dot(xOf(k), yOf(s.err), 6, getCSS('--accent')); txt(fe(s.err), xOf(k) + 8, yOf(s.err) - 8, { size: 9.5, mono: true }); txt(k, xOf(k), B + 14, { align: 'center', size: 9, mono: true }); }); [1, 1e-4, 1e-8, 1e-12, 1e-16].forEach(e => { txt(e.toExponential(0), L - 4, yOf(e) + 4, { align: 'right', size: 9, mono: true }); line([[L, yOf(e)], [R, yOf(e)]], getCSS('--grid'), 1, [3, 3]); }); line([[L, yOf(1e-8)], [R, yOf(1e-8)]], getCSS('--neg'), 1.5, [4, 3]); txt('判定 10⁻⁸', R, yOf(1e-8) - 5, { align: 'right', size: 9.5, color: getCSS('--neg') }); }
+function drawAB() { const L = 60, R = 335, T = 40, B = 320; axes(L, T, R, B, 'ν', '誤差（対数）'); const n = Math.max(GS.iters, 10); const yOf = e => B - (Math.log10(Math.max(e, 1e-16)) + 16) / 16 * (B - T), xOf = k => L + k / n * (R - L); line(GS.hist.map((e, k) => [xOf(k + 1), yOf(e)]), getCSS('--warm'), 2); GS.hist.forEach((e, k) => dot(xOf(k + 1), yOf(e), 2.5, getCSS('--warm'))); line(NR.map((s, k) => [xOf(k), yOf(s.err)]), getCSS('--accent'), 2.5); NR.forEach((s, k) => dot(xOf(k), yOf(s.err), 6, getCSS('--accent'))); line([[L, yOf(1e-8)], [R, yOf(1e-8)]], getCSS('--neg'), 1.5, [4, 3]); [0, Math.round(n / 4), Math.round(n / 2), Math.round(3 * n / 4), n].forEach(k => txt(k, xOf(k), B + 14, { align: 'center', size: 9, mono: true })); [1, 1e-4, 1e-8, 1e-12, 1e-16].forEach(e => txt(e.toExponential(0), L - 4, yOf(e) + 4, { align: 'right', size: 9, mono: true })); txt('GS ' + GS.iters + ' 回（加速 ' + ACC.toFixed(1) + '）', xOf(n * .55), yOf(1e-2), { size: 10.5, color: getCSS('--warm'), bold: true }); txt('NR ' + (NR.length - 1) + ' 回', xOf(1.2), yOf(1e-13), { size: 10.5, color: getCSS('--accent'), bold: true }); }
+function drawQlimit() { const L = 60, R = 335, T = 50, B = 300; axes(L, T, R, B, 'Q_G', 'V'); const xOf = q => L + q / 1.0 * (R - L), yOf = v => B - (v - .9) / .2 * (B - T); line([[xOf(0), yOf(1.03)], [xOf(.5), yOf(1.03)]], getCSS('--upd'), 3); const pts = []; for (let q = .5; q <= 1; q += .02) pts.push([xOf(q), yOf(1.03 - (q - .5) * .2)]); line(pts, getCSS('--neg'), 3, [5, 4]); line([[xOf(.5), T], [xOf(.5), B]], getCSS('--neg'), 1.5, [4, 3]); txt('Q_max = 0.5', xOf(.5) + 4, T + 12, { size: 10, color: getCSS('--neg'), bold: true }); txt('PV：V=1.03 を維持', xOf(.2), yOf(1.03) - 10, { align: 'center', size: 10, color: getCSS('--upd'), bold: true }); txt('PQ に切替：V が下がる', xOf(.78), yOf(.98) + 18, { align: 'center', size: 10, color: getCSS('--neg'), bold: true }); [0, .5, 1].forEach(q => txt(q, xOf(q), B + 14, { align: 'center', size: 9, mono: true })); [.9, 1.0, 1.1].forEach(v => txt(v.toFixed(1), L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); txt('励磁の限界 → 電圧を支えられない → 電圧崩壊の前兆', CW / 2, 340, { align: 'center', size: 10.5 }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur ? 'active' : (i < cur ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; NU = 0; ACC = 1.6; GS = gsRun(ACC); document.getElementById('nuRange').value = 0; document.getElementById('nuVal').textContent = '0'; document.getElementById('accRange').value = 1.6; document.getElementById('accVal').textContent = '1.6'; goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('nuRange').max = NR.length - 1;
+document.getElementById('nuRange').oninput = e => { NU = +e.target.value; document.getElementById('nuVal').textContent = NU; renderAll(); draw_(); };
+document.getElementById('accRange').oninput = e => { ACC = +e.target.value; document.getElementById('accVal').textContent = ACC.toFixed(1); GS = gsRun(ACC); renderAll(); draw_(); };
+goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

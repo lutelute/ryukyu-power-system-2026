@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第2回: 電力システムの構成 — 講義ノート</title>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="notes.css">
+</head>
+<body>
+<header class="top">
+  <a class="home" href="../index.html">▲ 地図（トップ）</a>
+  <nav class="days"><span class="on">Day 1 基礎と潮流計算入門</span><span class="">Day 2 潮流とダイナミクス</span><span class="">Day 3 インバータと予測</span><span class="">Day 4 AI と統合演習</span></nav>
+  <nav class="rounds"><a href="ch01.html" class="" title="第1回 エネルギー変換">1</a><a href="ch02.html" class="on" title="第2回 電力システムの構成">2</a><a href="ch03.html" class="" title="第3回 P と Q の分離">3</a><a href="ch04.html" class="" title="第4回 Y行列と直流法潮流">4</a><a href="ch05.html" class="" title="第5回 ニュートン・ラフソン法">5</a><a href="ch06.html" class="" title="第6回 電圧と無効電力">6</a><a href="ch07.html" class="" title="第7回 等面積法と安定度">7</a><a href="ch08.html" class="" title="第8回 周波数と需給バランス">8</a><a href="ch09.html" class="" title="第9回 インバータと系統連系">9</a><a href="ch10.html" class="" title="第10回 気象と再エネ出力">10</a><a href="ch11.html" class="" title="第11回 電力需要予測">11</a><a href="ch12.html" class="" title="第12回 機械学習で予測する">12</a><a href="ch13.html" class="" title="第13回 AI × 系統解析">13</a><a href="ch14.html" class="" title="第14回 経済負荷配分と OPF">14</a><a href="ch15.html" class="" title="第15回 沖縄系統・統合演習">15</a></nav>
+</header>
+<div class="wrap">
+  <main class="doc">
+    <div class="chips"><span class="chip day">Day 1 基礎と潮流計算入門</span><a class="chip viz" href="../viz/grid.html">🖥 動く図で見る</a><a class="chip ex" href="../ex/ch02.html">✍ 演習で確かめる</a><a class="chip" href="symbols.html">記号表</a></div>
+    <h1>第2回: 電力システムの構成</h1>
+<p><strong>Day 1 / コマ2</strong> ｜ 電力エネルギーシステム解析の基礎と応用</p>
+<blockquote class="callout textbook">
+<p><strong>教科書対応</strong>: 加藤・田岡『電力システム工学の基礎』<strong>第1章 電力システム</strong>（pp.1–14）
+— 1.1 電気の流れ（図1.1 日本の電力システム、図1.2 電気の流れ）、1.2 歴史、1.3 最近の動向</p>
+</blockquote>
+<blockquote class="callout viz">
+<p><strong>🖥 動くインフォグラフ</strong>：<a href="../viz/grid.html"><code>viz/grid.html</code></a> — 損失は電圧の2乗に反比例、放射状vsループ。
+ブラウザで「次へ ▶」を押しながら、この回の核心を実計算で追えます（<code>index.html</code> から全回に飛べます）。</p>
+</blockquote>
+<!-- intuition:start（tools/sync-intuition.mjs が スライド/ch02.md から生成。直接編集せずスライドを直す）-->
+<blockquote class="callout ex">
+<p><strong>✍ 演習</strong>：<a href="../ex/ch02.html"><code>ex/ch02.html</code></a> — 学籍番号ごとに数値が変わる問題。採点・途中式つき。
+<strong>📊 スライド</strong>：<code>スライド/ch02.pptx</code>（講義用）</p>
+</blockquote>
+<hr>
+<h2 id="s1">まず直感で（3 分でつかむ）</h2>
+<blockquote class="callout key">
+<p><strong>📌 一言でいうと</strong>：電力系統は「昇圧して運び、降圧して使う」階層構造。送電損失は電圧の 2 乗に反比例するから、高い電圧で運ぶ。母線が節点、線路が枝で、電流は経路を選ばずインピーダンスの逆比で分かれる。</p>
+</blockquote>
+<blockquote class="callout analogy">
+<p><strong>🪄 たとえ話：高速道路と生活道路</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">道路</th>
+<th align="left">電力系統</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">高速道路は少ない車線で <strong>大量輸送</strong></td>
+<td align="left">超高圧送電線（275〜500 kV）</td>
+</tr>
+<tr>
+<td align="left">IC で降りて生活道路へ</td>
+<td align="left">変電所で <strong>降圧</strong>（154 → 66 → 6.6 kV）</td>
+</tr>
+<tr>
+<td align="left">交差点で道が分かれる</td>
+<td align="left">交差点＝<strong>母線（bus）</strong></td>
+</tr>
+<tr>
+<td align="left">渋滞の摩擦で燃料を失う</td>
+<td align="left">摩擦＝<strong>送電損失 3I²R</strong></td>
+</tr>
+<tr>
+<td align="left">車の台数が多いほど摩擦は増える</td>
+<td align="left">台数＝<strong>電流 I</strong>。電圧を上げて台数を減らす</td>
+</tr>
+</tbody></table></div>
+<p>崩れる点：車は経路を選ぶが、電流は選ばない。並列する全経路に、インピーダンスの逆比で勝手に分かれる。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：2003年8月 北米北東部大停電</strong>
+送電線が樹木に接触して停止、警報システムの不具合で運用者が気づかず、潮流が他の線路へ移って次々に過負荷停止。<strong>約 5,000 万人</strong> が停電した。網目状の系統では 1 本の停止が「再配分」を起こす。今日の Ⅲ で、その再配分を 2 回線の数値で追う。</p>
+</blockquote>
+<blockquote class="callout case">
+<p><strong>📰 事例：2011年 東西の周波数の壁</strong>
+日本は東 50 Hz・西 60 Hz に分かれ、間をつなぐ周波数変換設備の容量は当時約 100 万 kW。震災後、西から東へ十分に融通できなかった。現在は約 210 万 kW に増強されている。「つながっていれば助け合える」の裏返しで、つながっていない沖縄には融通そのものがない。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 この回の式で読むと</strong>：沖縄は他地域と連系線がなく、この「融通」がそもそも存在しない。第8回で効いてくる。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ交流が主流なのか</strong>
+変圧器で電圧を自在に上げ下げできるから。損失を下げるには高電圧、使うには低電圧。この両立は変圧器なしには成り立たない。</p>
+</blockquote>
+<blockquote class="callout why">
+<p><strong>🤔 なぜ 50 Hz と 60 Hz に分かれたのか</strong>
+明治期に東京はドイツ製、大阪は米国製の発電機を導入した歴史の名残。統一の費用が大きく、変換設備でつないでいる。</p>
+</blockquote>
+<blockquote class="callout warn">
+<p><strong>⚠ 直流送電（HVDC）の出番</strong>
+変圧は苦手だが、長距離（架空線 600 km・ケーブル 50 km 超）・海底ケーブル・非同期連系では有利。北海道–本州、紀伊水道はこれ。</p>
+</blockquote>
+<p><strong>この回の地図</strong>：Ⅰ 発電 → 送電 → 変電 → 配電 の階層と電圧レベル → Ⅱ 損失の式 — なぜ高電圧か、を数字で → Ⅲ 単線結線図の読み方 — 母線・線路・変圧器・遮断器と分流 → Ⅳ 日本の系統（50/60 Hz、連系線）と沖縄の独自性</p>
+<!-- intuition:end -->
+<hr>
+<h2 id="s2">2.1 導入</h2>
+<h3 id="s3">学習目標</h3>
+<ol>
+<li>発電・送電・変電・配電の<strong>階層構造</strong>を、電圧レベルとともに説明できる。</li>
+<li><strong>なぜ高電圧で送電するのか</strong>を送電損失の式から定量的に説明できる。</li>
+<li>単線結線図（single-line diagram）を読み、母線・線路・変圧器・遮断器を identify できる。</li>
+<li>日本の電力系統の特徴（50/60 Hz 分断、連系線）と、<strong>沖縄系統の独自性</strong>を説明できる。</li>
+<li>系統構成（放射状・ループ・網目）と信頼度の関係を説明できる。</li>
+</ol>
+<h3 id="s4">前提知識（第1回との接続）</h3>
+<p>第1回では「電気をどう作るか」を見た。今回は「<strong>どう運ぶか</strong>」。
+第1回で述べた「電圧は局所的な量、周波数は系統共通の量」という性質が、
+なぜそうなるのかが今回の構造から見えてくる。</p>
+<hr>
+<h2 id="s5">2.2 理論</h2>
+<h3 id="s6">2.2.1 電力システムの階層構造</h3>
+<pre><code> [発電所]                    [送電系統]              [配電系統]      [需要家]
+ 火力/原子力  ──昇圧──→  500 kV / 275 kV  ──降圧──→  6.6 kV  ──→ 100/200 V
+   水力       (発電所         基幹系統          (配電用      高圧配電線      低圧
+   風力        変圧器)            │            変電所)          │
+   太陽光                    154/110 kV                    柱上変圧器
+                              (地域供給)
+                                  │
+                              66/22 kV
+                             (二次変電所)
+</code></pre>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">区分</th>
+<th align="left">電圧レベル</th>
+<th align="left">役割</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">発電端</td>
+<td align="left">10〜25 kV</td>
+<td align="left">発電機の端子電圧。絶縁の制約で高くできない</td>
+</tr>
+<tr>
+<td align="left">基幹送電</td>
+<td align="left">500 / 275 kV</td>
+<td align="left">大電力を長距離輸送。系統の「背骨」</td>
+</tr>
+<tr>
+<td align="left">地域送電</td>
+<td align="left">154 / 110 / 66 kV</td>
+<td align="left">地域内の供給。二次変電所へ</td>
+</tr>
+<tr>
+<td align="left">特別高圧配電</td>
+<td align="left">22 / 33 kV</td>
+<td align="left">大口需要家（工場・鉄道）</td>
+</tr>
+<tr>
+<td align="left">高圧配電</td>
+<td align="left">6.6 kV</td>
+<td align="left">市街地の配電線。柱上変圧器まで</td>
+</tr>
+<tr>
+<td align="left">低圧</td>
+<td align="left">100 / 200 V</td>
+<td align="left">一般家庭・小規模事業所</td>
+</tr>
+</tbody></table></div>
+<p><strong>ここが重要</strong>: 発電機の端子電圧は 10〜25 kV しかない。
+これは回転子・固定子の絶縁厚が物理的に制約されるためである。
+そこで発電所出口の<strong>主変圧器で一気に 275〜500 kV まで昇圧</strong>する。</p>
+<!-- fig:ch02_hierarchy.png -->
+<p><img src="../%E5%9B%B3/ch02_hierarchy.png" alt="図 2.1">
+<em>図 2.1　電気の旅（縦軸は対数）。発電機の 10〜25 kV を主変圧器で 275〜500 kV に上げて運び、一次変電所 154/66 kV → 配電用変電所 6.6 kV → 柱上変圧器 100/200 V と段階的に下げる。上げ下げを可能にしているのが変圧器で、交流が主流になった理由。</em></p>
+<!-- /fig -->
+
+
+<h3 id="s7">2.2.2 なぜ高電圧で送るのか — 送電損失の定量化</h3>
+<p>送電線を流れる電流を <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi></mrow><annotation encoding="application/x-tex">I</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span></span></span></span>、線路抵抗を <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi></mrow><annotation encoding="application/x-tex">R</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span></span></span></span> とすると、ジュール損失は</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>P</mi><mtext>loss</mtext></msub><mo>=</mo><mn>3</mn><msup><mi>I</mi><mn>2</mn></msup><mi>R</mi><mspace width="1em"/><mtext>(三相)</mtext></mrow><annotation encoding="application/x-tex">P_\text{loss} = 3 I^2 R \quad \text{(三相)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">loss</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1141em;vertical-align:-0.25em;"></span><span class="mord">3</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:1em;"></span><span class="mord text"><span class="mord">(</span><span class="mord cjk_fallback">三相</span><span class="mord">)</span></span></span></span></span></span></p>
+<p>一方、送電電力 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi></mrow><annotation encoding="application/x-tex">P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span> は線間電圧 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi></mrow><annotation encoding="application/x-tex">V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span></span></span></span>、力率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\cos\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">ϕ</span></span></span></span> を用いて</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo>=</mo><msqrt><mn>3</mn></msqrt><mtext> </mtext><mi>V</mi><mi>I</mi><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi><mspace width="1em"/><mo>⟹</mo><mspace width="1em"/><mi>I</mi><mo>=</mo><mfrac><mi>P</mi><mrow><msqrt><mn>3</mn></msqrt><mtext> </mtext><mi>V</mi><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">P = \sqrt{3}\, V I \cos\phi \quad\Longrightarrow\quad I = \frac{P}{\sqrt{3}\, V \cos\phi}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1505em;vertical-align:-0.1944em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9561em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord">3</span></span></span><span style="top:-2.9161em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.0839em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">ϕ</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">⟹</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.352em;vertical-align:-0.9917em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.2028em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9072em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord">3</span></span></span><span style="top:-2.8672em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1328em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">ϕ</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9917em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>これを損失の式に代入すると、</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><msub><mi>P</mi><mtext>loss</mtext></msub><mo>=</mo><mn>3</mn><mi>R</mi><msup><mrow><mo fence="true">(</mo><mfrac><mi>P</mi><mrow><msqrt><mn>3</mn></msqrt><mi>V</mi><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi></mrow></mfrac><mo fence="true">)</mo></mrow><mn>2</mn></msup><mo>=</mo><mfrac><mrow><mi>R</mi><msup><mi>P</mi><mn>2</mn></msup></mrow><mrow><msup><mi>V</mi><mn>2</mn></msup><msup><mrow><mi>cos</mi><mo>⁡</mo></mrow><mn>2</mn></msup><mi>ϕ</mi></mrow></mfrac></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\boxed{P_\text{loss} = 3R\left(\frac{P}{\sqrt{3}V\cos\phi}\right)^2 = \frac{R P^2}{V^2 \cos^2\phi}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:3.3257em;vertical-align:-1.3317em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.994em;"><span style="top:-5.3257em;"><span class="pstrut" style="height:5.3257em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">loss</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord">3</span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.2028em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9072em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord">3</span></span></span><span style="top:-2.8672em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1328em;"><span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">ϕ</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9917em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.654em;"><span style="top:-3.9029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.4911em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop"><span class="mop">cos</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">ϕ</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8804em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span><span style="top:-3.994em;"><span class="pstrut" style="height:5.3257em;"></span><span class="stretchy fbox" style="height:3.3257em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.3317em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>ここが重要</strong>: 損失は<strong>電圧の2乗に反比例</strong>する。
+同じ電力を送るとき、電圧を2倍にすれば損失は 1/4 になる。
+275 kV を 500 kV にすれば損失は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>275</mn><mi mathvariant="normal">/</mi><mn>500</mn><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mo>=</mo><mn>0.30</mn></mrow><annotation encoding="application/x-tex">(275/500)^2 = 0.30</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">275/500</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.30</span></span></span></span> 倍、つまり 70% 削減できる。</p>
+<p>また、力率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\cos\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">ϕ</span></span></span></span> の2乗にも反比例する。力率改善（無効電力の補償）が
+省エネ対策として有効な理由がここにある。第3回・第4回で詳しく扱う。</p>
+<p><strong>損失率の目安</strong>: 日本の送配電損失率は約 4.5%（うち送電 1.5%、配電 3.0%）。</p>
+<!-- fig:ch02_loss_voltage.png -->
+<p><img src="../%E5%9B%B3/ch02_loss_voltage.png" alt="図 2.2">
+<em>図 2.2　100 MW を 100 km（R = 0.1 Ω/km、力率 0.9）送るときの損失率。66 kV では I = 972 A で 28.3 MW（28%）を失うが、275 kV で 1.63 MW（1.6%）、500 kV で 0.49 MW（0.5%）。対数軸で傾き −2 の直線、すなわち損失は電圧の 2 乗に反比例し、66 kV と 500 kV では (500/66)² = 57 倍違う。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch02_loss_pf.png -->
+<p><img src="../%E5%9B%B3/ch02_loss_pf.png" alt="図 2.3">
+<em>図 2.3　損失のもう 1 つの 2 乗、力率。力率 1.0 のときを 1 とすると 0.95 で 1.11 倍、0.9 で 1.23 倍、0.8 で 1.56 倍（275 kV・100 MW なら 1.32 → 2.07 MW）。力率改善は設備を増やさずに損失を減らす。</em></p>
+<!-- /fig -->
+
+
+
+<h3 id="s8">2.2.3 なぜ交流なのか / 直流はどこで使うか</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">項目</th>
+<th align="left">交流 (AC)</th>
+<th align="left">直流 (DC)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">電圧変換</td>
+<td align="left">変圧器で容易・高効率</td>
+<td align="left">変換器が必要（高価）</td>
+</tr>
+<tr>
+<td align="left">遮断</td>
+<td align="left">電流零点があり容易</td>
+<td align="left">零点がなく困難</td>
+</tr>
+<tr>
+<td align="left">線路の充電電流</td>
+<td align="left">長距離・ケーブルで問題化</td>
+<td align="left">発生しない</td>
+</tr>
+<tr>
+<td align="left">安定度</td>
+<td align="left">位相角の制約あり（第7回）</td>
+<td align="left">制約なし</td>
+</tr>
+<tr>
+<td align="left">損失</td>
+<td align="left">表皮効果あり、無効電力を運ぶ</td>
+<td align="left">導体を有効利用</td>
+</tr>
+</tbody></table></div>
+<p>歴史的に<strong>変圧器で電圧を自在に変えられる</strong>ことが決定的で、交流が採用された（電流戦争）。
+ただし次の場合は直流が有利になる。</p>
+<ul>
+<li><strong>長距離大容量</strong>: 架空線でおよそ 600 km 以上、ケーブルで 50 km 以上</li>
+<li><strong>異周波数間連系</strong>: 日本の東西連系（佐久間・新信濃・東清水 周波数変換所）</li>
+<li><strong>海底ケーブル</strong>: 北海道-本州連系（新北本連系）</li>
+</ul>
+<p>これが <strong>HVDC（高圧直流送電）</strong> である。第9回のインバーター技術と直結する。</p>
+<h3 id="s9">2.2.4 変圧器の基本</h3>
+<p>変圧器は一次巻数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>N</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">N_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>、二次巻数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>N</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">N_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> の比で電圧を変換する。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><msub><mi>V</mi><mn>1</mn></msub><msub><mi>V</mi><mn>2</mn></msub></mfrac><mo>=</mo><mfrac><msub><mi>N</mi><mn>1</mn></msub><msub><mi>N</mi><mn>2</mn></msub></mfrac><mo>=</mo><mi>a</mi><mspace width="1em"/><mo stretchy="false">(</mo><mtext>巻数比</mtext><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"/><mfrac><msub><mi>I</mi><mn>1</mn></msub><msub><mi>I</mi><mn>2</mn></msub></mfrac><mo>=</mo><mfrac><mn>1</mn><mi>a</mi></mfrac></mrow><annotation encoding="application/x-tex">\frac{V_1}{V_2} = \frac{N_1}{N_2} = a \quad (\text{巻数比}), \qquad \frac{I_1}{I_2} = \frac{1}{a}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.1963em;vertical-align:-0.836em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.1963em;vertical-align:-0.836em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.109em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.1963em;vertical-align:-0.836em;"></span><span class="mord mathnormal">a</span><span class="mspace" style="margin-right:1em;"></span><span class="mopen">(</span><span class="mord text"><span class="mord cjk_fallback">巻数比</span></span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.836em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">a</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>理想変圧器では容量が保存される: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>V</mi><mn>1</mn></msub><msub><mi>I</mi><mn>1</mn></msub><mo>=</mo><msub><mi>V</mi><mn>2</mn></msub><msub><mi>I</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">V_1 I_1 = V_2 I_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.2222em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0785em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>。</p>
+<p><strong>インピーダンスの換算</strong>: 二次側のインピーダンス <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Z</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">Z_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">Z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> を一次側から見ると</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>Z</mi><mn>1</mn></msub><mo>=</mo><msup><mi>a</mi><mn>2</mn></msup><msub><mi>Z</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">Z_1 = a^2 Z_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">Z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0141em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">Z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p>これは<strong>単位法を使えば意識しなくてよくなる</strong>（第3回）。
+系統解析で単位法が標準になっている最大の理由がこれである。</p>
+<p><strong>三相変圧器の結線</strong>:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">結線</th>
+<th align="left">特徴</th>
+<th align="left">主な用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">Y-Y</td>
+<td align="left">中性点接地可能、第3調波の問題</td>
+<td align="left">あまり使わない</td>
+</tr>
+<tr>
+<td align="left">Δ-Δ</td>
+<td align="left">V結線で運転継続可能</td>
+<td align="left">配電用</td>
+</tr>
+<tr>
+<td align="left">Y-Δ</td>
+<td align="left">降圧用、Δ側で第3調波を循環させ吸収</td>
+<td align="left">受電用変圧器</td>
+</tr>
+<tr>
+<td align="left">Δ-Y</td>
+<td align="left">昇圧用、Y側中性点接地可能</td>
+<td align="left"><strong>発電所主変圧器</strong></td>
+</tr>
+</tbody></table></div>
+<p>Y-Δ / Δ-Y 結線では<strong>一次と二次で 30° の位相差</strong>が生じる。
+潮流計算では通常この位相差は無視するが、実系統の保護協調では重要になる。</p>
+<!-- fig:ch02_transformer.png -->
+<p><img src="../%E5%9B%B3/ch02_transformer.png" alt="図 2.4">
+<em>図 2.4　275/66 kV・100 MVA の変圧器。巻数比 a = 4.17 で電圧は a 倍、電流は 1/a 倍（一次 210 A、二次 875 A）。二次側の Z₂ = 0.5 + j8.0 Ω は一次から見ると a² = 17.4 倍の 8.7 + j139 Ω に見える。単位法（第3回）ならどちらも 0.184 p.u. で同じ値になる。</em></p>
+<!-- /fig -->
+
+
+<h3 id="s10">2.2.5 系統構成と信頼度</h3>
+<pre><code>【放射状（樹枝状）】     【ループ】            【網目（メッシュ）】
+   電源                  電源                  電源      電源
+    │                    ┌─┴─┐                 ├────┬───┤
+    ├──○                 │      │                 ○────○───○
+    ├──○                 ○      ○                 │    │   │
+    └──○                 │      │                 ○────○───○
+                         └─┬─┘
+                           ○
+  配電系統で一般的        送電系統の基本      大都市の基幹系統
+  安価・保護が簡単        1回線故障に耐える   高信頼度・高コスト
+  1点故障で停電          切替で復旧可能       潮流計算が必須
+</code></pre>
+<p><strong>ここが重要</strong>: 放射状系統では電流の流れる向きが一意に決まるので、
+手計算で潮流が求まる。しかしループ・網目系統では<strong>電流の分流が
+インピーダンスの比で決まる</strong>ため、連立方程式を解く必要がある。
+これが第4〜6回で学ぶ<strong>潮流計算</strong>が必要になる理由である。</p>
+<p>なお、太陽光発電が配電系統に大量導入されると、放射状系統でも
+<strong>逆潮流</strong>（需要家 → 変電所の向きの潮流）が発生し、
+従来の「電圧は末端に行くほど下がる」という前提が崩れる。</p>
+<!-- fig:ch02_topology.png -->
+<p><img src="../%E5%9B%B3/ch02_topology.png" alt="図 2.5">
+<em>図 2.5　同じ 1 区間の故障でも、放射状では故障点より先がすべて停電し、ループでは故障区間を両側の開閉器で切り離して逆側から給電を続けられる。各区間の年間故障確率を 0.01 とすると、末端に届く確率は放射状 (1 − 0.01)³ = 0.9703、ループ 1 − 0.01² = 0.9999。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch02_parallel.png -->
+<p><img src="../%E5%9B%B3/ch02_parallel.png" alt="図 2.6">
+<em>図 2.6　並列 2 回線の分流。両端の母線電圧が共通なので Z₁I₁ = Z₂I₂、すなわち I₁/I₂ = Z₂/Z₁（インピーダンスの逆比）。Z₁ = 10 Ω、Z₂ = 15 Ω、全電流 1,000 A なら 600 A / 400 A。回線 1 を開放すると残りの回線 2 が 1,000 A を負い、定格 700 A の 143% の過負荷になる。これが N-1 基準と潮流計算の動機。</em></p>
+<!-- /fig -->
+
+
+
+<h3 id="s11">2.2.6 単線結線図の読み方</h3>
+<p>三相回路は3本の線を持つが、平衡三相なら1相分で代表できる。
+これを1本の線で描いたものが<strong>単線結線図</strong>である。</p>
+<pre><code>     G1                    Bus1        L1         Bus2
+    ( ~ )────╫╫────×────────┬──────/\/\/\──────┬────×────╫╫────▽
+   発電機   変圧器 遮断器    母線    送電線      母線  遮断器 変圧器  負荷
+              Tr1   CB1                          CB2   Tr2
+</code></pre>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">記号</th>
+<th align="left">名称</th>
+<th align="left">役割</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span>（丸）</td>
+<td align="left">発電機</td>
+<td align="left">電源</td>
+</tr>
+<tr>
+<td align="left">╫╫</td>
+<td align="left">変圧器</td>
+<td align="left">電圧変換</td>
+</tr>
+<tr>
+<td align="left">× または ■</td>
+<td align="left">遮断器 (CB)</td>
+<td align="left">事故電流の遮断</td>
+</tr>
+<tr>
+<td align="left">／</td>
+<td align="left">断路器 (DS)</td>
+<td align="left">無電流時の開閉・作業時の絶縁確保</td>
+</tr>
+<tr>
+<td align="left">太い横線</td>
+<td align="left">母線 (bus)</td>
+<td align="left">接続点。<strong>潮流計算の節点になる</strong></td>
+</tr>
+<tr>
+<td align="left">▽</td>
+<td align="left">負荷</td>
+<td align="left">消費</td>
+</tr>
+<tr>
+<td align="left">⊥</td>
+<td align="left">接地</td>
+<td align="left">—</td>
+</tr>
+</tbody></table></div>
+<p><strong>ここが重要</strong>: 遮断器（CB）は事故電流を切れるが、断路器（DS）は切れない。
+必ず「CB を開いてから DS を開く」。逆順は重大事故になる。
+系統図を読むときは、この2つを区別できることが必須である。</p>
+<p><strong>母線 = 潮流計算の節点</strong>。第4回以降、単線結線図の母線に番号を振り、
+<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">Y</mi><mtext>bus</mtext></msub></mrow><annotation encoding="application/x-tex">\mathbf{Y}_\text{bus}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8361em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.0288em;">Y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0288em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">bus</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> を組み立てていく。今回の図の読み方がその前提になる。</p>
+<!-- fig:ch02_sld.png -->
+<p><img src="../%E5%9B%B3/ch02_sld.png" alt="図 2.7">
+<em>図 2.7　3 母線・3 線路の単線結線図の例。太線が母線（節点）、線路が枝、□ が遮断器 CB、斜めの刃が断路器 DS、◎ が変圧器。線路 L13 があるためループになっている。操作の順序は必ず「CB を開いてから DS を開く」。</em></p>
+<!-- /fig -->
+
+
+<h3 id="s12">2.2.7 日本の電力系統</h3>
+<p><strong>周波数の東西分断</strong>: 明治期にドイツ製 50 Hz 発電機（東京）、
+アメリカ製 60 Hz 発電機（大阪）を導入したことに由来する。
+静岡県の富士川〜新潟県の糸魚川を境界とする。</p>
+<p>連系には<strong>周波数変換所（FC）</strong>が必要:</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">変換所</th>
+<th align="left">容量</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">佐久間 FC</td>
+<td align="left">300 MW</td>
+</tr>
+<tr>
+<td align="left">新信濃 FC</td>
+<td align="left">600 MW</td>
+</tr>
+<tr>
+<td align="left">東清水 FC</td>
+<td align="left">300 MW</td>
+</tr>
+<tr>
+<td align="left">飛騨信濃 FC</td>
+<td align="left">900 MW</td>
+</tr>
+<tr>
+<td align="left"><strong>合計</strong></td>
+<td align="left"><strong>2,100 MW</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>沖縄電力系統の特徴</strong> — 本講義の受講生に最も身近な系統である。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th align="left">項目</th>
+<th align="left">沖縄本島系統</th>
+<th align="left">本土（例: 九州）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">他系統との連系</td>
+<td align="left"><strong>なし（完全独立）</strong></td>
+<td align="left">関門連系線で中国と接続</td>
+</tr>
+<tr>
+<td align="left">周波数</td>
+<td align="left">60 Hz</td>
+<td align="left">60 Hz</td>
+</tr>
+<tr>
+<td align="left">系統規模（最大需要）</td>
+<td align="left">約 1,500 MW</td>
+<td align="left">約 16,000 MW</td>
+</tr>
+<tr>
+<td align="left">主力電源</td>
+<td align="left">石炭・LNG 火力</td>
+<td align="left">原子力・LNG・石炭</td>
+</tr>
+<tr>
+<td align="left">慣性</td>
+<td align="left"><strong>小さい</strong></td>
+<td align="left">大きい</td>
+</tr>
+</tbody></table></div>
+<p><strong>ここが極めて重要</strong>: 沖縄系統は他系統と繋がっていない<strong>独立系統</strong>である。
+本土なら周波数が乱れたとき隣の系統から応援が来るが、沖縄にはそれがない。
+さらに系統規模が小さく<strong>慣性定数が小さい</strong>ため、
+同じ大きさの電源脱落でも<strong>周波数の変化が急峻</strong>になる。</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mrow><mi>d</mi><mi>f</mi></mrow><mrow><mi>d</mi><mi>t</mi></mrow></mfrac><mo>=</mo><mfrac><msub><mi>f</mi><mn>0</mn></msub><mrow><mn>2</mn><msub><mi>H</mi><mtext>sys</mtext></msub><msub><mi>S</mi><mtext>sys</mtext></msub></mrow></mfrac><mi mathvariant="normal">Δ</mi><mi>P</mi><mspace width="1em"/><mtext>(第8回で導出)</mtext></mrow><annotation encoding="application/x-tex">\frac{df}{dt} = \frac{f_0}{2H_\text{sys} S_\text{sys}} \Delta P \quad \text{(第8回で導出)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">df</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.3435em;vertical-align:-0.9721em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9721em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mspace" style="margin-right:1em;"></span><span class="mord text"><span class="mord">(</span><span class="mord cjk_fallback">第</span><span class="mord">8</span><span class="mord cjk_fallback">回で導出</span><span class="mord">)</span></span></span></span></span></span></p>
+<p>系統容量 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>S</mi><mtext>sys</mtext></msub></mrow><annotation encoding="application/x-tex">S_\text{sys}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> が小さいほど <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>f</mi><mi mathvariant="normal">/</mi><mi>d</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">df/dt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">df</span><span class="mord">/</span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span></span> が大きい。
+このため沖縄では再生可能エネルギーの導入可能量が本土より厳しく制約される。
+<strong>離島系統の再エネ統合は、世界的にも先端の研究課題</strong>であり、
+第8回・第13回・第15回で繰り返し扱う。</p>
+<!-- fig:ch02_okinawa.png -->
+<p><img src="../%E5%9B%B3/ch02_okinawa.png" alt="図 2.8">
+<em>図 2.8　沖縄本島の簡略 5 母線モデル（132 kV、pws_common.build_okinawa と同じ構成）。総負荷 900 MW を具志川（スラック 650 MW）と牧港（250 MW）が供給する。矢印は直流法（第4回）で概算した有効電力の向きで、牧港 → 那覇に 728 MW が集中し、中部は那覇側 328 MW と北部側 22 MW の 2 方向から受ける。回線数の多い中枢の線路ほどリアクタンスが小さく、潮流が集まる。</em></p>
+<!-- /fig -->
+
+<!-- fig:ch02_reserve.png -->
+<p><img src="../%E5%9B%B3/ch02_reserve.png" alt="図 2.9">
+<em>図 2.9　供給予備率と N-1。需要 1,500 MW に対して供給力 1,650 MW なら予備率 10% だが、最大機 250 MW が脱落すると 1,400 MW で 100 MW 足りない（予備率 −6.7%）。N-1 を満たすには 1,750 MW（予備率 16.7%）が要る。連系線のない沖縄では、この不足を融通で埋められない。</em></p>
+<!-- /fig -->
+
+
+
+<hr>
+<h2 id="s13">2.3 シミュレーション</h2>
+<h3 id="s14">2.3.1 送電電圧と損失の関係</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第2回 デモ1: 送電電圧レベルと損失率&quot;&quot;&quot;
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams[&#39;font.family&#39;] = [&#39;Hiragino Sans&#39;, &#39;Yu Gothic&#39;, &#39;DejaVu Sans&#39;]
+
+P      = 1000e6        # 送電電力 1000 MW
+length = 200.0         # 亘長 200 km
+r_per_km = 0.03        # 線路抵抗 [ohm/km]（ACSR 610mm^2 相当）
+R      = r_per_km * length
+pf     = 0.95          # 力率
+
+V_levels = np.array([66, 110, 154, 275, 500]) * 1e3   # [V]
+
+print(f&quot;{&#39;電圧[kV]&#39;:&gt;8} {&#39;電流[A]&#39;:&gt;10} {&#39;損失[MW]&#39;:&gt;10} {&#39;損失率[%]&#39;:&gt;10}&quot;)
+loss_rates = []
+for V in V_levels:
+    I    = P / (np.sqrt(3) * V * pf)
+    loss = 3 * I**2 * R
+    rate = loss / P * 100
+    loss_rates.append(rate)
+    print(f&quot;{V/1e3:8.0f} {I:10.0f} {loss/1e6:10.2f} {rate:10.2f}&quot;)
+
+fig, ax = plt.subplots(figsize=(7.5, 4.5))
+ax.plot(V_levels/1e3, loss_rates, &quot;o-&quot;, lw=2, ms=8, color=&quot;#e63946&quot;)
+for v, lr in zip(V_levels/1e3, loss_rates):
+    ax.annotate(f&quot;{lr:.1f}%&quot;, (v, lr), textcoords=&quot;offset points&quot;,
+                xytext=(6, 6), fontsize=9)
+ax.set_xlabel(&quot;送電電圧 [kV]&quot;); ax.set_ylabel(&quot;損失率 [%]&quot;)
+ax.set_title(f&quot;送電損失率 vs 電圧（{P/1e6:.0f} MW を {length:.0f} km 送電）&quot;)
+ax.set_yscale(&quot;log&quot;); ax.grid(alpha=0.3, which=&quot;both&quot;)
+plt.tight_layout()
+plt.savefig(&quot;../図/ch02_loss_vs_voltage.png&quot;, dpi=150)
+</code></pre>
+<p><strong>期待される出力</strong>:</p>
+<pre><code> 電圧[kV]    電流[A]   損失[MW]   損失率[%]
+      66       9206     1525.75     152.57   ← 送電不可能
+     110       5524      549.27      54.93
+     154       3945      280.24      28.02
+     275       2209       87.87       8.79
+     500       1215       26.57       2.66
+</code></pre>
+<p>66 kV で 1000 MW を送ろうとすると損失が送電電力を超えてしまう（物理的に不可能）。
+<strong>大電力の長距離送電には超高電圧が必然</strong>であることが数値で分かる。</p>
+<h3 id="s15">2.3.2 系統構成による信頼度の違い</h3>
+<pre><code class="language-python">&quot;&quot;&quot;第2回 デモ2: 放射状 vs ループの供給信頼度（簡易モンテカルロ）&quot;&quot;&quot;
+import numpy as np
+
+rng = np.random.default_rng(42)
+N_TRIAL  = 200_000
+p_fail   = 0.01      # 各線路の年間故障確率
+
+# 放射状: 3本直列。どれか1本でも故障すると末端needs停電
+radial_ok = rng.random((N_TRIAL, 3)) &gt; p_fail
+radial_supply = radial_ok.all(axis=1)
+
+# ループ: 2経路。両方故障したときのみ停電
+loop_ok = rng.random((N_TRIAL, 2)) &gt; p_fail
+loop_supply = loop_ok.any(axis=1)
+
+print(f&quot;放射状系統の供給成功率: {radial_supply.mean():.5f}&quot;)
+print(f&quot;ループ系統の供給成功率: {loop_supply.mean():.5f}&quot;)
+print(f&quot;年間停電時間の目安:&quot;)
+print(f&quot;  放射状: {(1-radial_supply.mean())*8760*60:.1f} 分/年&quot;)
+print(f&quot;  ループ: {(1-loop_supply.mean())*8760*60:.1f} 分/年&quot;)
+</code></pre>
+<p>理論値: 放射状 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>=</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mn>0.01</mn><msup><mo stretchy="false">)</mo><mn>3</mn></msup><mo>=</mo><mn>0.9703</mn></mrow><annotation encoding="application/x-tex">= (1-0.01)^3 = 0.9703</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mord">0.01</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.9703</span></span></span></span>、ループ <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>=</mo><mn>1</mn><mo>−</mo><msup><mn>0.01</mn><mn>2</mn></msup><mo>=</mo><mn>0.9999</mn></mrow><annotation encoding="application/x-tex">= 1-0.01^2 = 0.9999</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">0.0</span><span class="mord"><span class="mord">1</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.9999</span></span></span></span>。
+<strong>ループ化により停電時間が約 300 分の 1 になる</strong>。
+ただし設備コストは倍増し、潮流計算が必要になる。</p>
+<h3 id="s16">2.3.3 対応する MATLAB コード（参考）</h3>
+<pre><code class="language-matlab">% 第2回: 変圧器のインピーダンス換算
+V1 = 275e3;  V2 = 66e3;        % 一次/二次 電圧 [V]
+a  = V1 / V2;                   % 巻数比
+Z2 = 0.5 + 1j*8.0;              % 二次側インピーダンス [ohm]
+Z1 = a^2 * Z2;                  % 一次側換算
+fprintf(&#39;巻数比 a = %.3f\n&#39;, a);
+fprintf(&#39;一次側換算 Z1 = %.2f + j%.2f ohm\n&#39;, real(Z1), imag(Z1));
+
+% パーユニット換算（第3回の予告）
+Sbase = 100e6;                  % 基準容量 100 MVA
+Zbase1 = V1^2 / Sbase;
+Zbase2 = V2^2 / Sbase;
+fprintf(&#39;一次側 p.u.: %.4f\n&#39;, abs(Z1)/Zbase1);
+fprintf(&#39;二次側 p.u.: %.4f  &lt;- 同じ値になる\n&#39;, abs(Z2)/Zbase2);
+</code></pre>
+<p>最後の 2 行が示すとおり、<strong>パーユニットにすれば変圧器の両側で同じ値</strong>になる。
+これが次回のテーマである。</p>
+<hr>
+<h2 id="s17">2.4 例題</h2>
+<h3 id="s18">例題 2-1（送電損失）</h3>
+<p>線間電圧 154 kV、力率 0.9 で 60 MW を送電する三相送電線がある。
+線路 1 条あたりの抵抗は 8.0 Ω である。</p>
+<ol>
+<li>線路電流 [A] を求めよ。</li>
+<li>送電損失 [MW] と損失率 [%] を求めよ。</li>
+<li>電圧を 275 kV に昇圧した場合の損失率を求めよ。</li>
+</ol>
+<p><strong>解答</strong></p>
+<p><strong>(1)</strong>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>I</mi><mo>=</mo><mfrac><mi>P</mi><mrow><msqrt><mn>3</mn></msqrt><mi>V</mi><mi>cos</mi><mo>⁡</mo><mi>ϕ</mi></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>60</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup></mrow><mrow><msqrt><mn>3</mn></msqrt><mo>×</mo><mn>154</mn><mo>×</mo><msup><mn>10</mn><mn>3</mn></msup><mo>×</mo><mn>0.9</mn></mrow></mfrac><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>250</mn><mtext> A</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">I = \frac{P}{\sqrt{3}V\cos\phi} = \frac{60 \times 10^6}{\sqrt{3} \times 154\times10^3 \times 0.9} = \boxed{250\ \text{A}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.352em;vertical-align:-0.9917em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603em;"><span style="top:-2.2028em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9072em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord">3</span></span></span><span style="top:-2.8672em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1328em;"><span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">ϕ</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9917em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.4211em;vertical-align:-0.93em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.4911em;"><span style="top:-2.2028em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9072em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord">3</span></span></span><span style="top:-2.8672em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1328em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">154</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7401em;"><span style="top:-2.989em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.9</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">60</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.93em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">250</span><span class="mspace"> </span><span class="mord text"><span class="mord">A</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>(2)</strong>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>P</mi><mtext>loss</mtext></msub><mo>=</mo><mn>3</mn><msup><mi>I</mi><mn>2</mn></msup><mi>R</mi><mo>=</mo><mn>3</mn><mo>×</mo><msup><mn>250</mn><mn>2</mn></msup><mo>×</mo><mn>8.0</mn><mo>=</mo><mn>1.50</mn><mo>×</mo><msup><mn>10</mn><mn>6</mn></msup><mtext> W</mtext><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>1.50</mn><mtext> MW</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">P_\text{loss} = 3I^2R = 3 \times 250^2 \times 8.0 = 1.50\times10^6\ \text{W} = \boxed{1.50\ \text{MW}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">loss</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8641em;"></span><span class="mord">3</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0785em;">I</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9474em;vertical-align:-0.0833em;"></span><span class="mord">25</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">8.0</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.50</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8641em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span><span class="mspace"> </span><span class="mord text"><span class="mord">W</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3633em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0233em;"><span style="top:-3.3633em;"><span class="pstrut" style="height:3.3633em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">1.50</span><span class="mspace"> </span><span class="mord text"><span class="mord">MW</span></span></span></span></span></span><span style="top:-3.0233em;"><span class="pstrut" style="height:3.3633em;"></span><span class="stretchy fbox" style="height:1.3633em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>損失率</mtext><mo>=</mo><mfrac><mn>1.50</mn><mn>60</mn></mfrac><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>2.50</mn><mtext> </mtext><mi mathvariant="normal">%</mi></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\text{損失率} = \frac{1.50}{60} = \boxed{2.50\ \%}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">損失率</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">60</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1.50</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4856em;vertical-align:-0.3956em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.09em;"><span style="top:-3.4856em;"><span class="pstrut" style="height:3.4856em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">2.50</span><span class="mspace"> </span><span class="mord">%</span></span></span></span></span><span style="top:-3.09em;"><span class="pstrut" style="height:3.4856em;"></span><span class="stretchy fbox" style="height:1.4856em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3956em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>(3)</strong> 損失は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>V</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">V^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> に反比例するので
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>2.50</mn><mo>×</mo><msup><mrow><mo fence="true">(</mo><mfrac><mn>154</mn><mn>275</mn></mfrac><mo fence="true">)</mo></mrow><mn>2</mn></msup><mo>=</mo><mn>2.50</mn><mo>×</mo><mn>0.3136</mn><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>0.784</mn><mtext> </mtext><mi mathvariant="normal">%</mi></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">2.50 \times \left(\frac{154}{275}\right)^2 = 2.50 \times 0.3136 = \boxed{0.784\ \%}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2.50</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.604em;vertical-align:-0.95em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">275</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">154</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.654em;"><span style="top:-3.9029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2.50</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.3136</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4856em;vertical-align:-0.3956em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.09em;"><span style="top:-3.4856em;"><span class="pstrut" style="height:3.4856em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">0.784</span><span class="mspace"> </span><span class="mord">%</span></span></span></span></span><span style="top:-3.09em;"><span class="pstrut" style="height:3.4856em;"></span><span class="stretchy fbox" style="height:1.4856em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3956em;"><span></span></span></span></span></span></span></span></span></span></p>
+<h3 id="s19">例題 2-2（力率改善の効果）</h3>
+<p>例題 2-1 の系統（154 kV）で、力率を 0.9 から 0.98 に改善した。
+損失率は何 % になるか。また損失の削減量 [kW] を求めよ。</p>
+<p><strong>解答</strong></p>
+<p>損失は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow><mi>cos</mi><mo>⁡</mo></mrow><mn>2</mn></msup><mi>ϕ</mi></mrow><annotation encoding="application/x-tex">\cos^2\phi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0085em;vertical-align:-0.1944em;"></span><span class="mop"><span class="mop">cos</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">ϕ</span></span></span></span> に反比例するので</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msubsup><mi>P</mi><mtext>loss</mtext><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup><mo>=</mo><mn>1.50</mn><mo>×</mo><msup><mrow><mo fence="true">(</mo><mfrac><mn>0.9</mn><mn>0.98</mn></mfrac><mo fence="true">)</mo></mrow><mn>2</mn></msup><mo>=</mo><mn>1.50</mn><mo>×</mo><mn>0.8434</mn><mo>=</mo><mn>1.265</mn><mtext> MW</mtext></mrow><annotation encoding="application/x-tex">P_\text{loss}&#x27; = 1.50 \times \left(\frac{0.9}{0.98}\right)^2 = 1.50 \times 0.8434 = 1.265\ \text{MW}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0489em;vertical-align:-0.247em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8019em;"><span style="top:-2.453em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">loss</span></span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.50</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.604em;vertical-align:-0.95em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">0.98</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">0.9</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.654em;"><span style="top:-3.9029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.50</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.8434</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">1.265</span><span class="mspace"> </span><span class="mord text"><span class="mord">MW</span></span></span></span></span></span></p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>損失率</mtext><mo>=</mo><mfrac><mn>1.265</mn><mn>60</mn></mfrac><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>2.11</mn><mtext> </mtext><mi mathvariant="normal">%</mi></mrow></mstyle></mstyle></mstyle></menclose><mo separator="true">,</mo><mspace width="2em"/><mtext>削減量</mtext><mo>=</mo><mn>1.50</mn><mo>−</mo><mn>1.265</mn><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>235</mn><mtext> kW</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\text{損失率} = \frac{1.265}{60} = \boxed{2.11\ \%}, \qquad
+\text{削減量} = 1.50 - 1.265 = \boxed{235\ \text{kW}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord cjk_fallback">損失率</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">60</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1.265</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.4856em;vertical-align:-0.3956em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.09em;"><span style="top:-3.4856em;"><span class="pstrut" style="height:3.4856em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">2.11</span><span class="mspace"> </span><span class="mord">%</span></span></span></span></span><span style="top:-3.09em;"><span class="pstrut" style="height:3.4856em;"></span><span class="stretchy fbox" style="height:1.4856em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3956em;"><span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord cjk_fallback">削減量</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1.50</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.265</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.3744em;vertical-align:-0.34em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0344em;"><span style="top:-3.3744em;"><span class="pstrut" style="height:3.3744em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">235</span><span class="mspace"> </span><span class="mord text"><span class="mord">kW</span></span></span></span></span></span><span style="top:-3.0344em;"><span class="pstrut" style="height:3.3744em;"></span><span class="stretchy fbox" style="height:1.3744em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.34em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>着眼点</strong>: 設備を増強せずに力率だけで 15.7% の損失削減ができる。
+無効電力の管理が重要な理由である（第3回、第4回、第14回）。</p>
+<h3 id="s20">例題 2-3（沖縄系統の独立性）</h3>
+<p>沖縄本島系統（最大需要 1,500 MW、系統慣性定数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>H</mi><mtext>sys</mtext></msub><mo>=</mo><mn>4.0</mn></mrow><annotation encoding="application/x-tex">H_\text{sys} = 4.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4.0</span></span></span></span> s、定格 60 Hz）で、
+出力 250 MW の火力発電機 1 台が脱落した。</p>
+<ol>
+<li>脱落直後の周波数変化率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>f</mi><mi mathvariant="normal">/</mi><mi>d</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">df/dt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">df</span><span class="mord">/</span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span></span> [Hz/s] を求めよ。
+（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>f</mi><mi mathvariant="normal">/</mi><mi>d</mi><mi>t</mi><mo>=</mo><msub><mi>f</mi><mn>0</mn></msub><mi mathvariant="normal">Δ</mi><mi>P</mi><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mn>2</mn><msub><mi>H</mi><mtext>sys</mtext></msub><msub><mi>S</mi><mtext>sys</mtext></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">df/dt = f_0 \Delta P / (2 H_\text{sys} S_\text{sys})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">df</span><span class="mord">/</span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1076em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="mord">/</span><span class="mopen">(</span><span class="mord">2</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>S</mi><mtext>sys</mtext></msub><mo>=</mo><mn>1500</mn></mrow><annotation encoding="application/x-tex">S_\text{sys} = 1500</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1500</span></span></span></span> MVA とする）</li>
+<li>同じ規模の脱落が、系統容量 16,000 MVA・<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>H</mi><mtext>sys</mtext></msub><mo>=</mo><mn>5.0</mn></mrow><annotation encoding="application/x-tex">H_\text{sys}=5.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5.0</span></span></span></span> s の九州系統で起きた場合と比較せよ。</li>
+</ol>
+<p><strong>解答</strong></p>
+<p><strong>(1)</strong>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mrow><mi>d</mi><mi>f</mi></mrow><mrow><mi>d</mi><mi>t</mi></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>60</mn><mo>×</mo><mn>250</mn></mrow><mrow><mn>2</mn><mo>×</mo><mn>4.0</mn><mo>×</mo><mn>1500</mn></mrow></mfrac><mo>=</mo><mfrac><mn>15000</mn><mn>12000</mn></mfrac><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>1.25</mn><mtext> Hz/s</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\frac{df}{dt} = \frac{60 \times 250}{2 \times 4.0 \times 1500} = \frac{15000}{12000} = \boxed{1.25\ \text{Hz/s}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">df</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0908em;vertical-align:-0.7693em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">4.0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">1500</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">60</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">250</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">12000</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">15000</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.68em;vertical-align:-0.59em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.09em;"><span style="top:-3.68em;"><span class="pstrut" style="height:3.68em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">1.25</span><span class="mspace"> </span><span class="mord text"><span class="mord">Hz/s</span></span></span></span></span></span><span style="top:-3.09em;"><span class="pstrut" style="height:3.68em;"></span><span class="stretchy fbox" style="height:1.68em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.59em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>(2)</strong>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mrow><mi>d</mi><mi>f</mi></mrow><mrow><mi>d</mi><mi>t</mi></mrow></mfrac><mo>=</mo><mfrac><mrow><mn>60</mn><mo>×</mo><mn>250</mn></mrow><mrow><mn>2</mn><mo>×</mo><mn>5.0</mn><mo>×</mo><mn>16000</mn></mrow></mfrac><mo>=</mo><mfrac><mn>15000</mn><mn>160000</mn></mfrac><mo>=</mo><menclose notation="box"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="false"><mstyle scriptlevel="0" displaystyle="true"><mrow><mn>0.094</mn><mtext> Hz/s</mtext></mrow></mstyle></mstyle></mstyle></menclose></mrow><annotation encoding="application/x-tex">\frac{df}{dt} = \frac{60 \times 250}{2 \times 5.0 \times 16000} = \frac{15000}{160000} = \boxed{0.094\ \text{Hz/s}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.0574em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1076em;">df</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0908em;vertical-align:-0.7693em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">5.0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">16000</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">60</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">250</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.0074em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">160000</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">15000</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.68em;vertical-align:-0.59em;"></span><span class="mord"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.09em;"><span style="top:-3.68em;"><span class="pstrut" style="height:3.68em;"></span><span class="boxpad"><span class="mord"><span class="mord"><span class="mord">0.094</span><span class="mspace"> </span><span class="mord text"><span class="mord">Hz/s</span></span></span></span></span></span><span style="top:-3.09em;"><span class="pstrut" style="height:3.68em;"></span><span class="stretchy fbox" style="height:1.68em;border-style:solid;border-width:0.04em;"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.59em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>比較</strong>: 沖縄系統は九州系統の<strong>約 13 倍の速さ</strong>で周波数が低下する。
+UFR（周波数低下リレー）の整定が 57.0 Hz だとすると、
+沖縄では <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>60</mn><mo>−</mo><mn>57</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mn>1.25</mn><mo>=</mo><mn>2.4</mn></mrow><annotation encoding="application/x-tex">(60-57)/1.25 = 2.4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">60</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">57</span><span class="mclose">)</span><span class="mord">/1.25</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2.4</span></span></span></span> 秒で到達してしまう。
+<strong>小規模独立系統では周波数維持がいかに厳しいか</strong>が数値で理解できる。</p>
+<hr>
+<h2 id="s21">2.5 演習問題</h2>
+<h3 id="s22">基礎問題</h3>
+<p><strong>問 2-1</strong> 次の電圧レベルを、系統上で電気が流れる順に並べよ。
+また各段階の名称（発電端・基幹送電・高圧配電など）を答えよ。
+<code>6.6 kV</code>, <code>500 kV</code>, <code>100 V</code>, <code>18 kV</code>, <code>66 kV</code></p>
+<p><strong>問 2-2</strong> 線間電圧 66 kV、力率 0.85 で 20 MW を送電する。
+線路抵抗が 1 条あたり 5.0 Ω のとき、線路電流と損失率を求めよ。</p>
+<p><strong>問 2-3</strong> 遮断器（CB）と断路器（DS）の違いを述べ、
+送電線を停止して点検する際の正しい操作順序を書け。</p>
+<h3 id="s23">応用問題</h3>
+<p><strong>問 2-4</strong> ある送電系統で、275 kV・亘長 150 km・線路抵抗 0.025 Ω/km の
+送電線により 400 MW（力率 0.95）を送電している。</p>
+<p>(a) 送電損失 [MW] と損失率を求めよ。
+(b) この線路を 500 kV に昇圧した場合の損失率を求めよ。
+(c) 500 kV への昇圧工事に 200 億円かかるとする。電力量単価を 15 円/kWh、
+   設備利用率を 70% として、損失削減による年間の便益 [億円] を求め、
+   単純投資回収年数を計算せよ。
+(d) (c) の計算で考慮していない要素を 2 つ挙げよ。</p>
+<p><strong>問 2-5</strong> 沖縄本島系統に大規模太陽光発電（合計 300 MW）を導入する計画がある。</p>
+<p>(a) 晴天の昼間、需要 1,000 MW に対し太陽光が 300 MW 発電しているとき、
+   火力発電機が分担する出力を求めよ。
+(b) この状態で、系統に接続されている同期発電機の台数が減る。
+   系統慣性定数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>H</mi><mtext>sys</mtext></msub></mrow><annotation encoding="application/x-tex">H_\text{sys}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> はどう変化するか、理由とともに答えよ。
+(c) (b) の結果、電源脱落時の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>f</mi><mi mathvariant="normal">/</mi><mi>d</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">df/dt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">df</span><span class="mord">/</span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span></span> はどうなるか。
+   例題 2-3 の式を用いて、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>H</mi><mtext>sys</mtext></msub></mrow><annotation encoding="application/x-tex">H_\text{sys}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0813em;">H</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0813em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">sys</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span> が 4.0 s から 2.5 s に低下した場合の
+   250 MW 脱落時の <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>f</mi><mi mathvariant="normal">/</mi><mi>d</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">df/dt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">df</span><span class="mord">/</span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span></span> を求めよ。
+(d) この問題への対策を 2 つ挙げ、それぞれ簡潔に説明せよ。
+   （ヒント: 第8回・第9回の内容を先取りしてよい）</p>
+<hr>
+<h2 id="s24">2.6 まとめ</h2>
+<h3 id="s25">キーポイント</h3>
+<ul>
+<li>電力系統は<strong>発電（10〜25 kV）→ 昇圧（275〜500 kV）→ 送電 → 降圧 → 配電（6.6 kV）→ 消費（100/200 V）</strong>
+という階層構造を持つ。</li>
+<li>送電損失は <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mtext>loss</mtext></msub><mo>=</mo><mi>R</mi><msup><mi>P</mi><mn>2</mn></msup><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><msup><mi>V</mi><mn>2</mn></msup><msup><mrow><mi>cos</mi><mo>⁡</mo></mrow><mn>2</mn></msup><mi>ϕ</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">P_\text{loss} = RP^2/(V^2\cos^2\phi)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord text mtight"><span class="mord mtight">loss</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0077em;">R</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord">/</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.2222em;">V</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop"><span class="mop">cos</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">ϕ</span><span class="mclose">)</span></span></span></span>。
+<strong>電圧の2乗・力率の2乗に反比例</strong>するため、超高電圧送電と力率改善が損失低減の要。</li>
+<li>交流が主流なのは<strong>変圧器で電圧を自在に変えられる</strong>から。
+長距離大容量・異周波数連系・海底ケーブルでは HVDC が有利。</li>
+<li><strong>母線（bus）は潮流計算の節点</strong>である。単線結線図が読めることが第4回以降の前提。</li>
+<li>ループ・網目系統では電流の分流がインピーダンス比で決まるため、
+<strong>連立方程式を解く必要がある</strong> → これが潮流計算の動機。</li>
+<li><strong>沖縄系統は完全独立・小規模</strong>。慣性が小さく <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>f</mi><mi mathvariant="normal">/</mi><mi>d</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">df/dt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.1076em;">df</span><span class="mord">/</span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span></span></span></span> が本土の 10 倍以上大きくなる。
+再エネ統合の制約が厳しく、本講義の主要な題材となる。</li>
+</ul>
+<h3 id="s26">次回への橋渡し</h3>
+<p>第2回で「系統は多数の電圧レベルが変圧器で繋がった階層構造」であることを見た。
+このまま解析しようとすると、変圧器のたびにインピーダンスを <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>a</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">a^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 倍で
+換算しなければならず極めて煩雑である。</p>
+<p>第3回では、この問題を一掃する<strong>単位法</strong>を導入する。
+あわせて複素電力・力率・線路の π 型等価回路を扱い、
+第4回の潮流計算に必要な道具を揃える。</p>
+
+    <div class="pn"><a class="pn-prev" href="ch01.html">← 第1回 エネルギー変換</a><a class="pn-next" href="ch03.html">第3回 P と Q の分離 →</a></div>
+  </main>
+  <aside class="side"><nav class="toc" aria-label="目次"><div class="toc-h">この回の目次</div><a class="lv2" href="#s1">まず直感で（3 分でつかむ）</a><a class="lv2" href="#s2">2.1 導入</a><a class="lv3" href="#s3">学習目標</a><a class="lv3" href="#s4">前提知識（第1回との接続）</a><a class="lv2" href="#s5">2.2 理論</a><a class="lv3" href="#s6">2.2.1 電力システムの階層構造</a><a class="lv3" href="#s7">2.2.2 なぜ高電圧で送るのか — 送電損失の定量化</a><a class="lv3" href="#s8">2.2.3 なぜ交流なのか / 直流はどこで使うか</a><a class="lv3" href="#s9">2.2.4 変圧器の基本</a><a class="lv3" href="#s10">2.2.5 系統構成と信頼度</a><a class="lv3" href="#s11">2.2.6 単線結線図の読み方</a><a class="lv3" href="#s12">2.2.7 日本の電力系統</a><a class="lv2" href="#s13">2.3 シミュレーション</a><a class="lv3" href="#s14">2.3.1 送電電圧と損失の関係</a><a class="lv3" href="#s15">2.3.2 系統構成による信頼度の違い</a><a class="lv3" href="#s16">2.3.3 対応する MATLAB コード（参考）</a><a class="lv2" href="#s17">2.4 例題</a><a class="lv3" href="#s18">例題 2-1（送電損失）</a><a class="lv3" href="#s19">例題 2-2（力率改善の効果）</a><a class="lv3" href="#s20">例題 2-3（沖縄系統の独立性）</a><a class="lv2" href="#s21">2.5 演習問題</a><a class="lv3" href="#s22">基礎問題</a><a class="lv3" href="#s23">応用問題</a><a class="lv2" href="#s24">2.6 まとめ</a><a class="lv3" href="#s25">キーポイント</a><a class="lv3" href="#s26">次回への橋渡し</a></nav></aside>
+</div>
+<footer class="bottom">教科書：加藤・田岡『電力システム工学の基礎』 ／ 電力エネルギーシステム解析の基礎と応用 ／ 数式描画：KaTeX（同梱・MIT）</footer>
+<script>
+// 目次の現在位置ハイライト（外部依存なし・file:// で動く）
+(function(){
+  var links=[].slice.call(document.querySelectorAll('.toc a')); if(!links.length) return;
+  var heads=links.map(function(a){return document.getElementById(a.getAttribute('href').slice(1));});
+  function upd(){ var y=window.scrollY+120, i=0; for(var k=0;k<heads.length;k++){ if(heads[k]&&heads[k].offsetTop<=y) i=k; }
+    links.forEach(function(a,k){ a.classList.toggle('on',k===i); }); }
+  window.addEventListener('scroll',upd,{passive:true}); upd();
+})();
+</script>
+</body>
+</html>

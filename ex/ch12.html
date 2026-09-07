@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第12回 演習 — 機械学習による予測</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第12回: ブースティングの 1 ステップ、分割ゲイン、予測区間（PICP/PINAW）、時系列分割、外れ値と RMSE。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+const sse = arr => arr.reduce((s, v) => s + v * v, 0);
+const mean = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
+
+EX.page({
+  ch: 12,
+  intro: '機械学習を「手計算できる大きさ」で回します。残差を木が学ぶ 1 ステップ、分割で減る誤差、予測区間の正直さ、時系列分割、外れ値が RMSE に与える影響。',
+  problems: [
+    {
+      id: 'boost', title: '勾配ブースティングの 1 ステップ', tags: ['12.2.1', 'F_m = F_{m−1} + ν h_m'],
+      gen(rng) {
+        const F0 = pick(rng, [900, 1000, 1100]);
+        const r = Array.from({ length: 5 }, () => rint(rng, -80, 80, 10));
+        const k = pick(rng, [2, 3]);
+        const A = r.slice(0, k), B = r.slice(k);
+        const mA = mean(A), mB = mean(B);
+        const nu = pick(rng, [0.3, 0.5, 0.8]);
+        const r1 = r.map((v, i) => v - nu * (i < k ? mA : mB));
+        const s0 = sse(r), s1 = sse(r1);
+        return {
+          given: [['初期モデル F₀', F0 + ' MW（平均値）'], ['5 点の残差 r = y − F₀', '[' + r.join(', ') + ']'], ['木 1 の分割', '先頭 ' + k + ' 点が葉 A、残り ' + (5 - k) + ' 点が葉 B（葉の値は残差の平均）'], ['学習率 ν', String(nu)]],
+          q: '(a) 葉 A の値（残差の平均）<br>(b) 更新後の 1 点目の予測 <b>F₁ = F₀ + ν·h₁</b><br>(c) 更新後の残差二乗和 <b>SSE₁</b>（更新前 SSE₀ = ' + s0 + '）',
+          answers: [
+            { key: 'mA', label: '(a) 葉 A の値', unit: '', value: mA, abs: 0.5 },
+            { key: 'F1', label: '(b) F₁（1 点目）', unit: 'MW', value: F0 + nu * mA, abs: 0.5 },
+            { key: 'sse', label: '(c) SSE₁', unit: '', value: s1 },
+          ],
+          steps: [
+            '葉 A の値 = mean(' + A.join(', ') + ') = ' + fmt(mA) + '、葉 B = mean(' + B.join(', ') + ') = ' + fmt(mB) + '。木は「残差の平均」を返す。',
+            '1 点目は葉 A: ' + eq('F₁ = ' + F0 + ' + ' + nu + ' × ' + fmt(mA) + ' = ' + fmt(F0 + nu * mA) + ' MW') + '。',
+            '新しい残差 [' + r1.map(v => fmt(v, 1)).join(', ') + ']、' + eq('SSE₁ = ' + fmt(s1) + '（' + fmt((1 - s1 / s0) * 100) + ' % 減）') + '。次の木はこの残差を学ぶ。',
+          ],
+          insight: '「間違いノート」を 1 冊ずつ足す。ν を小さく・本数を多くするほど滑らかに減り、早期停止で止める。',
+        };
+      },
+    },
+    {
+      id: 'split-gain', title: '分割による誤差の減少（木の分割）', tags: ['12.2.1', '決定木'],
+      gen(rng) {
+        const T = [rint(rng, 20, 24, 1), rint(rng, 25, 27, 1), rint(rng, 28, 30, 1), rint(rng, 31, 34, 1)];
+        const y = [rint(rng, 900, 1000, 10), rint(rng, 950, 1050, 10), rint(rng, 1100, 1250, 10), rint(rng, 1250, 1400, 10)];
+        const total = sse(y.map(v => v - mean(y)));
+        const L = y.slice(0, 2), R = y.slice(2);
+        const after = sse(L.map(v => v - mean(L))) + sse(R.map(v => v - mean(R)));
+        return {
+          given: [['気温 T', '[' + T.join(', ') + '] °C'], ['需要 y', '[' + y.join(', ') + '] MW'], ['候補の分割', 'T &lt; ' + ((T[1] + T[2]) / 2) + ' °C で 2 葉に分ける']],
+          q: '(a) 分割前の二乗和 <b>SSE = Σ(y − ȳ)²</b><br>(b) 分割後の二乗和（左右の葉の SSE の和）<br>(c) 減少量（ゲイン）',
+          answers: [
+            { key: 'b', label: '(a) 分割前', unit: '', value: total },
+            { key: 'a', label: '(b) 分割後', unit: '', value: after },
+            { key: 'g', label: '(c) ゲイン', unit: '', value: total - after },
+          ],
+          steps: [
+            '全体平均 ȳ = ' + fmt(mean(y)) + '、' + eq('SSE = ' + fmt(total)) + '。',
+            '左葉の平均 ' + fmt(mean(L)) + '、右葉の平均 ' + fmt(mean(R)) + '。' + eq('SSE<sub>左</sub> + SSE<sub>右</sub> = ' + fmt(after)) + '。',
+            eq('ゲイン = ' + fmt(total) + ' − ' + fmt(after) + ' = ' + fmt(total - after)) + '。木は全候補の中でゲイン最大の分割を選ぶ。',
+          ],
+          insight: '「冷房が入る温度」のような閾値を、木は分割 1 回で拾う。線形回帰には書いてやらないと表せない。',
+        };
+      },
+    },
+    {
+      id: 'picp', title: '予測区間の正直さ — PICP と PINAW', tags: ['12.2.4', '分位点回帰'],
+      gen(rng) {
+        const n = 10;
+        const width = pick(rng, [60, 80, 100, 120]);
+        const y = Array.from({ length: n }, () => rint(rng, 950, 1250, 10));
+        const lo = y.map(v => v - width / 2 + rint(rng, -70, 70, 10));
+        const hi = lo.map(v => v + width);
+        const inside = y.filter((v, i) => v >= lo[i] && v <= hi[i]).length;
+        const picp = inside / n;
+        const range = Math.max(...y) - Math.min(...y);
+        const pinaw = width / range;
+        return {
+          given: [['実績 y（10 点）', '[' + y.join(', ') + ']'], ['区間の下端 q₀.₀₅', '[' + lo.join(', ') + ']'], ['区間の上端 q₀.₉₅', '[' + hi.join(', ') + ']（幅 ' + width + ' MW）']],
+          q: '90% 予測区間を評価する。<br>(a) 区間に入った割合 <b>PICP</b><br>(b) 平均幅を実績の範囲（max − min）で割った <b>PINAW</b>',
+          answers: [
+            { key: 'picp', label: '(a) PICP', unit: '', value: picp, abs: 0.01 },
+            { key: 'pinaw', label: '(b) PINAW', unit: '', value: pinaw },
+          ],
+          steps: [
+            '入った点: ' + inside + ' / 10 → ' + eq('PICP = ' + fmt(picp)) + '。90% 区間なら 0.9 に近いほど正直。',
+            '実績の範囲 = ' + Math.max(...y) + ' − ' + Math.min(...y) + ' = ' + range + '、' + eq('PINAW = ' + width + ' / ' + range + ' = ' + fmt(pinaw)) + '。',
+            (picp < 0.85 ? 'PICP が低い：区間が狭すぎて自信過剰。' : picp > 0.95 ? 'PICP が高い：区間が広すぎて情報が少ない（PINAW を見る）。' : 'PICP は妥当。次は PINAW を小さく（狭い区間）できるかが価値。'),
+          ],
+          insight: '当てるだけなら幅を無限にすればよい。狭くて当たる区間が価値で、予備力はその上端で決める。',
+        };
+      },
+    },
+    {
+      id: 'ts-split', title: '学習・検証・テストの時系列分割', tags: ['12.2.2', 'リーク防止'],
+      gen(rng) {
+        const days = pick(rng, [365, 730, 1095, 1460]);
+        const rows = days * 24;
+        const tr = pick(rng, [0.6, 0.7]);
+        const va = pick(rng, [0.15, 0.2]);
+        const nTr = Math.round(rows * tr), nVa = Math.round(rows * va), nTe = rows - nTr - nVa;
+        const lag = pick(rng, [24, 168]);
+        return {
+          given: [['データ', days + ' 日 × 24 = ' + rows + ' 行（時系列順）'], ['割合', '学習 ' + tr * 100 + ' % / 検証 ' + va * 100 + ' % / テスト 残り'], ['特徴量に使うラグ', lag + ' 時間前の需要']],
+          q: '(a) 検証の行数<br>(b) テストの行数<br>(c) ラグ特徴量を作ると先頭の何行が欠損になるか',
+          answers: [
+            { key: 'va', label: '(a) 検証', unit: '行', value: nVa, abs: 1 },
+            { key: 'te', label: '(b) テスト', unit: '行', value: nTe, abs: 1 },
+            { key: 'lag', label: '(c) 欠損行数', unit: '行', value: lag, abs: 0.5 },
+          ],
+          steps: [
+            eq('学習 ' + nTr + ' 行、検証 ' + nVa + ' 行、テスト ' + nTe + ' 行') + '。前から順に切り、未来を過去の学習に混ぜない。',
+            lag + ' 時間前の値を特徴量にすると、最初の ' + lag + ' 行はその値が存在しない（欠損）。',
+            '検証で早期停止の本数を決め、テストは最後に 1 回だけ使う。テストで調整を繰り返すと、それ自体がリークになる。',
+          ],
+          insight: '「予測時点で手に入るか」を特徴量 1 つずつ問う。ラグはその最も基本的な形。',
+        };
+      },
+    },
+    {
+      id: 'outlier', title: '外れ値 1 点が RMSE に与える影響', tags: ['12.2.5', 'MAE と RMSE'],
+      gen(rng) {
+        const n = 8;
+        const e = Array.from({ length: n - 1 }, () => rint(rng, -30, 30, 5));
+        const big = pick(rng, [150, 200, 250, 300]);
+        const all = e.concat([big]);
+        const mae0 = mean(e.map(Math.abs)), rmse0 = Math.sqrt(mean(e.map(v => v * v)));
+        const mae1 = mean(all.map(Math.abs)), rmse1 = Math.sqrt(mean(all.map(v => v * v)));
+        return {
+          given: [['7 点の誤差', '[' + e.join(', ') + '] MW'], ['8 点目（記録的猛暑日の外れ）', big + ' MW']],
+          q: '(a) 8 点の <b>MAE</b><br>(b) 8 点の <b>RMSE</b><br>(c) 外れ値を含めたときの RMSE の増加率（7 点の RMSE = ' + fmt(rmse0) + ' に対して）[%]',
+          answers: [
+            { key: 'mae', label: '(a) MAE', unit: 'MW', value: mae1 },
+            { key: 'rmse', label: '(b) RMSE', unit: 'MW', value: rmse1 },
+            { key: 'inc', label: '(c) RMSE 増加率', unit: '%', value: (rmse1 / rmse0 - 1) * 100 },
+          ],
+          steps: [
+            '7 点: MAE = ' + fmt(mae0) + '、RMSE = ' + fmt(rmse0) + '。',
+            '8 点: ' + eq('MAE = ' + fmt(mae1) + ',  RMSE = ' + fmt(rmse1)) + '。MAE は ' + fmt((mae1 / mae0 - 1) * 100) + ' % 増、RMSE は ' + fmt((rmse1 / rmse0 - 1) * 100) + ' % 増。',
+            '2 乗するので 1 点の大外れが RMSE を支配する。木モデルは外挿できず、記録更新日にこの種の外れを出しやすい。',
+          ],
+          insight: 'RMSE が跳ねた日を調べると、外挿かリークか設備事故かが見える。指標は診断の入口。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

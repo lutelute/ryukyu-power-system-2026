@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第14回 演習 — 経済負荷配分と OPF</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第14回: 等 λ 法（2 台・3 台）、メリットオーダー、LMP と混雑レント、炭素価格による順位逆転、均等配分との比較。
+// 費用曲線 C(P) = a + bP + cP²（千円/h、P は MW）。限界費用 λ = b + 2cP（千円/MWh）。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+
+EX.page({
+  ch: 14,
+  intro: '「一番安い電気から使う」を式にします。等 λ 法で最適配分と λ を出し、メリットオーダーで約定価格、混雑があるときの地点別価格（LMP）、炭素価格で順位が逆転する点まで。',
+  problems: [
+    {
+      id: 'eld2', title: '等 λ 法（2 台）と均等配分との差', tags: ['14.2.1', '教科書 例題'],
+      gen(rng) {
+        const b1 = pick(rng, [8, 10, 12]), c1 = pick(rng, [0.02, 0.03]);
+        const b2 = pick(rng, [12, 14, 16]), c2 = pick(rng, [0.01, 0.015]);
+        const D = pick(rng, [300, 400, 500, 600]);
+        // b1 + 2c1 P1 = b2 + 2c2 (D − P1)
+        const P1 = (b2 - b1 + 2 * c2 * D) / (2 * c1 + 2 * c2);
+        const P2 = D - P1;
+        const lam = b1 + 2 * c1 * P1;
+        const C = (b, c, P) => b * P + c * P * P;
+        const opt = C(b1, c1, P1) + C(b2, c2, P2);
+        const eqs = C(b1, c1, D / 2) + C(b2, c2, D / 2);
+        return {
+          given: [['機 1 の限界費用', 'λ₁ = ' + b1 + ' + ' + (2 * c1) + ' P₁（千円/MWh）'], ['機 2 の限界費用', 'λ₂ = ' + b2 + ' + ' + (2 * c2) + ' P₂'], ['需要 D', D + ' MW（上下限なし、損失なし）']],
+          q: '(a) 最適配分 <b>P₁</b><br>(b) システム <b>λ</b><br>(c) 均等配分（D/2 ずつ）に比べた 1 時間あたりの費用の差（千円/h、a は共通なので無視）',
+          answers: [
+            { key: 'P1', label: '(a) P₁', unit: 'MW', value: P1 },
+            { key: 'lam', label: '(b) λ', unit: '千円/MWh', value: lam },
+            { key: 'sav', label: '(c) 節約', unit: '千円/h', value: eqs - opt, abs: 0.5 },
+          ],
+          steps: [
+            '最適条件は λ₁ = λ₂ と P₁ + P₂ = D: ' + eq(b1 + ' + ' + (2 * c1) + ' P₁ = ' + b2 + ' + ' + (2 * c2) + '(' + D + ' − P₁)') + ' → ' + eq('P₁ = ' + fmt(P1) + ',  P₂ = ' + fmt(P2) + ' MW') + '。',
+            eq('λ = ' + b1 + ' + ' + (2 * c1) + ' × ' + fmt(P1) + ' = ' + fmt(lam) + ' 千円/MWh') + '。どちらの機で 1 MW 増やしても同じ追加費用。',
+            '費用 bP + cP²: 最適 ' + fmt(opt) + '、均等 ' + fmt(eqs) + ' → 差 ' + eq(fmt(eqs - opt) + ' 千円/h') + '（年に約 ' + fmt((eqs - opt) * 8760 / 1e5, 1) + ' 億円）。',
+          ],
+          insight: 'λ が揃っていなければ、高い方から安い方へ 1 MW 移すだけで得をする。揃った点が最適。',
+        };
+      },
+    },
+    {
+      id: 'eld3', title: '等 λ 法（3 台）', tags: ['14.2.1', 'λ の反復'],
+      gen(rng) {
+        const b = [pick(rng, [8, 10]), pick(rng, [11, 12, 13]), pick(rng, [14, 16, 18])];
+        const c = [pick(rng, [0.02, 0.025]), pick(rng, [0.01, 0.015]), pick(rng, [0.008, 0.01])];
+        const D = pick(rng, [600, 800, 1000]);
+        const invs = c.map(ci => 1 / (2 * ci));
+        const lam = (D + b.reduce((s, bi, i) => s + bi * invs[i], 0)) / invs.reduce((s, v) => s + v, 0);
+        const P = b.map((bi, i) => (lam - bi) * invs[i]);
+        return {
+          given: [['限界費用（千円/MWh）', b.map((bi, i) => 'λ' + (i + 1) + ' = ' + bi + ' + ' + (2 * c[i]) + ' P' + (i + 1)).join('、')], ['需要 D', D + ' MW（上下限なし）']],
+          q: '(a) システム <b>λ</b><br>(b) <b>P₁</b><br>(c) <b>P₃</b>',
+          answers: [
+            { key: 'lam', label: '(a) λ', unit: '千円/MWh', value: lam },
+            { key: 'P1', label: '(b) P₁', unit: 'MW', value: P[0] },
+            { key: 'P3', label: '(c) P₃', unit: 'MW', value: P[2] },
+          ],
+          steps: [
+            '各機で P<sub>i</sub> = (λ − b<sub>i</sub>) / (2c<sub>i</sub>)。合計が D になる λ を解く: ' + eq('λ = (D + Σ b<sub>i</sub>/(2c<sub>i</sub>)) / Σ 1/(2c<sub>i</sub>) = ' + fmt(lam)) + '。',
+            eq('P₁ = (' + fmt(lam) + ' − ' + b[0] + ') / ' + (2 * c[0]) + ' = ' + fmt(P[0]) + ',  P₂ = ' + fmt(P[1]) + ',  P₃ = ' + fmt(P[2])) + '。合計 ' + fmt(P.reduce((s, v) => s + v, 0)) + ' MW。',
+            '動く図は λ を仮定 → 合計と D を比べる → λ を修正、の反復で同じ答えに着く。負になる機は下限 0 に固定して残りで揃え直す。',
+          ],
+          insight: 'b が小さく c も小さい（安くて緩い）機ほど多く使う。上限に当たった機は λ から外れて固定。',
+        };
+      },
+    },
+    {
+      id: 'merit', title: 'メリットオーダーと約定価格', tags: ['14.2.6', '市場'],
+      gen(rng) {
+        const caps = [pick(rng, [300, 400]), pick(rng, [300, 500]), pick(rng, [200, 400]), pick(rng, [200, 300])];
+        const mc = [pick(rng, [2, 3]), pick(rng, [7, 8, 9]), pick(rng, [11, 12, 14]), pick(rng, [25, 30, 40])];
+        const names = ['再エネ・原子力', '石炭', 'LNG', '石油'];
+        const total = caps.reduce((s, v) => s + v, 0);
+        const D = pick(rng, [0.4, 0.55, 0.7, 0.85, 0.95]) * total;
+        let acc = 0, price = 0, k = 0, cost = 0;
+        for (let i = 0; i < 4; i++) { const use = Math.min(caps[i], Math.max(D - acc, 0)); if (use > 0) { price = mc[i]; k = i + 1; cost += use * mc[i]; } acc += use; }
+        return {
+          given: [['電源（安い順）', names.map((n, i) => n + ' ' + caps[i] + ' MW @ ' + mc[i] + ' 円/kWh').join('、')], ['需要 D', fmt(D) + ' MW']],
+          q: '安い順に積み上げて需要を満たす。<br>(a) 約定価格（需要を満たす最後の電源の限界費用）[円/kWh]<br>(b) 稼働する電源の数<br>(c) 1 時間の発電費用の合計 [千円/h]',
+          answers: [
+            { key: 'p', label: '(a) 約定価格', unit: '円/kWh', value: price, abs: 0.01 },
+            { key: 'k', label: '(b) 稼働数', unit: '', value: k, abs: 0.1 },
+            { key: 'c', label: '(c) 費用', unit: '千円/h', value: cost },
+          ],
+          steps: [
+            '積み上げ: ' + caps.map((c, i) => c).reduce((arr, c, i) => { arr.push((i ? arr[i - 1] : 0) + c); return arr; }, []).map((a, i) => names[i] + ' まで ' + a + ' MW').join(' → ') + '。',
+            '需要 ' + fmt(D) + ' MW を満たすのは ' + k + ' 番目まで → ' + eq('約定価格 = ' + price + ' 円/kWh') + '。全電源がこの価格で売る。',
+            eq('費用 = Σ(使用量 × 限界費用) = ' + fmt(cost) + ' 千円/h') + '。',
+          ],
+          insight: '需要が高い電源まで届くと価格が段階的に跳ねる。2021 年 1 月の 200 円/kWh はこの「最後の電源」が石油・不足だった。',
+        };
+      },
+    },
+    {
+      id: 'lmp', title: 'LMP — 混雑が価格に表れる（2 ノード）', tags: ['14.2.4', 'DC-OPF'],
+      gen(rng) {
+        const lamA = pick(rng, [8, 10, 12]);
+        const lamB = pick(rng, [18, 20, 25, 30]);
+        const cap = pick(rng, [100, 150, 200]);
+        const DB = cap + pick(rng, [50, 100, 150]);
+        const rent = (lamB - lamA) * cap;
+        return {
+          given: [['ノード A の限界費用', lamA + ' 千円/MWh（安い、余力あり）'], ['ノード B の限界費用', lamB + ' 千円/MWh（高い）'], ['線路 A→B の容量', cap + ' MW'], ['B の需要 D<sub>B</sub>', DB + ' MW（A の需要は A の電源で賄う）']],
+          q: '(a) 混雑がないときの B の価格（A の安い電気が全部届くと仮定）<br>(b) 混雑があるときの <b>LMP<sub>B</sub></b><br>(c) 混雑レント <b>(LMP<sub>B</sub> − LMP<sub>A</sub>) × 線路潮流</b> [千円/h]',
+          answers: [
+            { key: 'nc', label: '(a) 混雑なし', unit: '千円/MWh', value: lamA },
+            { key: 'lmpB', label: '(b) LMP_B', unit: '千円/MWh', value: lamB },
+            { key: 'rent', label: '(c) 混雑レント', unit: '千円/h', value: rent },
+          ],
+          steps: [
+            '混雑がなければ B の需要は全部 A の安い電源で賄え、B であと 1 MW 増やす費用も A の ' + lamA + ' → LMP<sub>B</sub> = ' + lamA + '。',
+            '線路は ' + cap + ' MW で満杯。残り ' + (DB - cap) + ' MW は B の高い電源。B であと 1 MW 増やす費用は B の電源の ' + lamB + ' → ' + eq('LMP<sub>B</sub> = ' + lamB) + '。A は変わらず ' + lamA + '。',
+            eq('混雑レント = (' + lamB + ' − ' + lamA + ') × ' + cap + ' = ' + fmt(rent) + ' 千円/h') + '。送電線を増強する価値の目安。',
+          ],
+          insight: '価格は「あと 1 MW をどこで作るか」で決まる。線路が詰まると、その先だけ値段が上がる。',
+        };
+      },
+    },
+    {
+      id: 'carbon', title: '炭素価格で石炭とガスの順位が入れ替わる点', tags: ['14.2.6', '燃料費と CO₂'],
+      gen(rng) {
+        const cc = pick(rng, [5, 6, 7]);
+        const cg = pick(rng, [9, 10, 12, 14]);
+        const ec = 0.86, eg = 0.37;
+        const pstar = (cg - cc) / (ec - eg) * 1000;
+        const p2 = pick(rng, [5000, 8000, 10000]);
+        const coalAt = cc + p2 / 1000 * ec, gasAt = cg + p2 / 1000 * eg;
+        return {
+          given: [['石炭の燃料費', cc + ' 円/kWh、排出 ' + ec + ' kg-CO₂/kWh'], ['LNG の燃料費', cg + ' 円/kWh、排出 ' + eg + ' kg-CO₂/kWh'], ['炭素価格 p', '円/t-CO₂（費用 = 燃料費 + p × 排出）']],
+          q: '(a) 両者の費用が等しくなる炭素価格 <b>p*</b> [円/t]<br>(b) 炭素価格 ' + p2 + ' 円/t のときの石炭の費用 [円/kWh]<br>(c) 同じときの LNG の費用 [円/kWh]',
+          answers: [
+            { key: 'p', label: '(a) p*', unit: '円/t', value: pstar },
+            { key: 'c', label: '(b) 石炭', unit: '円/kWh', value: coalAt },
+            { key: 'g', label: '(c) LNG', unit: '円/kWh', value: gasAt },
+          ],
+          steps: [
+            eq(cc + ' + p × ' + ec + ' = ' + cg + ' + p × ' + eg) + ' → ' + eq('p* = (' + cg + ' − ' + cc + ') / (' + ec + ' − ' + eg + ') = ' + fmt(pstar / 1000) + ' 円/kg = ' + fmt(pstar) + ' 円/t') + '。',
+            p2 + ' 円/t = ' + (p2 / 1000) + ' 円/kg: 石炭 ' + eq(cc + ' + ' + (p2 / 1000) + ' × ' + ec + ' = ' + fmt(coalAt)) + '、LNG ' + eq(cg + ' + ' + (p2 / 1000) + ' × ' + eg + ' = ' + fmt(gasAt)) + '。',
+            (coalAt > gasAt ? 'この炭素価格では LNG の方が安く、メリットオーダーで順位が逆転する。' : 'この炭素価格ではまだ石炭が安い。p* を超えると逆転する。'),
+          ],
+          insight: '動く図の交点は約 4,500 円/t。炭素価格は燃料の順位を動かし、系統全体の CO₂ を配分の側から減らす。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

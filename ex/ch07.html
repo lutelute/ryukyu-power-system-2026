@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第7回 演習 — 動揺方程式と等面積法</title>
+<link rel="stylesheet" href="ex.css">
+</head>
+<body>
+<div id="ex"></div>
+<script src="../viz/site.js"></script>
+<script src="ex.js"></script>
+<script>
+"use strict";
+// 第7回: 慣性定数 H、初期相差角、等面積法の臨界除去角 δ_cr、臨界除去時間 t_cr、慣性低下、1 回線開放。
+// 角度はラジアンで計算し、答えは度で示す。ω0 = 2π f0。
+const { fmt, rint, pick } = EX;
+const eq = s => '<span class="eq">' + s + '</span>';
+const R2D = 180 / Math.PI;
+function critical(Pm, Pmax) {
+  const d0 = Math.asin(Pm / Pmax), dmax = Math.PI - d0;
+  const cosc = (Pm * (dmax - d0) + Pmax * Math.cos(dmax)) / Pmax;
+  return { d0, dmax, dcr: Math.acos(Math.max(-1, Math.min(1, cosc))) };
+}
+
+EX.page({
+  ch: 7,
+  intro: '等面積法を最後まで手で通します。運転点 δ₀ → 臨界除去角 δ_cr → 臨界除去時間 t_cr の順で、慣性 H が「角度には効かず時間に効く」ことを数値で確かめます。',
+  problems: [
+    {
+      id: 'inertia', title: '慣性定数 H と蓄積エネルギー', tags: ['7.2.2', 'H の定義'],
+      gen(rng) {
+        const S = pick(rng, [200, 300, 500, 600, 1000]);
+        const H = pick(rng, [2.5, 3, 4, 5, 6]);
+        const rpm = pick(rng, [1500, 1800, 3000, 3600]);
+        const Wk = H * S;
+        const wm = 2 * Math.PI * rpm / 60;
+        const J = 2 * Wk * 1e6 / (wm * wm);
+        return {
+          given: [['定格容量 S', S + ' MVA'], ['慣性定数 H', H + ' s'], ['定格回転速度', rpm + ' rpm']],
+          q: '(a) 定格速度での蓄積運動エネルギー <b>W<sub>k</sub> = H·S</b> [MJ]<br>(b) 慣性モーメント <b>J = 2W<sub>k</sub>/ω<sub>m</sub>²</b> [kg·m²]',
+          answers: [
+            { key: 'Wk', label: '(a) W_k', unit: 'MJ', value: Wk },
+            { key: 'J', label: '(b) J', unit: 'kg·m²', value: J },
+          ],
+          steps: [
+            'H の定義は「運動エネルギー ÷ 定格容量」なので ' + eq('W<sub>k</sub> = H S = ' + H + ' × ' + S + ' = ' + fmt(Wk) + ' MJ') + '。定格出力で ' + H + ' 秒分。',
+            eq('ω<sub>m</sub> = 2π × ' + rpm + '/60 = ' + fmt(wm) + ' rad/s') + '。',
+            eq('J = 2 W<sub>k</sub> / ω<sub>m</sub>² = 2 × ' + fmt(Wk) + '×10⁶ / ' + fmt(wm) + '² = ' + fmt(J) + ' kg·m²') + '。',
+          ],
+          insight: 'H の単位が秒なのは「勢いの貯金で何秒もつか」だから。容量が違う機でも H で比べられる。',
+        };
+      },
+    },
+    {
+      id: 'operating', title: '運転点と加速電力', tags: ['7.2.3', 'P–δ 曲線'],
+      gen(rng) {
+        const E = pick(rng, [1.0, 1.05, 1.1, 1.2]);
+        const V = 1.0;
+        const X = pick(rng, [0.3, 0.35, 0.4, 0.5]);
+        const Pmax = E * V / X;
+        const Pm = pick(rng, [0.6, 0.8, 1.0, 1.2].filter(p => p < 0.8 * Pmax));
+        const d0 = Math.asin(Pm / Pmax);
+        return {
+          given: [['発電機内部電圧 E′', E + ' p.u.'], ['無限大母線電圧 V', V + ' p.u.'], ['発電機から母線までの X', X + ' p.u.'], ['機械入力 P<sub>m</sub>', Pm + ' p.u.']],
+          q: '(a) 最大送電電力 <b>P<sub>max</sub> = E′V/X</b><br>(b) 運転点の相差角 <b>δ₀</b>（度）<br>(c) 三相短絡（P<sub>e</sub> = 0）中の加速電力 <b>P<sub>a</sub></b>',
+          answers: [
+            { key: 'Pmax', label: '(a) P_max', unit: 'p.u.', value: Pmax },
+            { key: 'd0', label: '(b) δ_0', unit: 'deg', value: d0 * R2D },
+            { key: 'Pa', label: '(c) P_a', unit: 'p.u.', value: Pm },
+          ],
+          steps: [
+            eq('P<sub>max</sub> = ' + E + ' × ' + V + ' / ' + X + ' = ' + fmt(Pmax) + ' p.u.') + '。',
+            '定常では P<sub>e</sub> = P<sub>m</sub>: ' + eq('δ₀ = asin(P<sub>m</sub>/P<sub>max</sub>) = asin(' + fmt(Pm / Pmax) + ') = ' + fmt(d0 * R2D) + '°') + '。',
+            '短絡中は電気出力が出せない（P<sub>e</sub> = 0）ので ' + eq('P<sub>a</sub> = P<sub>m</sub> − 0 = ' + Pm + ' p.u.') + ' がまるごとロータを加速する。',
+          ],
+          insight: '定態安定余裕は P_max − P_m。δ₀ が 90° に近いほど、事故前からすでに余裕がない。',
+        };
+      },
+    },
+    {
+      id: 'critical-angle', title: '臨界除去角（等面積法）', tags: ['7.2.4', '三相短絡'],
+      gen(rng) {
+        const Pmax = pick(rng, [1.5, 1.8, 2.0, 2.5]);
+        const Pm = pick(rng, [0.6, 0.8, 1.0]);
+        const c = critical(Pm, Pmax);
+        return {
+          given: [['P<sub>max</sub>', Pmax + ' p.u.'], ['P<sub>m</sub>', Pm + ' p.u.'], ['事故', '三相短絡（事故中 P<sub>e</sub> = 0、除去後は元の P<sub>max</sub> に戻る）']],
+          q: '(a) <b>δ₀</b>、(b) <b>δ<sub>max</sub> = 180° − δ₀</b>（度）<br>(c) 臨界除去角 <b>δ<sub>cr</sub></b>（度）：cos δ<sub>cr</sub> = [P<sub>m</sub>(δ<sub>max</sub> − δ₀) + P<sub>max</sub> cos δ<sub>max</sub>] / P<sub>max</sub>（角度はラジアン）',
+          answers: [
+            { key: 'd0', label: '(a) δ_0', unit: 'deg', value: c.d0 * R2D },
+            { key: 'dmax', label: '(b) δ_max', unit: 'deg', value: c.dmax * R2D },
+            { key: 'dcr', label: '(c) δ_cr', unit: 'deg', value: c.dcr * R2D },
+          ],
+          steps: [
+            eq('δ₀ = asin(' + Pm + '/' + Pmax + ') = ' + fmt(c.d0) + ' rad = ' + fmt(c.d0 * R2D) + '°,  δ<sub>max</sub> = π − δ₀ = ' + fmt(c.dmax) + ' rad') + '。',
+            '加速面積 A₁ = P<sub>m</sub>(δ<sub>cr</sub> − δ₀)、減速面積 A₂ = ∫(P<sub>max</sub> sin δ − P<sub>m</sub>)dδ（δ<sub>cr</sub> → δ<sub>max</sub>）。A₁ = A₂ を δ<sub>cr</sub> について解くと上の cos の式。',
+            eq('cos δ<sub>cr</sub> = [' + Pm + ' × ' + fmt(c.dmax - c.d0) + ' + ' + Pmax + ' × ' + fmt(Math.cos(c.dmax)) + '] / ' + Pmax + ' = ' + fmt(Math.cos(c.dcr))) + ' → ' + eq('δ<sub>cr</sub> = ' + fmt(c.dcr * R2D) + '°') + '。',
+          ],
+          insight: 'δ_cr の式に H は出てこない。臨界「角」は P–δ 平面の幾何だけで決まる。',
+        };
+      },
+    },
+    {
+      id: 'critical-time', title: '臨界除去時間', tags: ['7.2.4', 't_cr ∝ √H'],
+      gen(rng) {
+        const Pmax = pick(rng, [1.8, 2.0, 2.5]);
+        const Pm = pick(rng, [0.6, 0.8, 1.0]);
+        const H = pick(rng, [2, 3, 4, 5, 6]);
+        const f0 = pick(rng, [50, 60]);
+        const c = critical(Pm, Pmax);
+        const w0 = 2 * Math.PI * f0;
+        const tcr = Math.sqrt(4 * H * (c.dcr - c.d0) / (w0 * Pm));
+        return {
+          given: [['P<sub>max</sub>, P<sub>m</sub>', Pmax + ', ' + Pm + ' p.u.'], ['慣性定数 H', H + ' s'], ['定格周波数 f₀', f0 + ' Hz'], ['臨界除去角 δ<sub>cr</sub>', fmt(c.dcr * R2D) + '°（δ₀ = ' + fmt(c.d0 * R2D) + '°）']],
+          q: '三相短絡中は P<sub>e</sub> = 0 で等加速度運動になる。<br>(a) <b>ω₀ = 2πf₀</b><br>(b) 臨界除去時間 <b>t<sub>cr</sub> = √(4H(δ<sub>cr</sub> − δ₀)/(ω₀P<sub>m</sub>))</b>（ms、角度はラジアン）',
+          answers: [
+            { key: 'w0', label: '(a) ω_0', unit: 'rad/s', value: w0 },
+            { key: 'tcr', label: '(b) t_cr', unit: 'ms', value: tcr * 1e3 },
+          ],
+          steps: [
+            eq('ω₀ = 2π × ' + f0 + ' = ' + fmt(w0) + ' rad/s') + '。',
+            '動揺方程式 (2H/ω₀) δ″ = P<sub>m</sub> を積分: δ − δ₀ = (ω₀P<sub>m</sub>/4H) t²。δ = δ<sub>cr</sub> となる t を解く。',
+            eq('t<sub>cr</sub> = √(4 × ' + H + ' × (' + fmt(c.dcr) + ' − ' + fmt(c.d0) + ') / (' + fmt(w0) + ' × ' + Pm + ')) = ' + fmt(tcr) + ' s = ' + fmt(tcr * 1e3) + ' ms') + '。',
+          ],
+          insight: '保護リレー＋遮断器が 3〜5 サイクル（50〜100 ms）で切れるかどうかを、この数字と比べる。',
+        };
+      },
+    },
+    {
+      id: 'inertia-drop', title: '再エネ導入で慣性が下がると', tags: ['7.2.6', '慣性低下'],
+      gen(rng) {
+        const t1 = pick(rng, [200, 247, 300, 350]);
+        const H1 = pick(rng, [4, 5, 6]);
+        const H2 = pick(rng, [1.5, 2, 2.5, 3]);
+        const t2 = t1 * Math.sqrt(H2 / H1);
+        const ratio = Math.sqrt(H2 / H1);
+        return {
+          given: [['現在の t<sub>cr</sub>', t1 + ' ms（H = ' + H1 + ' s）'], ['再エネ導入後の H', H2 + ' s（同期機を停止）'], ['P<sub>m</sub>, P<sub>max</sub>', '変わらない']],
+          q: '(a) 慣性が下がった後の <b>t<sub>cr</sub></b>（ms）<br>(b) 比 <b>t<sub>cr,2</sub>/t<sub>cr,1</sub></b>',
+          answers: [
+            { key: 't2', label: '(a) t_cr（H = ' + H2 + ' s）', unit: 'ms', value: t2 },
+            { key: 'r', label: '(b) 比', unit: '', value: ratio },
+          ],
+          steps: [
+            'δ<sub>cr</sub> は P–δ 平面の幾何だけで決まり H に依らない。変わるのは t<sub>cr</sub> だけ。',
+            't<sub>cr</sub> ∝ √H なので ' + eq('t<sub>cr,2</sub> = ' + t1 + ' × √(' + H2 + '/' + H1 + ') = ' + fmt(t2) + ' ms') + '。',
+            '保護の除去時間が同じなら、余裕が ' + fmt((1 - ratio) * 100) + ' % 減る。合成慣性（第9回）や高速再閉路が対策。',
+          ],
+          insight: '太陽光を増やすと「角度の余裕」は変わらないが「時間の余裕」が √H で縮む。第15回の安定度制約はこれ。',
+        };
+      },
+    },
+    {
+      id: 'line-out', title: '1 回線開放後の安定判定', tags: ['7.2.5', '事故後系統'],
+      gen(rng) {
+        const E = pick(rng, [1.05, 1.1, 1.2]);
+        const Xg = pick(rng, [0.2, 0.25, 0.3]);
+        const Xl = pick(rng, [0.3, 0.4, 0.5]);
+        const Pm = pick(rng, [0.6, 0.8, 1.0]);
+        const X1 = Xg + Xl / 2, X2 = Xg + Xl;
+        const Pmax1 = E / X1, Pmax2 = E / X2;
+        const d1 = Math.asin(Math.min(1, Pm / Pmax1));
+        const stable = Pm < Pmax2;
+        const d2 = stable ? Math.asin(Pm / Pmax2) : NaN;
+        return {
+          given: [['E′, V', E + ', 1.0 p.u.'], ['発電機リアクタンス X<sub>g</sub>', Xg + ' p.u.'], ['2 回線送電線（各回線 X<sub>l</sub>）', Xl + ' p.u.'], ['P<sub>m</sub>', Pm + ' p.u.']],
+          q: '(a) 2 回線運転時の <b>P<sub>max,1</sub></b>（X = X<sub>g</sub> + X<sub>l</sub>/2）<br>(b) 1 回線開放後の <b>P<sub>max,2</sub></b>（X = X<sub>g</sub> + X<sub>l</sub>）<br>(c) 開放後の新しい運転点 <b>δ<sub>2</sub></b>（度）。存在しなければ 0 を入力（脱調）',
+          answers: [
+            { key: 'P1', label: '(a) P_max,1', unit: 'p.u.', value: Pmax1 },
+            { key: 'P2', label: '(b) P_max,2', unit: 'p.u.', value: Pmax2 },
+            { key: 'd2', label: '(c) δ_2', unit: 'deg', value: stable ? d2 * R2D : 0, abs: 0.5 },
+          ],
+          steps: [
+            '2 回線は並列なので X<sub>l</sub>/2: ' + eq('P<sub>max,1</sub> = ' + E + ' / (' + Xg + ' + ' + Xl + '/2) = ' + fmt(Pmax1) + ',  δ₁ = ' + fmt(d1 * R2D) + '°') + '。',
+            '1 回線になると X が増えて P–δ 曲線が低くなる: ' + eq('P<sub>max,2</sub> = ' + E + ' / (' + Xg + ' + ' + Xl + ') = ' + fmt(Pmax2)) + '。',
+            stable ? eq('δ₂ = asin(' + Pm + '/' + fmt(Pmax2) + ') = ' + fmt(d2 * R2D) + '°') + '。新しい運転点が存在し、等面積が釣り合えば安定。' : 'P<sub>m</sub> = ' + Pm + ' &gt; P<sub>max,2</sub> = ' + fmt(Pmax2) + ' なので新しい運転点が存在しない。出力を下げなければ脱調する。',
+          ],
+          insight: 'N-1 で線路が減ると P_max が下がる。安定度の対策「A₂ を増やす」は P_max を上げること（直列コンデンサ・FACTS）。',
+        };
+      },
+    },
+  ],
+});
+</script>
+</body>
+</html>

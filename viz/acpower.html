@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第3回 P と Q の分離 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第3回 P と Q の分離 — 有効電力は相差角、無効電力は電圧差で動く</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch03.html">📖 講義ノート（第3回）</a><a class="e" href="../ex/ch03.html">✍ 演習で確かめる</a></div>
+  <div class="lead">交流の電力には「仕事をする P」と「行き戻りするだけの Q」があります。この回は<b>瞬時電力を分解して Q の正体を見る</b>ところから始め、2 母線の送電電力式 <i>P</i> = <i>V<sub>s</sub>V<sub>r</sub></i> sin δ / <i>X</i> に到達します。<b>この式は講義全体でいちばん重要</b>で、第5・7・8回の土台になります。前提は<a href="grid.html">第2回</a>、次は<a href="ybus.html">第4回 Y行列</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「無効電力は役に立たない」と思うと、電圧崩壊・力率割引・太陽光の連系制約がすべて理解不能になります。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>P を動かしたければ位相をずらす、Q（＝電圧）を動かしたければ電圧の高さを変える。この 2 つは別々に効く。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>発電機の AVR（電圧）とガバナ（位相・周波数）の役割分担、電力会社の力率割引、太陽光 PCS の Volt-Var 制御。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>力率角 φ <input type="range" id="phiRange" min="0" max="90" step="1" value="30"> <span id="phiVal">30</span>°</label>
+      <label>相差角 δ <input type="range" id="dRange" min="0" max="180" step="1" value="20"> <span id="dVal">20</span>°</label>
+      <label>V<sub>s</sub> <input type="range" id="vsRange" min="0.90" max="1.10" step="0.01" value="1.05"> <span id="vsVal">1.05</span></label>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>無効電力は「無効」ではなく<b>電圧を支える通貨</b>で、しかも遠くへ運べない — だから電圧はいつも「その場所」の問題になります。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>無効電力は仕事をしないのだから、流れていても損はない。</div>
+    <div class="row"><span class="o">✓</span>Q も電線を<b>電流として実際に流れます</b>。同じ P でも力率 0.8 では電流が 1.25 倍、損失は 1.56 倍。仕事をしないのに損失だけ生む、それが「厄介」の意味です。</div>
+    <div class="row"><span class="x">✗</span>送電電力を増やすには電圧を上げればよい。</div>
+    <div class="row"><span class="o">✓</span>P を決めるのは主に<b>相差角 δ</b> です。電圧を 5% 上げても P は 5% しか増えませんが、δ を 20° から 40° にすると P は 1.88 倍になります。逆に電圧差は Q を動かします。図の 2 本のスライダで確かめてください。</div>
+  </div>
+  <details><summary>もっと詳しく：導出・π型等価回路・単位法の基準変換</summary><div class="det">
+    瞬時電力は <i>p</i>(<i>t</i>) = <i>VI</i>cos φ[1+cos 2(ω<i>t</i>+θ<sub>v</sub>)] + <i>VI</i>sin φ·sin 2(ω<i>t</i>+θ<sub>v</sub>)。第 1 項の平均が <i>P</i>、第 2 項は平均 0 で振幅が <i>Q</i>。
+    送電電力式は <i>S<sub>r</sub></i> = <i>V<sub>r</sub>I</i>* に <i>I</i> = (<i>V<sub>s</sub></i>∠δ − <i>V<sub>r</sub></i>)/(j<i>X</i>) を代入し、実部と虚部を分けると得られます（教科書 加藤・田岡 4.3 節 (4.13) 式）。
+    中距離線路は π 型等価回路（直列 <i>Z</i>、両端に <i>Y</i>/2）で表し、四端子定数は <i>A</i>=<i>D</i>=1+<i>ZY</i>/2、<i>B</i>=<i>Z</i>、<i>C</i>=<i>Y</i>(1+<i>ZY</i>/4)。
+    単位法の基準変換は <i>Z</i><sub>new</sub> = <i>Z</i><sub>old</sub>·(<i>S</i><sub>new</sub>/<i>S</i><sub>old</sub>)·(<i>V</i><sub>old</sub>/<i>V</i><sub>new</sub>)²。
+    <b>限界：</b>このページの送電電力式は抵抗 <i>R</i> を無視しています（架空線の <i>X</i>/<i>R</i>≈5〜15 では良い近似）。配電系統では <i>R</i>≈<i>X</i> となり、有効電力も電圧を動かします（第6回で扱います）。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+/* ---- モデル ---- */
+let PHI = 30, DELTA = 20, VS = 1.05; const VR = 1.0, X = 0.20, V = 1.0, I = 1.0, F = 60;
+const rad = d => d * Math.PI / 180;
+const Pinst = t => { const w = 2 * Math.PI * F, ph = rad(PHI); return (Math.sqrt(2) * V * Math.cos(w * t)) * (Math.sqrt(2) * I * Math.cos(w * t - ph)); };
+function negFrac() { let n = 0, N = 2000; for (let k = 0; k < N; k++) if (Pinst(k / N * 2 / F) < 0) n++; return n / N; }
+const Pflow = (vs, vr, d) => vs * vr / X * Math.sin(rad(d));
+const Qflow = (vs, vr, d) => (vs * vr * Math.cos(rad(d)) - vr * vr) / X;
+const f3 = x => x.toFixed(3), f2 = x => x.toFixed(2);
+const S_BASE = 100, V_BASE = 154; const Z_BASE = V_BASE ** 2 / S_BASE, I_BASE = S_BASE * 1e6 / (Math.sqrt(3) * V_BASE * 1e3);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ 複素電力', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ 送電電力式', c: 'var(--loss)', start: 7 }, { t: 'Ⅳ まとめ', c: 'var(--accent)', start: 12 } ];
+const SLIDES = [
+  { legend: '上=電圧 v(t) と電流 i(t)。電流が φ だけ遅れている（誘導性負荷）',
+    mini: () => '<div>φ <b>' + PHI + '°</b></div><div>力率 <b>' + f3(Math.cos(rad(PHI))) + '</b></div>',
+    html() { return '<h3>問題：電流が電圧より「遅れる」と何が起きるか</h3><div class="eq curr"><i>v</i>(<i>t</i>) = √2<i>V</i>cos ω<i>t</i>,　<i>i</i>(<i>t</i>) = √2<i>I</i>cos(ω<i>t</i> − φ)<span class="read">読み：モータや変圧器（コイル）につなぐと、電流の波は電圧の波より φ だけ遅れて追いかけます。</span></div><div class="desc">右下の φ スライダで遅れ角を変えてください。φ = 0 なら電圧と電流は同じ形で、φ = 90° なら 1/4 周期ずれます。<b>このずれが「無効電力」を生みます</b>。何が起きているかを、次のスライドで 2 つの波を掛け算して確かめます。</div>'; },
+    draw() { drawWaves(false); caption('φ=' + PHI + '°：電流が遅れて追いかける'); } },
+  { legend: '下=瞬時電力 p(t)=v·i。赤い領域=p<0（電源へ戻る時間帯）',
+    mini: () => '<div>P <b>' + f3(Math.cos(rad(PHI))) + '</b></div><div>Q <b>' + f3(Math.sin(rad(PHI))) + '</b></div><div>p&lt;0 <b>' + (negFrac() * 100).toFixed(1) + '%</b></div>',
+    html() { return '<h3>掛け算すると、電力が「負」になる時間が現れる</h3><div class="eq curr"><i>p</i>(<i>t</i>) = <i>v</i>·<i>i</i> = <i>VI</i>cos φ [1 + cos 2ω<i>t</i>] + <i>VI</i>sin φ · sin 2ω<i>t</i><span class="read">読み：第 1 項は常に 0 以上（負荷が受け取る）。第 2 項は平均 0 で、プラスとマイナスを往復します。</span></div><div class="desc">図の赤い部分は <i>p</i>(<i>t</i>) &lt; 0、つまり<b>負荷から電源へエネルギーが戻っている時間</b>です。φ = ' + PHI + '° では 1 周期の <b>' + (negFrac() * 100).toFixed(1) + '%</b> が戻りの時間です。φ = 0 にすると赤が消え、φ = 90° にすると半分が赤になります。この「往復するだけの成分」の振幅が無効電力 <i>Q</i> です。</div>'; },
+    draw() { drawWaves(true); caption('赤 = 仕事をせず往復しているだけ（正味 0）'); } },
+
+  { legend: 'フェーザ図：V を基準に I が φ 遅れ。S=V·I* の実部が P、虚部が Q',
+    mini: () => '<div>S <b>' + f3(V * I) + '</b></div><div>P=S cosφ <b>' + f3(Math.cos(rad(PHI))) + '</b></div><div>Q=S sinφ <b>' + f3(Math.sin(rad(PHI))) + '</b></div>',
+    html() { return '<h3>複素電力 S = P + jQ：1 つの複素数に「両方」を入れる</h3><div class="eq curr"><i>S</i> = <i>V I</i>* = <i>VI</i>∠φ = <i>VI</i>cos φ + j <i>VI</i>sin φ = <b class="res">' + f3(Math.cos(rad(PHI))) + '</b> + j<b class="res">' + f3(Math.sin(rad(PHI))) + '</b><span class="read">読み：電圧フェーザに電流フェーザの共役を掛ける。実部が有効電力 P（W）、虚部が無効電力 Q（var）。</span></div><div class="desc">時間を追うのをやめて、大きさと位相だけの矢印（フェーザ）で扱うと、P と Q は<b>1 つの三角形の 2 辺</b>になります。斜辺が皮相電力 <i>S</i>（設備容量を決める）、底辺が <i>P</i>、高さが <i>Q</i>。本講義では<b>負荷が消費する遅れ無効電力を正</b>とします。</div>'; },
+    draw() { drawPhasor(); caption('P と Q は同じ三角形の 2 辺'); } },
+  { legend: '同じ P=100 MW を送るときの電流と損失。力率が悪いほど右へ伸びる',
+    html() { const rows = [1.0, .95, .9, .8].map(pf => [pf, 100 / pf, 1 / pf, 1 / pf / pf]); return '<h3>なぜ Q を減らしたいのか：同じ仕事に余計な電流が要る</h3><div class="eq curr"><i>I</i> = <i>S</i>/<i>V</i> = <span class="frac"><span><i>P</i></span><span><i>V</i> cos φ</span></span>　⇒ 損失 ∝ <i>I</i>² ∝ 1/cos²φ<span class="read">読み：力率 cos φ が小さいほど、同じ P を運ぶのに大きな電流が要り、損失はその 2 乗で増えます。</span></div><div class="desc">力率 0.8 では電流 <b>1.25 倍</b>、損失 <b>1.56 倍</b>。Q は仕事をしないのに、<b>電流としては本当に流れて損失を生みます</b>。電力会社が力率 85% 以上を求め、割引制度まで用意している理由がこれです。第2回の損失式の分母 cos²φ が、ここで顔を出しました。</div>'; },
+    draw() { drawPFTable(); caption('力率 0.8 → 損失 1.56 倍。Q は無料ではない'); } },
+  { legend: '横軸=φ、曲線=P（緑）と Q（紫）。●=いまのφ',
+    mini: () => '<div>cos φ <b>' + f3(Math.cos(rad(PHI))) + '</b></div><div>sin φ <b>' + f3(Math.sin(rad(PHI))) + '</b></div>',
+    html() { return '<h3>P と Q は「トレードオフ」：φ が増えると P が減り Q が増える</h3><div class="eq curr"><i>P</i> = <i>S</i>cos φ,　<i>Q</i> = <i>S</i>sin φ,　<i>P</i>² + <i>Q</i>² = <i>S</i>²<span class="read">読み：皮相電力 S（設備容量）が決まっていれば、P を増やすには Q を減らすしかありません。</span></div><div class="desc">変圧器や発電機の容量は kVA（<i>S</i>）で決まります。同じ設備で Q を 30% 流していると、P に使える容量は <b>' + f2(Math.sqrt(1 - .09) * 100) + '%</b> しか残りません。設備を最大限に使うには、<b>Q を別の場所（調相設備）で賄う</b>のが定石です（第6回）。</div>'; },
+    draw() { drawPQphi(); caption('S が同じなら P と Q は円の上を動く'); } },
+  { legend: '単位法：基準を決めると数値がすべて 1 前後に揃う（100 MVA / 154 kV）',
+    mini: () => '<div>Z<sub>base</sub> <b>' + Z_BASE.toFixed(1) + ' Ω</b></div><div>I<sub>base</sub> <b>' + I_BASE.toFixed(0) + ' A</b></div>',
+    html() { const z = { r: 12, x: 45 }; return '<h3>単位法：変圧器の換算を消し、数値を 1 前後に揃える</h3><div class="eq curr"><i>Z</i><sub>base</sub> = <span class="frac"><span><i>V</i><sub>base</sub>²</span><span><i>S</i><sub>base</sub></span></span> = <span class="frac"><span>154²</span><span>100</span></span> = <b class="res">' + Z_BASE.toFixed(1) + '</b> Ω　⇒　12 + j45 Ω = <b class="res">' + f3(z.r / Z_BASE) + ' + j' + f3(z.x / Z_BASE) + '</b> p.u.<span class="read">読み：基準容量と基準電圧の 2 つを決めれば基準インピーダンスが決まり、実単位の Ω を「基準に対する比」に直せます。√3 は約分で消えます。</span></div><div class="desc">第2回で見た「変圧器ごとに <i>a</i>² を掛ける面倒」は、基準電圧を巻数比に合わせて取ると<b>一次側・二次側で同じ p.u. 値</b>になり、完全に消えます。さらに電圧は 0.95〜1.05、インピーダンスは 0.01〜0.5 に揃うので、<b>桁を間違えると一目で分かる</b>のも大きな利点です。教科書（加藤・田岡 3.2 節）は「単位法」、実務は「p.u.」と呼びます。</div>'; },
+    draw() { drawPU(); caption('両側で同じ数値 → 変圧器が「消える」'); } },
+  { legend: 'π型等価回路：直列 Z=R+jX、両端に対地アドミタンス jB/2',
+    html() { return '<h3>送電線のモデル：π 型等価回路</h3><div class="eq curr"><i>Z</i> = <i>R</i> + j<i>X</i>,　<i>Y</i> = j<i>B</i>　（架空線 <i>X</i>/<i>R</i> ≈ 5〜15）<span class="read">読み：導体の抵抗 R、磁束による X、対地の静電容量による B。中距離（50〜250 km）はこの形で表します。</span></div><div class="desc">架空送電線では <b>X が R の 5〜15 倍</b>あります。この「リアクタンス支配」が、次の章で <i>R</i> を無視して式を簡単にできる根拠であり、第5回の高速デカップル法・第4回の直流法潮流の根拠でもあります。<i>B</i> は軽負荷時に受電端電圧を持ち上げるフェランチ効果（第6回）を生みます。</div>'; },
+    draw() { drawPi(); caption('X ≫ R：この 1 事実があとで何度も効く'); } },
+
+  { legend: '2 母線：送電端 Vs∠δ、受電端 Vr∠0、リアクタンス X のみ',
+    mini: () => '<div>δ <b>' + DELTA + '°</b></div><div>V<sub>s</sub> <b>' + f2(VS) + '</b></div><div>X <b>' + X + '</b></div>',
+    html() { return '<h3>最もシンプルな系統：2 つの母線を X でつなぐ</h3><div class="eq curr"><i>I</i> = <span class="frac"><span><i>V<sub>s</sub></i>∠δ − <i>V<sub>r</sub></i></span><span>j<i>X</i></span></span>,　<i>S<sub>r</sub></i> = <i>V<sub>r</sub> I</i>*<span class="read">読み：電圧の差をリアクタンスで割ると電流。受電端の電圧に電流の共役を掛けると受電端の複素電力。</span></div><div class="desc">送電端の電圧を <i>V<sub>s</sub></i>∠δ、受電端を <i>V<sub>r</sub></i>∠0 とします。<b>δ は 2 つの母線の位相のずれ（相差角）</b>で、これが主役になります。この 2 本の式を展開して実部と虚部を分けるだけで、講義でいちばん大事な式が出てきます。</div>'; },
+    draw() { drawTwoBus(); caption('δ：送電端が受電端より「進んでいる」角度'); } },
+  { legend: '導出の結果。P は sin δ、Q は cos δ と電圧差を含む',
+    html() { return '<h3>送電電力式：P は δ で、Q は電圧の差で決まる</h3><div class="eq curr"><i>P</i> = <span class="frac"><span><i>V<sub>s</sub>V<sub>r</sub></i></span><span><i>X</i></span></span> sin δ,　<i>Q</i> = <span class="frac"><span><i>V<sub>s</sub>V<sub>r</sub></i>cos δ − <i>V<sub>r</sub></i>²</span><span><i>X</i></span></span><span class="read">読み：有効電力は相差角の正弦に比例。無効電力は「送電端電圧×cos δ」と「受電端電圧」の差に比例。</span></div><div class="desc">δ が小さいとき sin δ ≈ δ、cos δ ≈ 1 なので <i>P</i> ≈ <i>V<sub>s</sub>V<sub>r</sub></i>δ/<i>X</i>、<i>Q</i> ≈ <i>V<sub>r</sub></i>(<i>V<sub>s</sub></i> − <i>V<sub>r</sub></i>)/<i>X</i>。つまり <b>P は位相差、Q は電圧差</b>という分離が式に現れます。次の 2 枚で、スライダを片方ずつ動かして分離を体で確かめます。</div>'; },
+    draw() { drawFormula(); caption('P ← δ　／　Q ← (Vs − Vr)'); } },
+  { legend: 'A/B①：δ を動かす（Vs 固定）。P は大きく動き、Q はほとんど動かない',
+    mini: () => '<div>P <b>' + f3(Pflow(VS, VR, DELTA)) + '</b></div><div>Q <b>' + f3(Qflow(VS, VR, DELTA)) + '</b></div>',
+    html() { return '<h3>A/B①：δ を 0° → 40° にすると P は 0 → ' + f2(Pflow(VS, VR, 40)) + '</h3><div class="eq curr">δ = ' + DELTA + '°：<i>P</i> = <b class="res">' + f3(Pflow(VS, VR, DELTA)) + '</b>,　<i>Q</i> = <b class="res">' + f3(Qflow(VS, VR, DELTA)) + '</b>　（<i>V<sub>s</sub></i> = ' + f2(VS) + ' 固定）<span class="read">読み：右下の δ スライダを動かすと、P は sin δ に沿って大きく変わります。Q の変化は cos δ 経由でわずかです。</span></div><div class="desc">δ を 20° → 40° にすると P は <b>' + f2(Pflow(VS, VR, 40) / Pflow(VS, VR, 20)) + ' 倍</b>。同じ操作で Q は ' + f3(Qflow(VS, VR, 20)) + ' → ' + f3(Qflow(VS, VR, 40)) + ' と小さく動くだけです。発電機の<b>ガバナ（機械入力）で δ を動かすのが有効電力の制御</b>で、第8回の周波数制御の物理的な正体です。</div>'; },
+    draw() { drawPDcurve(); caption('δ を動かす → P が sin δ に沿って動く'); } },
+  { legend: 'A/B②：Vs を動かす（δ 固定）。Q は大きく動き、P は少ししか動かない',
+    mini: () => '<div>V<sub>s</sub> <b>' + f2(VS) + '</b></div><div>P <b>' + f3(Pflow(VS, VR, DELTA)) + '</b></div><div>Q <b>' + f3(Qflow(VS, VR, DELTA)) + '</b></div>',
+    html() { return '<h3>A/B②：V<sub>s</sub> を 0.95 → 1.05 にすると Q は ' + f2(Qflow(.95, VR, DELTA)) + ' → ' + f2(Qflow(1.05, VR, DELTA)) + '</h3><div class="eq curr"><i>V<sub>s</sub></i> = ' + f2(VS) + '：<i>Q</i> = <b class="res">' + f3(Qflow(VS, VR, DELTA)) + '</b>,　<i>P</i> = <b class="res">' + f3(Pflow(VS, VR, DELTA)) + '</b>　（δ = ' + DELTA + '° 固定）<span class="read">読み：V_s スライダを動かすと Q が符号まで変わって大きく動きます。P は V_s に比例するだけで、変化は 10% 程度です。</span></div><div class="desc">V<sub>s</sub> &lt; V<sub>r</sub> なら Q は負（受電端から吸い上げる）、V<sub>s</sub> &gt; V<sub>r</sub> なら正（受電端へ供給）。<b>電圧が高い側から低い側へ Q が流れる</b>。発電機の <b>AVR（励磁）で電圧を動かすのが無効電力の制御</b>で、第6回の電圧制御の物理的な正体です。</div>'; },
+    draw() { drawQVcurve(); caption('Vs を動かす → Q が符号ごと動く'); } },
+  { legend: 'P-δ 曲線の頂点 δ=90° が定態安定限界。運用は 30〜40° 以内',
+    mini: () => '<div>P<sub>max</sub> <b>' + f2(VS * VR / X) + '</b></div><div>いま <b>' + f3(Pflow(VS, VR, DELTA)) + '</b></div><div>余裕 <b>' + ((1 - Pflow(VS, VR, DELTA) / (VS * VR / X)) * 100).toFixed(0) + '%</b></div>',
+    html() { return '<h3>P には上限がある：δ = 90° が「定態安定限界」</h3><div class="eq curr"><i>P</i><sub>max</sub> = <span class="frac"><span><i>V<sub>s</sub>V<sub>r</sub></i></span><span><i>X</i></span></span> = <span class="frac"><span>' + f2(VS) + ' × 1.00</span><span>' + X + '</span></span> = <b class="res">' + f2(VS * VR / X) + '</b>　（δ = 90° のとき）<span class="read">読み：sin δ は 90° で最大の 1。それ以上 δ を開いても P は減ってしまい、同期が保てなくなります。</span></div><div class="desc">δ スライダを 90° を越えて動かしてください。<b>P が減り始めます</b>。δ &gt; 90° では「もっと送ろうと位相を開く → かえって送れなくなる → さらに開く」という正のフィードバックで脱調します（第7回の主題）。実運用では余裕を持って δ ≤ 30〜40° に抑えます。</div>'; },
+    draw() { drawPDcurve(true); caption('頂点の向こう側は「送ろうとするほど送れない」'); } },
+
+  { legend: 'この式が枝分かれして届く先：第4・5・7・8・14 回',
+    html() { return '<h3>まとめ：1 本の式が講義の全部につながる</h3><div class="eq curr"><i>P</i> = <span class="frac"><span><i>V<sub>s</sub>V<sub>r</sub></i></span><span><i>X</i></span></span> sin δ,　<i>Q</i> = <span class="frac"><span><i>V<sub>s</sub>V<sub>r</sub></i>cos δ − <i>V<sub>r</sub></i>²</span><span><i>X</i></span></span><span class="read">読み：暗記する式はこれだけ。あとはこの式を一般化したり、時間変化させたり、最適化したりするだけです。</span></div><div class="desc"><b>P は相差角、Q は電圧差</b>。この分離が、ヤコビアンの H と L ブロックの分離（第5回）、等面積法の P-δ 曲線（第7回）、周波数制御 vs 電圧制御の役割分担（第6・8回）、直流法潮流と電力市場（第4・14回）にそのまま繋がります。次回はこの 2 母線を <b>n 母線に一般化</b>し、Y 行列を組みます。</div>'; },
+    draw() { drawMap(); caption('第3回の式 → 第4・5・6・7・8・14回へ'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function arrow(x0, y0, x1, y1, color, w = 2) { line([[x0, y0], [x1, y1]], color, w); const a = Math.atan2(y1 - y0, x1 - x0); line([[x1, y1], [x1 - 9 * Math.cos(a - .4), y1 - 9 * Math.sin(a - .4)]], color, w); line([[x1, y1], [x1 - 9 * Math.cos(a + .4), y1 - 9 * Math.sin(a + .4)]], color, w); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+
+function drawWaves(withP) {
+  const L = 30, R = 335; const T1 = 40, B1 = withP ? 190 : 330, mid1 = (T1 + B1) / 2, amp1 = (B1 - T1) / 2 * .85;
+  const N = 400, w = 2 * Math.PI * F, ph = rad(PHI); line([[L, mid1], [R, mid1]], getCSS('--faint'), 1);
+  const vp = [], ip = []; for (let k = 0; k <= N; k++) { const t = k / N * 2 / F, x = L + k / N * (R - L); vp.push([x, mid1 - amp1 * Math.cos(w * t)]); ip.push([x, mid1 - amp1 * Math.cos(w * t - ph)]); }
+  line(vp, getCSS('--upd'), 2); line(ip, getCSS('--warm'), 2); txt('v(t)', L + 4, T1 + 12, { color: getCSS('--upd'), size: 10, bold: true }); txt('i(t)', L + 40, T1 + 12, { color: getCSS('--warm'), size: 10, bold: true });
+  if (withP) { const T2 = 215, B2 = 395, mid2 = 320, amp2 = 90; line([[L, mid2], [R, mid2]], getCSS('--faint'), 1); const P = Math.cos(ph);
+    ctx.save(); ctx.fillStyle = getCSS('--neg'); ctx.globalAlpha = .3; for (let k = 0; k < N; k++) { const t = k / N * 2 / F, p = Pinst(t) / 2; if (p < 0) { const x = L + k / N * (R - L); ctx.fillRect(x, mid2, (R - L) / N + .5, -p * amp2); } } ctx.restore();
+    const pp = []; for (let k = 0; k <= N; k++) { const t = k / N * 2 / F; pp.push([L + k / N * (R - L), mid2 - Pinst(t) / 2 * amp2]); } line(pp, getCSS('--text'), 2);
+    line([[L, mid2 - P * amp2], [R, mid2 - P * amp2]], getCSS('--accent'), 1.5, [4, 3]); txt('平均 = P = ' + f3(P), R - 4, mid2 - P * amp2 - 5, { align: 'right', size: 10, color: getCSS('--accent'), bold: true });
+    txt('p(t) = v·i', L + 4, T2 + 12, { size: 10, bold: true }); txt('赤 = 電源へ戻る（' + (negFrac() * 100).toFixed(1) + '%）', L + 4, B2 + 2, { size: 10, color: getCSS('--neg') }); }
+}
+function drawPhasor() {
+  const ox = 70, oy = 260, sc = 220; const ph = rad(PHI); const P = Math.cos(ph), Q = Math.sin(ph);
+  arrow(ox, oy, ox + sc * 1.0, oy, getCSS('--upd'), 2.5); txt('V (基準)', ox + sc + 6, oy + 4, { size: 10, color: getCSS('--upd'), bold: true });
+  arrow(ox, oy, ox + sc * .75 * Math.cos(ph), oy + sc * .75 * Math.sin(ph), getCSS('--warm'), 2.5); txt('I（φ 遅れ）', ox + sc * .75 * Math.cos(ph) + 6, oy + sc * .75 * Math.sin(ph) + 4, { size: 10, color: getCSS('--warm'), bold: true });
+  // 電力三角形（上側）
+  const px = ox, py = 150; rect(px, py - Q * 100, P * 200, Q * 100, getCSS('--accent'), .08);
+  arrow(px, py, px + P * 200, py, getCSS('--accent'), 2.5); arrow(px + P * 200, py, px + P * 200, py - Q * 100, getCSS('--upd'), 2.5); arrow(px, py, px + P * 200, py - Q * 100, getCSS('--neg'), 2.5);
+  txt('P = ' + f3(P), px + P * 100, py + 16, { align: 'center', size: 10.5, color: getCSS('--accent'), bold: true }); txt('Q = ' + f3(Q), px + P * 200 + 6, py - Q * 50, { size: 10.5, color: getCSS('--upd'), bold: true }); txt('S = 1', px + P * 100 - 10, py - Q * 50 - 6, { align: 'right', size: 10.5, color: getCSS('--neg'), bold: true });
+  ctx.save(); ctx.strokeStyle = getCSS('--muted'); ctx.beginPath(); ctx.arc(px, py, 30, -ph, 0); ctx.stroke(); ctx.restore(); txt('φ', px + 36, py - 6, { size: 10 });
+  txt('上：電力三角形　下：フェーザ', 30, 330, { size: 10, color: getCSS('--muted') });
+}
+function drawPFTable() {
+  const rows = [[1.0, 'green'], [.95, ''], [.9, ''], [.8, 'red']]; axes(90, 60, 330, 300, '', '電流・損失（力率 1 を 1 とする）');
+  rows.forEach(([pf], i) => { const y = 80 + i * 55, iRel = 1 / pf, lRel = 1 / pf / pf; rect(90, y, 120 * iRel, 18, getCSS('--warm'), .8); rect(90, y + 22, 120 * lRel, 18, getCSS('--neg'), .8); txt('cosφ ' + pf.toFixed(2), 84, y + 24, { align: 'right', size: 10.5, mono: true }); txt('I ' + iRel.toFixed(2) + '×', 94 + 120 * iRel, y + 13, { size: 9.5, mono: true }); txt('損失 ' + lRel.toFixed(2) + '×', 94 + 120 * lRel, y + 35, { size: 9.5, mono: true, bold: pf < .85 }); });
+  txt('橙=電流 / 赤=損失（同じ P=100 MW）', 90, 325, { size: 10, color: getCSS('--muted') });
+}
+function drawPQphi() {
+  const L = 48, R = 335, T = 40, B = 320; axes(L, T, R, B, 'φ [deg]', 'p.u.');
+  const xOf = d => L + d / 90 * (R - L), yOf = v => B - v * (B - T);
+  const pp = [], qp = []; for (let d = 0; d <= 90; d++) { pp.push([xOf(d), yOf(Math.cos(rad(d)))]); qp.push([xOf(d), yOf(Math.sin(rad(d)))]); }
+  line(pp, getCSS('--accent'), 2.5); line(qp, getCSS('--upd'), 2.5); [0, 30, 60, 90].forEach(d => txt(d, xOf(d), B + 14, { align: 'center', size: 9, mono: true })); [0, .5, 1].forEach(v => txt(v, L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true }));
+  dot(xOf(PHI), yOf(Math.cos(rad(PHI))), 6, getCSS('--accent')); dot(xOf(PHI), yOf(Math.sin(rad(PHI))), 6, getCSS('--upd'));
+  txt('P = cos φ', xOf(15), yOf(Math.cos(rad(15))) - 10, { size: 10.5, color: getCSS('--accent'), bold: true }); txt('Q = sin φ', xOf(70), yOf(Math.sin(rad(70))) + 16, { size: 10.5, color: getCSS('--upd'), bold: true });
+  line([[xOf(PHI), T], [xOf(PHI), B]], getCSS('--faint'), 1, [3, 3]); txt('φ=' + PHI + '°', xOf(PHI) + 4, T + 12, { size: 10, mono: true });
+}
+function drawPU() {
+  const y = 190; const c = getCSS('--text'); line([[30, y], [130, y]], c, 2); line([[230, y], [330, y]], c, 2);
+  for (let k = 0; k < 4; k++) { ctx.save(); ctx.strokeStyle = getCSS('--upd'); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(150, y - 24 + k * 16, 8, Math.PI / 2, -Math.PI / 2, false); ctx.stroke(); ctx.beginPath(); ctx.arc(210, y - 24 + k * 16, 8, -Math.PI / 2, Math.PI / 2, false); ctx.stroke(); ctx.restore(); }
+  txt('275 kV 側', 80, 165, { align: 'center', size: 10.5 }); txt('66 kV 側', 280, 165, { align: 'center', size: 10.5 });
+  rect(50, 205, 60, 22, getCSS('--neg'), .45); txt('a²Z = 17.4 Ω', 80, 220, { align: 'center', size: 9.5, mono: true }); rect(250, 205, 60, 22, getCSS('--warm'), .45); txt('Z = 1 Ω', 280, 220, { align: 'center', size: 9.5, mono: true });
+  txt('実単位：両側で違う数値', CW / 2, 250, { align: 'center', size: 10.5, color: getCSS('--neg') });
+  const zb1 = 275 ** 2 / 100, zb2 = 66 ** 2 / 100; rect(50, 270, 60, 22, getCSS('--accent'), .45); txt((17.4 / zb1).toFixed(4) + ' p.u.', 80, 285, { align: 'center', size: 9.5, mono: true, bold: true }); rect(250, 270, 60, 22, getCSS('--accent'), .45); txt((1 / zb2).toFixed(4) + ' p.u.', 280, 285, { align: 'center', size: 9.5, mono: true, bold: true });
+  txt('単位法：両側で同じ数値（Zbase=756 Ω / 43.6 Ω）', CW / 2, 315, { align: 'center', size: 10.5, color: getCSS('--accent'), bold: true });
+  txt('基準電圧を巻数比どおりに取れば換算が消える', CW / 2, 350, { align: 'center', size: 10 });
+}
+function drawPi() {
+  const y = 200, c = getCSS('--text'); dot(40, y, 5, c); dot(320, y, 5, c); txt('送電端', 40, 180, { align: 'center', size: 10 }); txt('受電端', 320, 180, { align: 'center', size: 10 });
+  line([[40, y], [110, y]], c, 2); rect(110, y - 9, 60, 18, getCSS('--panel'), 1); line([[110, y - 9], [170, y - 9], [170, y + 9], [110, y + 9], [110, y - 9]], c, 1.5); txt('R', 140, y + 4, { align: 'center', size: 10, mono: true });
+  line([[170, y], [190, y]], c, 2); ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); for (let k = 0; k < 4; k++) ctx.arc(196 + k * 12, y, 6, Math.PI, 0, false); ctx.stroke(); ctx.restore(); txt('jX', 214, y - 12, { align: 'center', size: 10, mono: true }); line([[238, y], [320, y]], c, 2);
+  [[80, 'jB/2'], [280, 'jB/2']].forEach(([x, lab]) => { line([[x, y], [x, y + 40]], c, 2); line([[x - 12, y + 40], [x + 12, y + 40]], c, 2); line([[x - 12, y + 48], [x + 12, y + 48]], c, 2); line([[x, y + 48], [x, y + 70]], c, 2); line([[x - 10, y + 70], [x + 10, y + 70]], c, 2); txt(lab, x + 16, y + 48, { size: 10, mono: true }); });
+  txt('架空線：X/R ≈ 5〜15（リアクタンス支配）', CW / 2, 310, { align: 'center', size: 11, bold: true }); txt('ケーブル：C が 20〜50 倍 → 充電電流が問題', CW / 2, 335, { align: 'center', size: 10, color: getCSS('--muted') });
+}
+function drawTwoBus() {
+  const y = 200, c = getCSS('--text'); rect(58, y - 40, 6, 80, c); rect(296, y - 40, 6, 80, c); line([[64, y], [296, y]], c, 2.5);
+  ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); for (let k = 0; k < 5; k++) ctx.arc(150 + k * 12, y, 6, Math.PI, 0, false); ctx.stroke(); ctx.restore(); txt('X = ' + X, 174, y - 14, { align: 'center', size: 10.5, mono: true });
+  txt('Vs∠δ', 61, y - 50, { align: 'center', size: 11, mono: true, bold: true }); txt('Vr∠0', 299, y - 50, { align: 'center', size: 11, mono: true, bold: true });
+  txt(f2(VS) + '∠' + DELTA + '°', 61, y + 60, { align: 'center', size: 10, mono: true, color: getCSS('--upd') }); txt('1.00∠0°', 299, y + 60, { align: 'center', size: 10, mono: true, color: getCSS('--upd') });
+  const P = Pflow(VS, VR, DELTA); arrow(120, y + 30, 120 + Math.max(0, Math.min(160, P * 60)), y + 30, getCSS('--accent'), 3); txt('P = ' + f3(P), 180, y + 48, { align: 'center', size: 10.5, color: getCSS('--accent'), bold: true });
+  // フェーザ
+  const ox = 180, oy = 330; arrow(ox, oy, ox + 90, oy, getCSS('--faint'), 2); txt('Vr', ox + 94, oy + 4, { size: 9.5, mono: true }); arrow(ox, oy, ox + 90 * VS * Math.cos(rad(DELTA)), oy - 90 * VS * Math.sin(rad(DELTA)), getCSS('--upd'), 2); txt('Vs', ox + 90 * VS * Math.cos(rad(DELTA)) + 4, oy - 90 * VS * Math.sin(rad(DELTA)), { size: 9.5, mono: true, color: getCSS('--upd') });
+}
+function drawFormula() {
+  rect(20, 60, 320, 110, getCSS('--accent'), .1); rect(20, 200, 320, 110, getCSS('--upd'), .1);
+  txt('P = (Vs·Vr / X) · sin δ', 180, 95, { align: 'center', size: 15, mono: true, bold: true, color: getCSS('--accent') }); txt('δ 小 → P ≈ (Vs·Vr/X)·δ', 180, 125, { align: 'center', size: 11, mono: true }); txt('← 位相差が支配', 180, 150, { align: 'center', size: 11, color: getCSS('--accent'), bold: true });
+  txt('Q = (Vs·Vr·cos δ − Vr²) / X', 180, 235, { align: 'center', size: 15, mono: true, bold: true, color: getCSS('--upd') }); txt('δ 小 → Q ≈ Vr·(Vs − Vr)/X', 180, 265, { align: 'center', size: 11, mono: true }); txt('← 電圧の差が支配', 180, 290, { align: 'center', size: 11, color: getCSS('--upd'), bold: true });
+  txt('（R ≈ 0：架空線の近似）', 180, 345, { align: 'center', size: 10, color: getCSS('--muted') });
+}
+function drawPDcurve(mark90) {
+  const L = 48, R = 335, T = 40, B = 320; axes(L, T, R, B, 'δ [deg]', 'p.u.'); const pmax = VS * VR / X, ymax = Math.max(pmax * 1.15, 3);
+  const xOf = d => L + d / 180 * (R - L), yOf = v => B - (v + 1) / (ymax + 1) * (B - T);
+  const pp = [], qp = []; for (let d = 0; d <= 180; d++) { pp.push([xOf(d), yOf(Pflow(VS, VR, d))]); qp.push([xOf(d), yOf(Qflow(VS, VR, d))]); }
+  line([[L, yOf(0)], [R, yOf(0)]], getCSS('--faint'), 1); line(pp, getCSS('--accent'), 2.5); line(qp, getCSS('--upd'), 2, [4, 3]);
+  [0, 45, 90, 135, 180].forEach(d => txt(d, xOf(d), B + 14, { align: 'center', size: 9, mono: true })); [-1, 0, 1, 2, 3, 4, 5].filter(v => v <= ymax).forEach(v => txt(v, L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true }));
+  dot(xOf(DELTA), yOf(Pflow(VS, VR, DELTA)), 7, getCSS('--accent')); dot(xOf(DELTA), yOf(Qflow(VS, VR, DELTA)), 5, getCSS('--upd'));
+  txt('P', xOf(60), yOf(Pflow(VS, VR, 60)) - 10, { size: 11, color: getCSS('--accent'), bold: true }); txt('Q', xOf(150), yOf(Qflow(VS, VR, 150)) - 10, { size: 11, color: getCSS('--upd'), bold: true });
+  txt('δ=' + DELTA + '° → P=' + f3(Pflow(VS, VR, DELTA)), xOf(DELTA) + (DELTA > 100 ? -8 : 8), yOf(Pflow(VS, VR, DELTA)) - 12, { align: DELTA > 100 ? 'right' : 'left', size: 10.5, bold: true, color: getCSS('--accent') });
+  if (mark90) { line([[xOf(90), T], [xOf(90), B]], getCSS('--neg'), 1.5, [4, 3]); txt('定態安定限界 90°', xOf(90) + 4, T + 12, { size: 10, color: getCSS('--neg'), bold: true }); rect(xOf(90), T, R - xOf(90), B - T, getCSS('--neg'), .07); txt('不安定領域', xOf(135), T + 30, { align: 'center', size: 10, color: getCSS('--neg') }); }
+}
+function drawQVcurve() {
+  const L = 48, R = 335, T = 40, B = 320; axes(L, T, R, B, 'Vs [p.u.]', 'p.u.');
+  const xOf = v => L + (v - .9) / .2 * (R - L), yOf = q => B - (q + .8) / 1.8 * (B - T);
+  const qp = [], pp = []; for (let v = .9; v <= 1.1001; v += .005) { qp.push([xOf(v), yOf(Qflow(v, VR, DELTA))]); pp.push([xOf(v), yOf(Pflow(v, VR, DELTA) - Pflow(1, VR, DELTA))]); }
+  line([[L, yOf(0)], [R, yOf(0)]], getCSS('--faint'), 1); line(qp, getCSS('--upd'), 2.5); line(pp, getCSS('--accent'), 2, [4, 3]);
+  [.9, 1.0, 1.1].forEach(v => txt(v.toFixed(2), xOf(v), B + 14, { align: 'center', size: 9, mono: true })); [-.5, 0, .5, 1].forEach(q => txt(q, L - 4, yOf(q) + 4, { align: 'right', size: 9, mono: true }));
+  dot(xOf(VS), yOf(Qflow(VS, VR, DELTA)), 7, getCSS('--upd')); txt('Vs=' + f2(VS) + ' → Q=' + f3(Qflow(VS, VR, DELTA)), xOf(VS) + (VS > 1.03 ? -8 : 8), yOf(Qflow(VS, VR, DELTA)) - 12, { align: VS > 1.03 ? 'right' : 'left', size: 10.5, bold: true, color: getCSS('--upd') });
+  txt('Q', xOf(1.08), yOf(Qflow(1.08, VR, DELTA)) + 16, { size: 11, color: getCSS('--upd'), bold: true }); txt('P の変化分（小）', xOf(.92), yOf(Pflow(.92, VR, DELTA) - Pflow(1, VR, DELTA)) - 8, { size: 10, color: getCSS('--accent') });
+  line([[xOf(1.0), T], [xOf(1.0), B]], getCSS('--faint'), 1, [3, 3]); txt('Vs=Vr', xOf(1.0) + 3, T + 12, { size: 9, color: getCSS('--muted') });
+}
+function drawMap() {
+  const c = getCSS('--text'); rect(105, 40, 150, 44, getCSS('--accent'), .2); txt('第3回', 180, 58, { align: 'center', size: 10, color: getCSS('--muted') }); txt('P = VsVr sinδ / X', 180, 76, { align: 'center', size: 11.5, mono: true, bold: true });
+  const nodes = [[60, 160, '第4回', 'Y行列・直流法'], [180, 160, '第5回', 'ヤコビアン H/L'], [300, 160, '第7回', '等面積法'], [60, 270, '第6回', '電圧制御 (Q)'], [180, 270, '第8回', '周波数制御 (P)'], [300, 270, '第14回', 'OPF・LMP']];
+  nodes.forEach(([x, y, a, b]) => { line([[180, 84], [x, y - 30]], getCSS('--faint'), 1.5); rect(x - 55, y - 30, 110, 58, getCSS('--panel'), 1); line([[x - 55, y - 30], [x + 55, y - 30], [x + 55, y + 28], [x - 55, y + 28], [x - 55, y - 30]], c, 1); txt(a, x, y - 10, { align: 'center', size: 10.5, bold: true }); txt(b, x, y + 12, { align: 'center', size: 9.5, color: getCSS('--muted') }); });
+  txt('P ← δ の系譜 ／ Q ← V の系譜', CW / 2, 345, { align: 'center', size: 10.5 });
+}
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur ? 'active' : (i < cur ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+function sync() { document.getElementById('phiVal').textContent = PHI; document.getElementById('dVal').textContent = DELTA; document.getElementById('vsVal').textContent = VS.toFixed(2); }
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; PHI = 30; DELTA = 20; VS = 1.05; document.getElementById('phiRange').value = 30; document.getElementById('dRange').value = 20; document.getElementById('vsRange').value = 1.05; sync(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('phiRange').oninput = e => { PHI = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('dRange').oninput = e => { DELTA = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('vsRange').oninput = e => { VS = +e.target.value; sync(); renderAll(); draw_(); };
+sync(); goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第13回 AI × 系統解析 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第13回 AI × 系統解析 — 物理を置き換えるのではなく、物理計算を速くする</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch13.html">📖 講義ノート（第13回）</a><a class="e" href="../ex/ch13.html">✍ 演習で確かめる</a></div>
+  <div class="lead">第12回まで AI は「予測」に使いました。この回は<b>系統解析そのもの</b>——潮流・状態推定・異常検知・制御——に AI を使います。電力系統はグラフなので GNN と形が合うこと、正常データだけで異常を見つけられること、強化学習で電圧制御の方策を獲得できることを、<b>PCA 異常検知と Q 学習はブラウザ内で実計算</b>して示します。GNN の実学習は process_nn の<a href="https://lutelute.github.io/process_nn/viz/gnnflow.html">特別講演 GNN×潮流計算</a>を参照してください。前提は<a href="ml.html">第12回</a>、次は<a href="opf.html">第14回 OPF</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「AI で潮流計算を置き換える」は危険で、「AI でふるいにかけて危ないケースだけ厳密に解く」が正解。この線引きを知らないと事故を起こします。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>系統はグラフ、GNN は隣の和、電力方程式も隣の和。だから形が合う。でも最終判断は物理と人間。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>EMS の状態推定・想定事故解析の高速化、PMU データの異常検知、電圧無効電力制御の方策学習（研究〜実証段階）。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>RL エピソード <input type="range" id="epRange" min="100" max="3000" step="100" value="1500"> <span id="epVal">1500</span></label>
+      <button id="diceBtn">🎲</button>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>電力系統には 150 年分の確立した物理モデルがある — <b>それを捨ててデータだけで学ぶのは、持っている情報を捨てる愚行</b>です。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>強化学習は実系統で試行錯誤させれば、運用員より賢い制御を自動で覚える。</div>
+    <div class="row"><span class="o">✓</span>初期の方策はランダムに近く、遮断器を無作為に操作することになります。<b>実系統での学習は絶対に不可</b>。シミュレータで学習し、安全層で制約違反を却下し、実運用は推薦にとどめて人間が判断する段階的適用が現実解です。</div>
+    <div class="row"><span class="x">✗</span>GNN で潮流計算が 200 倍速くなるなら、ニュートン法はもう要らない。</div>
+    <div class="row"><span class="o">✓</span>代理モデルの誤差 0.003 p.u. は電圧上限 1.05 の判定に足りません。<b>GNN でスクリーニングし、危険なケースだけニュートン法で厳密計算</b>する 2 段階が実務の解です。学習範囲外では信じてはいけません。</div>
+  </div>
+  <details><summary>もっと詳しく：状態推定 WLS・PINN・過平滑化</summary><div class="det">
+    状態推定はノイズを含む冗長な計測 <b>z</b> から状態 <b>x</b>（各母線の <i>V</i>, θ）を重み付き最小二乗 min [<b>z</b>−<b>h</b>(<b>x</b>)]<sup>T</sup><b>R</b><sup>−1</sup>[<b>z</b>−<b>h</b>(<b>x</b>)] で求める問題で、ガウス・ニュートン法の反復は第5回のヤコビアンと同じ構造です。潮流計算（「こうしたらどうなるか」）と目的が違います。
+    PINN は損失に物理方程式の残差 ℒ<sub>physics</sub> = Σ[(<i>P<sub>i</sub></i><sup>sch</sup>−<i>P<sub>i</sub></i>(<b>V̂</b>,<b>θ̂</b>))² + …] を加えたもので、少ないデータで物理的に妥当な解に寄り、外挿にも強くなります。
+    GNN の層数はメッセージが届くホップ数に対応し、電力系統では 2〜4 層が適切。深すぎると全ノードの表現が似てしまう過平滑化が起きます。
+    <b>限界：</b>このページの異常検知は線形 PCA（2 主成分）、強化学習は表形式 Q 学習の 25 状態×3 行動という最小構成です。実系統ではオートエンコーダ・深層 RL・安全層を伴います。GNN の学習はこのページでは行わず、process_nn の gnnflow（6 バス DC 潮流を 800 反復で実学習）に委ねています。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+let EP = 1500, ROUND = 0;
+/* ---- 3 ノード直流法潮流（第4回）→ 異常検知の題材 ---- */
+function dcFlow(P1, P2, cut) { const L = [[0, 1, .8], [0, 2, .5], [1, 2, 1.0]].filter((_, k) => k !== cut); const Bp = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; L.forEach(([a, b, x]) => { const y = 1 / x; Bp[a][a] += y; Bp[b][b] += y; Bp[a][b] -= y; Bp[b][a] -= y; }); const P3 = -(P1 + P2); const a = Bp[1][1], b = Bp[1][2], c = Bp[2][1], d = Bp[2][2], det = a * d - b * c; const d2 = (P2 * d - b * P3) / det, d3 = (a * P3 - c * P2) / det; const del = [0, d2, d3]; const fl = [[0, 1, .8], [0, 2, .5], [1, 2, 1.0]].map(([p, q, x], k) => k === cut ? 0 : (del[p] - del[q]) / x); return [d2, d3, ...fl]; }
+const gauss = () => { const u = Math.max(rng(), 1e-9), v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+const noisy = x => x.map(v => v + 0.01 * gauss());     // 計測ノイズ 1%
+function makeData() { seed = 100 + ROUND * 7919; const normal = [], anom = []; for (let i = 0; i < 300; i++) { const P1 = 0.6 + 0.8 * rng(), P2 = 0.4 + 0.8 * rng(); normal.push(noisy(dcFlow(P1, P2, -1))); } for (let i = 0; i < 60; i++) { const P1 = 0.6 + 0.8 * rng(), P2 = 0.4 + 0.8 * rng(); anom.push(noisy(dcFlow(P1, P2, 1))); } return { normal, anom }; }
+function pca2(X) { const n = X.length, d = X[0].length; const mu = Array(d).fill(0); X.forEach(x => x.forEach((v, j) => mu[j] += v / n)); const C = Array.from({ length: d }, () => Array(d).fill(0)); X.forEach(x => { for (let i = 0; i < d; i++) for (let j = 0; j < d; j++) C[i][j] += (x[i] - mu[i]) * (x[j] - mu[j]) / n; }); const vecs = []; const M = C.map(r => [...r]); for (let k = 0; k < 2; k++) { let v = Array(d).fill(0).map((_, i) => 1 / Math.sqrt(d) + 0.01 * i); for (let it = 0; it < 200; it++) { const w = M.map(r => r.reduce((s, m, j) => s + m * v[j], 0)); const nm = Math.hypot(...w); v = w.map(x => x / nm); } const lam = M.map(r => r.reduce((s, m, j) => s + m * v[j], 0)).reduce((s, x, i) => s + x * v[i], 0); vecs.push({ v, lam }); for (let i = 0; i < d; i++) for (let j = 0; j < d; j++) M[i][j] -= lam * v[i] * v[j]; } return { mu, vecs }; }
+function reconErr(P, x) { const c = x.map((v, j) => v - P.mu[j]); let rec = Array(x.length).fill(0); P.vecs.forEach(({ v }) => { const s = c.reduce((q, ci, j) => q + ci * v[j], 0); rec = rec.map((r, j) => r + s * v[j]); }); return Math.sqrt(c.reduce((q, ci, j) => q + (ci - rec[j]) ** 2, 0)); }
+let AD = null; function runAD() { const D = makeData(); const P = pca2(D.normal.slice(0, 200)); const en = D.normal.slice(200).map(x => reconErr(P, x)), ea = D.anom.map(x => reconErr(P, x)); const thr = [...en].sort((a, b) => a - b)[Math.floor(0.99 * (en.length - 1))]; AD = { en, ea, thr, tpr: ea.filter(e => e > thr).length / ea.length, fpr: en.filter(e => e > thr).length / en.length, P }; return AD; }
+/* ---- メッセージパッシング 1 層（5 ノード、固定順伝播） ---- */
+const G5 = { adj: [[1, 4], [0, 2], [1, 3], [2, 4], [3, 0]], h0: [1.0, 0.2, 0.9, 0.1, 0.5] };
+function mpLayer(h) { return h.map((_, i) => { const nb = G5.adj[i]; return (h[i] + nb.reduce((s, j) => s + h[j], 0)) / (nb.length + 1); }); }
+/* ---- Q 学習：電圧制御（第6回 2 母線・配電線） ---- */
+const RL_ = 0.08, XL_ = 0.08; function vr2(P, Q) { const a = RL_ * P + XL_ * Q, b = RL_ * Q - XL_ * P; const B2 = 2 * a - 1, C = a * a + b * b, disc = B2 * B2 - 4 * C; if (disc < 0) return null; return Math.sqrt((-B2 + Math.sqrt(disc)) / 2); }
+const ACTS = [-0.125, 0, 0.125]; const vbin = v => Math.max(0, Math.min(4, Math.floor((v - 0.90) / 0.03))); const qbin = q => Math.max(0, Math.min(4, Math.round((q + 0.5) / 0.25)));
+function reward(v, qc) { let r = -Math.abs(v - 1) * 100; if (v < .95 || v > 1.05) r -= 40; r -= Math.abs(qc) * 4; return r; }
+let QT = null, HIST = null; function trainRL(episodes) { seed = 500 + ROUND * 7919; const Q = Array.from({ length: 25 }, () => [0, 0, 0]); const hist = []; let eps = 1.0; for (let e = 0; e < episodes; e++) { const P = 0.2 + 0.6 * rng(), Ql = 0.4 * P; let qc = 0; let v = vr2(P, Ql - qc); if (v === null) continue; let s = vbin(v) * 5 + qbin(qc); let tot = 0; for (let t = 0; t < 8; t++) { const a = rng() < eps ? Math.floor(rng() * 3) : Q[s].indexOf(Math.max(...Q[s])); qc = Math.max(-0.5, Math.min(0.5, qc + ACTS[a])); v = vr2(P, Ql - qc); if (v === null) { Q[s][a] += 0.15 * (-100 - Q[s][a]); tot -= 100; break; } const r = reward(v, qc); const s2 = vbin(v) * 5 + qbin(qc); Q[s][a] += 0.15 * (r + 0.9 * Math.max(...Q[s2]) - Q[s][a]); s = s2; tot += r; } hist.push(tot); eps = Math.max(0.03, eps * 0.9975); } QT = Q; HIST = hist; return Q; }
+function evalRL(policy) { seed = 900; let dev = 0, viol = 0, n = 0; for (let k = 0; k < 200; k++) { const P = 0.2 + 0.6 * rng(), Ql = 0.4 * P; let qc = 0; let v = vr2(P, Ql); if (v === null) continue; if (policy) { let s = vbin(v) * 5 + qbin(qc); for (let t = 0; t < 8; t++) { const a = QT[s].indexOf(Math.max(...QT[s])); qc = Math.max(-0.5, Math.min(0.5, qc + ACTS[a])); const nv = vr2(P, Ql - qc); if (nv === null) break; v = nv; s = vbin(v) * 5 + qbin(qc); } } dev += Math.abs(v - 1); if (v < .95 || v > 1.05) viol++; n++; } return { dev: dev / n, viol: viol / n * 100 }; }
+const f0 = x => x.toFixed(0), f1 = x => x.toFixed(1), f2 = x => x.toFixed(2), f3 = x => x.toFixed(3), f4 = x => x.toFixed(4);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ GNN', c: 'var(--upd)', start: 1 }, { t: 'Ⅲ 異常検知・RL', c: 'var(--loss)', start: 6 }, { t: 'Ⅳ 物理・まとめ', c: 'var(--accent)', start: 11 } ];
+const SLIDES = [
+  { legend: '従来手法（反復・重い）と AI（一発推論・速いが保証なし）の役割分担',
+    html() { return '<h3>問題：AI は物理計算を置き換えるのか、速くするのか</h3><div class="eq curr">潮流計算 3〜5 反復 × 数千ケース（N-1・モンテカルロ）　→　学習済みモデルで一発推論？<span class="read">読み：第5回のニュートン法は正確だが、想定事故を数千ケース回すと重い。AI で置き換えたい誘惑があるが、誤差と保証の問題がある。</span></div><div class="desc">この回の立場は明確です：<b>AI は物理の代替ではなく、物理計算の高速化と補完</b>。まず「なぜ電力系統と GNN の形が合うのか」を第4回の電力方程式から見て、次に異常検知と強化学習を実際に動かし、最後に物理を組み込む学習（PINN）で締めます。</div>'; },
+    draw() { drawRoles(); caption('置き換えるのではなく、ふるいにかける'); } },
+
+  { legend: '電力系統 = グラフ。ノード（母線）とエッジ（線路）。Y_bus は隣接行列そのもの',
+    html() { return '<h3>電力系統はグラフである（第2・4回の再掲）</h3><div class="eq curr">ノード = 母線　／　エッジ = 送電線・変圧器　／　<b>Y</b><sub>bus</sub> の非零パターン = 隣接行列<span class="read">読み：第4回で組んだ Y 行列は「どの母線とどの母線がつながっているか」をそのまま表している。</span></div><div class="desc">通常のニューラルネット（MLP）は入力の順序に依存し、母線に番号を振り直すと別の入力になってしまいます。線路 1 本の開放（N-1）ごとに再学習が要り、14 母線で学習したモデルは 118 母線に使えません。<b>グラフ構造をそのまま扱う GNN</b> がこれを解決します。</div>'; },
+    draw() { drawGraph(null); caption('母線 = ノード、線路 = エッジ'); } },
+  { legend: 'メッセージパッシング：各ノードが「隣の値を集めて混ぜる」。1 層＝1 ホップ',
+    mini: () => { const h1 = mpLayer(G5.h0); return '<div>h₀ → h₁（ノード 1）<b>' + f2(G5.h0[0]) + ' → ' + f2(h1[0]) + '</b></div>'; },
+    html() { const h1 = mpLayer(G5.h0), h2 = mpLayer(h1); return '<h3>GNN の 1 層：隣の和で自分を更新する（固定順伝播）</h3><div class="eq curr"><b>h</b><sub>i</sub><sup>(l+1)</sup> = σ(<b>W</b><sub>s</sub><b>h</b><sub>i</sub><sup>(l)</sup> + Σ<sub>j∈N(i)</sub> <b>W</b><sub>n</sub><b>h</b><sub>j</sub><sup>(l)</sup>)　→　平均集約の例：ノード 1 の値 ' + f2(G5.h0[0]) + ' → <b class="res">' + f2(h1[0]) + '</b> → ' + f2(h2[0]) + '<span class="read">読み：自分と隣の値を（重み付きで）足し合わせて次の層の値にする。図は重みなし平均の固定計算で、学習はしていない。</span></div><div class="desc">5 ノードの環で、ノード 1（値 1.0）が隣（0.2 と 0.5）と混ざって ' + f2(h1[0]) + ' になり、2 層目で 2 ホップ先まで届いて ' + f2(h2[0]) + ' になります。<b>層数 = 情報が届く距離</b>。深すぎると全ノードが同じ値に近づく（過平滑化）ので、電力系統では 2〜4 層が適切です。</div>'; },
+    draw() { drawGraph(mpLayer(G5.h0)); caption('1 層で 1 ホップ。隣の和で更新'); } },
+  { legend: '電力方程式（第4回）とメッセージパッシングの式を並べる。どちらも「隣の和」',
+    html() { return '<h3>形が合う：電力方程式も「隣の和」で書けている</h3><div class="eq curr"><i>P<sub>i</sub></i> = <i>V<sub>i</sub></i> Σ<sub>j∈N(i)</sub> <i>V<sub>j</sub></i>(<i>G<sub>ij</sub></i>cos θ<sub>ij</sub> + <i>B<sub>ij</sub></i>sin θ<sub>ij</sub>)　⇔　<b>h</b><sub>i</sub>′ = σ(<b>W</b><sub>s</sub><b>h</b><sub>i</sub> + Σ<sub>j∈N(i)</sub> <b>W</b><sub>n</sub><b>h</b><sub>j</sub>)<span class="read">読み：自分の量は隣接ノードからの寄与の和で決まる、という構造が両方に共通。キルヒホッフ則は局所則。</span></div><div class="desc">これが GNN が電力系統に適合する根本的な理由です。物理と同じ帰納バイアス（局所性）を持つので、少ないデータで学び、トポロジー変化（線路開放）にも隣接行列を変えるだけで対応できます。<b>実際に 6 バスの潮流を GNN が学ぶ様子</b>は process_nn の gnnflow（次のスライド）で見られます。</div>'; },
+    draw() { drawIsomorphism(); caption('物理の局所則 × 学習器の局所則'); } },
+  { legend: 'process_nn「特別講演 GNN×潮流計算」：6 バス DC 潮流を 800 反復で実学習、未知ケース誤差 7%',
+    html() { return '<h3>導線：GNN の実学習は gnnflow で</h3><div class="eq curr">6 バス系統・160 問の教師データ・P 再注入 GNN（5 層）・ライブ学習 800 反復・未知ケースの潮流誤差 7%・過負荷判定一致 98%<span class="read">読み：別ページ（process_nn の特別講演）の要約。学習範囲外（逆潮流）では誤差が跳ね上がる限界も実演されている。</span></div><div class="desc"><a href="https://lutelute.github.io/process_nn/viz/gnnflow.html">gnnflow.html</a> では、このページと同じ直流法潮流（第4回）を GNN が本当に学習します。ここで押さえるべきは 2 点：<b>速さ（反復 → 1 回の行列計算）</b>と、<b>学習範囲の外では信じないこと</b>（第12回の外挿問題）。GNN の利点：順序不変・トポロジー対応・規模への汎化。</div>'; },
+    draw() { drawGnnflowCard(); caption('実学習は特別講演で。ここでは「形」と「限界」'); } },
+  { legend: '状態推定 vs 潮流計算：目的・入力・方程式の数が違う',
+    html() { return '<h3>状態推定：「今どうなっているか」を計測から推定する</h3><div class="eq curr">min <b>J</b>(<b>x</b>) = [<b>z</b> − <b>h</b>(<b>x</b>)]<sup>T</sup> <b>R</b><sup>−1</sup> [<b>z</b> − <b>h</b>(<b>x</b>)]　（計測 <b>z</b> は冗長・ノイズ付き）<span class="read">読み：潮流計算は指定値から「こうしたらどうなるか」。状態推定はノイズ付き計測から「今どうなっているか」。方程式が未知数より多い（過決定）。</span></div><div class="desc">AI を使う動機：反復が遅い（リアルタイム性）、計測欠損に弱い、不良データの識別が難しい、配電系統は計測が極端に少ない。PMU（GPS 同期の位相計測）が普及すると線形問題になり、AI との相性が良くなります。</div>'; },
+    draw() { drawSEtable(); caption('潮流 = 予想、状態推定 = 現状把握'); } },
+
+  { legend: '異常検知：正常データ（線路すべて健全）だけで PCA を学習。主成分 2 本で復元',
+    enter() { if (!AD) runAD(); },
+    mini: () => { if (!AD) runAD(); return '<div>閾値 <b>' + f3(AD.thr) + '</b></div><div>検出率 <b>' + f0(AD.tpr * 100) + '%</b></div>'; },
+    html() { if (!AD) runAD(); return '<h3>異常検知：正常だけを学び、外れたら疑う</h3><div class="eq curr">異常スコア = ‖<b>x</b> − 復元(<b>x</b>)‖　（PCA 2 主成分、正常 200 件で学習）　閾値 = 正常の 99 パーセンタイル = <b class="res">' + f3(AD.thr) + '</b><span class="read">読み：正常な潮流パターンは低次元（負荷 2 変数で決まる）なので 2 主成分で復元できる。線路開放の潮流は別のパターンなので復元できず、誤差が跳ねる。</span></div><div class="desc">事故データは希少で未知の故障もあるため、<b>正常だけで「正常らしさ」を学ぶ</b>のが異常検知の定石です（オートエンコーダはこの非線形版）。データは第4回の 3 ノード直流法潮流（計測ノイズ 1% 付き）で、負荷をランダムに振った 300 件が正常、線路 1–3 を開放した 60 件が異常です。</div>'; },
+    draw() { drawADhist(); caption('正常は低次元。外れたものが異常'); } },
+  { legend: 'A/B：正常（緑）vs 線路開放（赤）の異常スコア分布。閾値で分離',
+    mini: () => { if (!AD) runAD(); return '<div>検出率 <b>' + f1(AD.tpr * 100) + '%</b></div><div>誤警報 <b>' + f1(AD.fpr * 100) + '%</b></div>'; },
+    html() { if (!AD) runAD(); return '<h3>A/B：線路開放を ' + f0(AD.tpr * 100) + '% 検出、誤警報 ' + f1(AD.fpr * 100) + '%</h3><div class="eq curr">検出率（TPR）= <b class="res">' + f1(AD.tpr * 100) + '%</b>　誤警報率（FPR）= <b class="res">' + f1(AD.fpr * 100) + '%</b>　（正常 100 件・異常 60 件で評価、🎲 で振り直し）<span class="read">読み：異常の何%を捕まえたか、正常の何%を誤って異常と言ったか。閾値を動かすとトレードオフになる。</span></div><div class="desc">線路が 1 本切れると潮流の「形」が変わり、正常データの主成分では復元できません。第7回で見たとおり保護は数十 ms で判断する必要があり、<b>AI の推論速度が保護リレーの要求に応えられるか</b>が実用化の鍵です。</div>'; },
+    draw() { drawADscatter(); caption('パターンの違いが復元誤差に出る'); } },
+  { legend: '強化学習の 5 要素を電圧制御（第6回 VQC）に対応づける',
+    html() { return '<h3>強化学習：試行錯誤で制御ルールを獲得する</h3><div class="eq curr">状態 <i>s</i>（電圧・調相設備の状態）／ 行動 <i>a</i>（Q を ±0.125 出す・保持）／ 報酬 <i>r</i>（−|<i>V</i>−1|−逸脱罰−設備コスト）／ 環境 = 潮流計算<span class="read">読み：環境は第6回の 2 母線モデル。負荷がランダムに変わる中で、電圧を 1.0 に保ちつつ調相設備を使いすぎない方策を Q テーブルに覚えさせる。</span></div><div class="desc">明示的なルール（第6回の VQC 4 象限）を書かなくても、報酬さえ設計すれば方策が得られるのが強化学習の利点です。次のスライドで実際に Q 学習を回します（エピソード数スライダ）。</div>'; },
+    draw() { drawRLloop(); caption('環境 = 潮流計算。実系統では絶対にやらない'); } },
+  { legend: 'Q 学習の学習曲線（累積報酬の移動平均）と、学習後の方策 vs 無制御の評価',
+    enter() { trainRL(EP); },
+    mini: () => { if (!QT) trainRL(EP); const a = evalRL(false), b = evalRL(true); return '<div>無制御 逸脱 <b>' + f0(a.viol) + '%</b></div><div>RL 逸脱 <b>' + f0(b.viol) + '%</b></div>'; },
+    html() { if (!QT) trainRL(EP); const a = evalRL(false), b = evalRL(true); return '<h3>A/B：Q 学習後、電圧逸脱 ' + f0(a.viol) + '% → ' + f0(b.viol) + '%（' + EP + ' エピソード）</h3><div class="eq curr"><i>Q</i>(<i>s</i>,<i>a</i>) ← <i>Q</i> + α[<i>r</i> + γ max<sub>a′</sub><i>Q</i>(<i>s</i>′,<i>a</i>′) − <i>Q</i>]　→　平均偏差 |<i>V</i>−1|：無制御 <b class="res">' + f4(a.dev) + '</b> / RL <b class="res">' + f4(b.dev) + '</b>、逸脱率 <b class="res">' + f0(a.viol) + '% → ' + f0(b.viol) + '%</b><span class="read">読み：25 状態×3 行動の Q テーブルを ε-greedy で更新。学習後はランダムな負荷 200 件で評価（学習と別のシード）。</span></div><div class="desc">エピソード数スライダを 100 まで下げると方策がまだ粗く、逸脱が残ります。' + EP + ' エピソードでは第6回の VQC 相当の挙動を<b>ルールを書かずに獲得</b>しています。ただし報酬設計・安全性の保証・学習範囲外の挙動が課題です。</div>'; },
+    draw() { drawRLcurve(); caption('報酬だけで VQC 相当の方策が育つ'); } },
+  { legend: '安全性の段階的適用：シミュレータ → 安全層 → オフライン検証 → 推薦 → 限定自動化',
+    html() { return '<h3>安全性：実系統で学習は絶対に不可</h3><div class="eq curr">①シミュレータで学習 → ②安全層で制約違反を却下 → ③過去事故で検証 → ④推薦モード（人が判断）→ ⑤限定自動化<span class="read">読み：sim-to-real ギャップをどう埋めるかが最大の課題。最終責任を人間が持つ設計が現時点の前提。</span></div><div class="desc">停電させながら学習するわけにはいきません。強化学習の「試行錯誤」は本質なので、<b>シミュレータの中でだけ試行錯誤</b>し、実運用では制約チェック（安全層）を通した行動しか出さない、が現実解です。</div>'; },
+    draw() { drawSafety(); caption('試行錯誤はシミュレータの中だけ'); } },
+
+  { legend: 'PINN：損失にデータ誤差 + 物理方程式の残差。物理を捨てない学習',
+    html() { return '<h3>物理を捨てない：損失に電力方程式の残差を足す（PINN）</h3><div class="eq curr">ℒ = ℒ<sub>data</sub> + λ ℒ<sub>physics</sub>,　ℒ<sub>physics</sub> = Σ<sub>i</sub>[(<i>P<sub>i</sub></i><sup>sch</sup> − <i>P<sub>i</sub></i>(<b>V̂</b>,<b>θ̂</b>))² + (<i>Q<sub>i</sub></i><sup>sch</sup> − <i>Q<sub>i</sub></i>(<b>V̂</b>,<b>θ̂</b>))²]<span class="read">読み：予測した電圧・位相を第4回の電力方程式に入れて、どれだけ物理を破っているかを罰点にする。データが少なくても物理が正則化として効く。</span></div><div class="desc">効果は 4 つ：物理的に妥当な解、少ないデータで学習可能、汎化性能の向上、そして<b>物理残差を見れば信頼度が分かる</b>（検証可能性）。木モデルの外挿問題（第12回）への処方箋でもあります。図は概念図で、このページでは学習していません。</div>'; },
+    draw() { drawPINN(); caption('データ + 物理 = 少なく学び、外挿に強い'); } },
+  { legend: '再エネ時代の AI への要求と、実務の 2 段階構成',
+    html() { return '<h3>まとめ：AI でふるい、物理で確かめる</h3><div class="eq curr">GNN でスクリーニング（ms）→ 危険なケースだけニュートン法で厳密計算　／　異常検知は正常のみで学習　／　RL は安全層＋人の判断<span class="read">読み：この 3 行が第13回。速さは AI、保証は物理、責任は人間。</span></div><div class="desc">再エネで慣性が下がると現象が速くなり（第7・8回）、AI にはミリ秒の判断が求められます。独立系統の沖縄では連系線の応援がない分、限られた設備を最大限使う高度な予測と制御が切実です。次回は AI を「解析」から「最適化」へ — <b>OPF の高速化</b>（第14回）です。</div>'; },
+    draw() { drawTwoStage(); caption('速さは AI、保証は物理、責任は人'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawRoles() { rect(20, 60, 150, 250, getCSS('--upd'), .1); rect(190, 60, 150, 250, getCSS('--accent'), .1); txt('物理（ニュートン法）', 95, 85, { align: 'center', size: 11, bold: true, color: getCSS('--upd') }); txt('AI（学習済み推論）', 265, 85, { align: 'center', size: 11, bold: true, color: getCSS('--accent') }); ['正確（機械精度）', '保証あり', '反復 3〜5 回', '数千ケースで重い', '学習不要'].forEach((s, i) => txt('・' + s, 28, 118 + i * 30, { size: 10 })); ['誤差あり（例 0.003 p.u.）', '保証なし', '一発推論（ms）', '数千ケースでも一瞬', '学習範囲外は不可'].forEach((s, i) => txt('・' + s, 198, 118 + i * 30, { size: 10 })); txt('→ AI でふるい、物理で確かめる', CW / 2, 340, { align: 'center', size: 11, bold: true }); }
+const NPOS = [[180, 80], [300, 160], [255, 290], [105, 290], [60, 160]];
+function drawGraph(h) { const c = getCSS('--text'); G5.adj.forEach((nb, i) => nb.forEach(j => { if (j > i) line([NPOS[i], NPOS[j]], c, 2); })); NPOS.forEach(([x, y], i) => { const v = h ? h[i] : G5.h0[i]; dot(x, y, 20, getCSS('--accent'), c); ctx.save(); ctx.globalAlpha = 1 - Math.min(1, v); ctx.fillStyle = getCSS('--panel'); ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI * 2); ctx.fill(); ctx.restore(); txt(i + 1, x, y + 4, { align: 'center', size: 11, bold: true }); txt(f2(v), x, y + 36, { align: 'center', size: 10, mono: true, bold: true }); if (h) txt('(' + f2(G5.h0[i]) + ')', x, y + 50, { align: 'center', size: 8.5, mono: true, color: getCSS('--muted') }); }); txt(h ? '濃さ = 値。括弧は 1 層前' : '濃さ = 各ノードの値 h₀', CW / 2, 370, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawIsomorphism() { rect(20, 60, 320, 110, getCSS('--upd'), .12); rect(20, 200, 320, 110, getCSS('--accent'), .12); txt('電力方程式（第4回）', 180, 85, { align: 'center', size: 11, bold: true, color: getCSS('--upd') }); txt('P_i = V_i Σ_{j∈N(i)} V_j (G cos θ + B sin θ)', 180, 115, { align: 'center', size: 11, mono: true }); txt('自分 × 隣の和', 180, 145, { align: 'center', size: 11, bold: true }); txt('メッセージパッシング（GNN）', 180, 225, { align: 'center', size: 11, bold: true, color: getCSS('--accent') }); txt("h_i' = σ(W_s h_i + Σ_{j∈N(i)} W_n h_j)", 180, 255, { align: 'center', size: 11, mono: true }); txt('自分 ＋ 隣の和', 180, 285, { align: 'center', size: 11, bold: true }); txt('⇕ 同じ局所構造', 180, 185, { align: 'center', size: 12, bold: true, color: getCSS('--neg') }); txt('順序不変・トポロジー対応・規模への汎化', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawGnnflowCard() { rect(30, 60, 300, 260, getCSS('--panel'), 1); line([[30, 60], [330, 60], [330, 320], [30, 320], [30, 60]], getCSS('--text'), 1.5); txt('⚡ 特別講演', 180, 90, { align: 'center', size: 12, bold: true, color: getCSS('--neg') }); txt('GNN × 潮流計算', 180, 115, { align: 'center', size: 15, bold: true }); ['6 バス系統・DC 潮流を本当に解く', '160 問の教師データ', 'P 再注入 GNN（5 層）ライブ学習 800 反復', '未知ケースの潮流誤差 7%', '過負荷判定一致 98%', '逆潮流（学習範囲外）で誤差が跳ねる'].forEach((s, i) => txt('・' + s, 50, 150 + i * 24, { size: 10 })); txt('process_nn / viz / gnnflow.html', 180, 305, { align: 'center', size: 9.5, mono: true, color: getCSS('--muted') }); txt('外部ページ（別リポジトリ）へのリンク', CW / 2, 345, { align: 'center', size: 9.5, color: getCSS('--muted') }); }
+function drawSEtable() { const rows = [['入力', '指定値 P, Q, V', 'ノイズ付き計測（冗長）'], ['方程式', '未知数と同数', '未知数より多い'], ['解法', '非線形連立（NR）', '重み付き最小二乗'], ['目的', '「こうしたらどうなるか」', '「今どうなっているか」']]; txt('', 30, 60, {}); txt('潮流計算', 150, 62, { align: 'center', size: 10.5, bold: true, color: getCSS('--upd') }); txt('状態推定', 275, 62, { align: 'center', size: 10.5, bold: true, color: getCSS('--accent') }); rows.forEach(([a, b, c], i) => { const y = 100 + i * 60; rect(20, y - 22, 325, 46, getCSS('--panel'), 1); line([[20, y + 24], [345, y + 24]], getCSS('--grid'), 1); txt(a, 30, y + 4, { size: 10.5, bold: true }); txt(b, 150, y + 4, { align: 'center', size: 9.5 }); txt(c, 275, y + 4, { align: 'center', size: 9.5 }); }); txt('AI：反復の高速化・欠損への頑健性・不良データ検出', CW / 2, 345, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawADhist() { if (!AD) runAD(); const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '異常スコア', '件数'); const all = [...AD.en, ...AD.ea]; const mx = Math.max(...all) * 1.05; const nb = 30; const hn = Array(nb).fill(0), ha = Array(nb).fill(0); AD.en.forEach(e => hn[Math.min(nb - 1, Math.floor(e / mx * nb))]++); AD.ea.forEach(e => ha[Math.min(nb - 1, Math.floor(e / mx * nb))]++); const hmax = Math.max(...hn, ...ha, 1); const xOf = k => L + k / nb * (R - L), yOf = v => B - v / hmax * (B - T); for (let k = 0; k < nb; k++) { rect(xOf(k), yOf(hn[k]), (R - L) / nb - 1, B - yOf(hn[k]), getCSS('--accent'), .6); rect(xOf(k), yOf(ha[k]), (R - L) / nb - 1, B - yOf(ha[k]), getCSS('--neg'), .6); } line([[L + AD.thr / mx * (R - L), T], [L + AD.thr / mx * (R - L), B]], getCSS('--text'), 1.5, [4, 3]); txt('閾値 ' + f3(AD.thr), L + AD.thr / mx * (R - L) + 4, T + 12, { size: 10, bold: true }); txt('緑=正常 / 赤=線路開放', L + 8, T + 30, { size: 10 }); }
+function drawADscatter() { if (!AD) runAD(); const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '件', 'スコア'); const mx = Math.max(...AD.en, ...AD.ea) * 1.05; const yOf = v => B - v / mx * (B - T); AD.en.forEach((e, k) => dot(L + k / AD.en.length * (R - L) * .6, yOf(e), 2.5, getCSS('--accent'))); AD.ea.forEach((e, k) => dot(L + (R - L) * .65 + k / AD.ea.length * (R - L) * .35, yOf(e), 2.5, getCSS('--neg'))); line([[L, yOf(AD.thr)], [R, yOf(AD.thr)]], getCSS('--text'), 1.5, [4, 3]); txt('閾値', R - 4, yOf(AD.thr) - 5, { align: 'right', size: 9.5 }); txt('正常', L + (R - L) * .3, B + 14, { align: 'center', size: 10, color: getCSS('--accent'), bold: true }); txt('線路開放', L + (R - L) * .82, B + 14, { align: 'center', size: 10, color: getCSS('--neg'), bold: true }); txt('TPR ' + f1(AD.tpr * 100) + '% / FPR ' + f1(AD.fpr * 100) + '%', CW / 2, 345, { align: 'center', size: 11, mono: true, bold: true }); }
+function drawRLloop() { const c = getCSS('--text'); rect(40, 90, 120, 50, getCSS('--upd'), .2); txt('エージェント', 100, 120, { align: 'center', size: 11, bold: true }); rect(200, 90, 120, 50, getCSS('--warm'), .2); txt('環境', 260, 110, { align: 'center', size: 11, bold: true }); txt('= 潮流計算', 260, 128, { align: 'center', size: 9.5, color: getCSS('--muted') }); line([[160, 105], [200, 105]], c, 2); txt('▶', 196, 109, { size: 10 }); txt('行動 a：Q ±0.125', 180, 95, { align: 'center', size: 9.5, mono: true }); line([[200, 125], [160, 125]], c, 2); txt('◀', 160, 129, { size: 10 }); txt('状態 s, 報酬 r', 180, 150, { align: 'center', size: 9.5, mono: true }); ['s：電圧 5 区分 × 調相 5 区分 = 25', 'a：Q を −0.125 / 0 / +0.125', 'r = −|V−1|·100 − 40·逸脱 − 4|Q|'].forEach((t, i) => txt(t, CW / 2, 200 + i * 26, { align: 'center', size: 10, mono: true })); txt('報酬を設計すれば方策は学習で得られる', CW / 2, 300, { align: 'center', size: 10.5 }); txt('⚠ 実系統で試行錯誤は不可', CW / 2, 335, { align: 'center', size: 11, bold: true, color: getCSS('--neg') }); }
+function drawRLcurve() { if (!QT) trainRL(EP); const L = 50, T = 40, R = 335, B = 230; axes(L, T, R, B, 'エピソード', '累積報酬'); const w = Math.max(10, Math.floor(HIST.length / 30)); const ma = []; for (let i = w; i < HIST.length; i++) { let s = 0; for (let k = i - w; k < i; k++) s += HIST[k]; ma.push([i, s / w]); } if (ma.length) { const mn = Math.min(...ma.map(v => v[1])), mx = Math.max(...ma.map(v => v[1])); const xOf = i => L + i / HIST.length * (R - L), yOf = v => B - (v - mn) / (mx - mn + 1e-9) * (B - T); line(ma.map(([i, v]) => [xOf(i), yOf(v)]), getCSS('--upd'), 2); txt(f0(mn), L - 4, B + 4, { align: 'right', size: 9, mono: true }); txt(f0(mx), L - 4, T + 4, { align: 'right', size: 9, mono: true }); } [0, EP].forEach(e => txt(e, L + e / EP * (R - L), B + 14, { align: 'center', size: 9, mono: true })); const a = evalRL(false), b = evalRL(true); const y0 = 280; rect(70, y0, 100, 22, getCSS('--neg'), .7); rect(200, y0, 100, 22, getCSS('--accent'), .7); txt('無制御 逸脱 ' + f0(a.viol) + '%', 120, y0 + 15, { align: 'center', size: 9.5, color: '#fff', bold: true }); txt('RL 逸脱 ' + f0(b.viol) + '%', 250, y0 + 15, { align: 'center', size: 9.5, color: '#fff', bold: true }); txt('平均 |V−1|：' + f4(a.dev) + ' → ' + f4(b.dev), CW / 2, 330, { align: 'center', size: 10.5, mono: true }); }
+function drawSafety() { const steps = ['① シミュレータで学習', '② 安全層で違反を却下', '③ 過去事故で検証', '④ 推薦モード（人が判断）', '⑤ 限定的な自動化']; steps.forEach((s, i) => { const y = 60 + i * 58; rect(50, y - 18, 260, 40, getCSS(i === 3 ? '--accent' : '--upd'), i === 3 ? .35 : .15); txt(s, 180, y + 6, { align: 'center', size: 11, bold: i === 3 }); if (i < 4) txt('▼', 180, y + 34, { align: 'center', size: 10, color: getCSS('--faint') }); }); txt('sim-to-real ギャップ：最終責任は人間', CW / 2, 360, { align: 'center', size: 10.5, color: getCSS('--neg'), bold: true }); }
+function drawPINN() { const c = getCSS('--text'); rect(40, 80, 120, 50, getCSS('--upd'), .2); txt('ℒ_data', 100, 110, { align: 'center', size: 12, mono: true, bold: true }); txt('データとの誤差', 100, 150, { align: 'center', size: 9.5, color: getCSS('--muted') }); rect(200, 80, 120, 50, getCSS('--accent'), .2); txt('λ·ℒ_physics', 260, 110, { align: 'center', size: 12, mono: true, bold: true }); txt('電力方程式の残差', 260, 150, { align: 'center', size: 9.5, color: getCSS('--muted') }); txt('＋', 180, 112, { align: 'center', size: 18, bold: true }); line([[180, 170], [180, 200]], c, 2); txt('▼', 180, 205, { align: 'center', size: 10 }); rect(100, 215, 160, 44, getCSS('--warm'), .25); txt('ℒ を最小化', 180, 242, { align: 'center', size: 12, bold: true }); ['物理的に妥当な解', '少ないデータで学習可能', '外挿に強い', '残差 = 信頼度の指標'].forEach((s, i) => txt('・' + s, 70, 290 + i * 20, { size: 10 })); }
+function drawTwoStage() { const c = getCSS('--text'); rect(30, 100, 130, 60, getCSS('--accent'), .25); txt('GNN', 95, 125, { align: 'center', size: 13, bold: true }); txt('数千ケース / ms', 95, 145, { align: 'center', size: 9.5, color: getCSS('--muted') }); line([[160, 130], [200, 130]], c, 2.5); txt('▶', 196, 134, { size: 11 }); txt('危険な数十件', 180, 118, { align: 'center', size: 9, color: getCSS('--neg') }); rect(200, 100, 130, 60, getCSS('--upd'), .25); txt('ニュートン法', 265, 125, { align: 'center', size: 13, bold: true }); txt('厳密計算', 265, 145, { align: 'center', size: 9.5, color: getCSS('--muted') }); txt('速さは AI', 95, 200, { align: 'center', size: 11, bold: true, color: getCSS('--accent') }); txt('保証は物理', 265, 200, { align: 'center', size: 11, bold: true, color: getCSS('--upd') }); txt('責任は人間', CW / 2, 260, { align: 'center', size: 13, bold: true, color: getCSS('--neg') }); txt('異常検知：正常のみで学習 ／ RL：安全層＋推薦', CW / 2, 320, { align: 'center', size: 10, color: getCSS('--muted') }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur2 = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur2 ? 'active' : (i < cur2 ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur2 ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; EP = 1500; ROUND = 0; AD = null; QT = null; document.getElementById('epRange').value = 1500; document.getElementById('epVal').textContent = '1500'; goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('epRange').oninput = e => { EP = +e.target.value; document.getElementById('epVal').textContent = EP; if (slideIdx >= 9) trainRL(EP); renderAll(); draw_(); };
+document.getElementById('diceBtn').onclick = () => { ROUND++; AD = null; QT = null; if (slideIdx >= 6 && slideIdx <= 8) runAD(); if (slideIdx >= 9) trainRL(EP); renderAll(); draw_(); };
+goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>

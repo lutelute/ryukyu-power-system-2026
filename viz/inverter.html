@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第9回 インバータと系統連系 — 動くインフォグラフ</title>
+<style>
+  /* =========================================================================
+     このページのレイアウト（＝骨格の寸法）。配色と書体は theme.css が後から上書きする。
+     ここは原則そのままコピーして使う。触るのは canvas の高さくらい。
+     ========================================================================= */
+  :root{
+    --bg:#faf8f1; --panel:#ffffff; --panel-2:#fffdf6; --line:#dcd8cc; --grid:#e7e3d8;
+    --text:#1a1a17; --muted:#52504a; --faint:#928f84;
+    --accent:#1f9e8a; --warm:#b3812f; --neg:#cf4f5f; --loss:#c2891b; --upd:#6f54c4;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,serif;
+    --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--gothic);-webkit-font-smoothing:antialiased;line-height:1.6;}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 50px;}
+  .nav{font-size:12.5px;margin-bottom:16px;line-height:1.9;}
+  h1{font-family:var(--mincho);font-weight:600;font-size:25px;margin:0 0 5px;letter-spacing:.02em;}
+  .lead{color:var(--muted);font-size:13.5px;max-width:760px;margin-bottom:18px;}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .stepper{display:flex;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .stp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;cursor:pointer;position:relative;border-right:1px solid var(--line);transition:.18s;}
+  .stp:last-child{border-right:none;}
+  .stp .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;background:#fff;color:var(--faint);border:1px solid var(--line);transition:.18s;}
+  .stp .t{font-size:12px;color:var(--faint);transition:.18s;}
+  .stp.done .n{background:#e4f4ef;color:var(--accent);border-color:var(--accent);} .stp.done .t{color:var(--muted);}
+  .stp.active{background:var(--panel);}
+  .stp.active .n{background:var(--c);color:#fff;border-color:var(--c);font-weight:700;}
+  .stp.active .t{color:var(--text);font-weight:600;}
+  .stp.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--c);}
+  .body{display:grid;grid-template-columns:1fr 1fr;}
+  .vis{padding:16px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;}
+  canvas{display:block;width:100%;max-width:360px;height:auto;border-radius:10px;background:var(--panel-2);}
+  .mini{display:flex;gap:18px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;align-self:flex-start;}
+  .mini b{color:var(--text);font-weight:600;}
+  .legend{font-size:11.5px;color:var(--faint);margin-top:6px;align-self:flex-start;}
+  .explain{padding:18px 18px 16px;}
+  .explain .lbl{display:inline-block;font-size:11px;font-family:var(--mono);letter-spacing:.08em;color:var(--c,var(--accent));border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin-bottom:10px;}
+  .explain h3{font-family:var(--mincho);font-size:17px;margin:0 0 8px;}
+  .eq{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.9;}
+  .eq.curr{border-color:var(--c);}
+  .desc{font-size:13px;color:var(--muted);} .desc b{color:var(--text);}
+  .bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid var(--line);background:var(--panel-2);flex-wrap:wrap;}
+  button{font-family:var(--gothic);font-size:13.5px;border-radius:9px;padding:9px 15px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer;transition:.15s;}
+  button:hover:not(:disabled){border-color:var(--faint);} button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .bar .spacer{flex:1;}
+  .bar label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;}
+  input[type=range]{accent-color:var(--accent);cursor:pointer;width:90px;}
+  select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--gothic);font-size:13px;cursor:pointer;}
+  details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;}
+  summary{padding:13px 16px;cursor:pointer;font-size:13.5px;color:var(--muted);} summary:hover{color:var(--text);}
+  .det{padding:0 16px 16px;font-size:13px;color:var(--muted);}
+  @media(max-width:760px){.body{grid-template-columns:1fr;}.vis{border-right:none;border-bottom:1px solid var(--line);}.stp .t{display:none;}}
+.xlinks{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 14px}.xlinks a{font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 11px;color:var(--ink-2,#52504a);background:var(--panel)}.xlinks a.n{border-color:var(--ink,#1a1a17);color:var(--ink,#1a1a17);font-weight:600}.xlinks a.e{border-color:var(--warm);color:var(--warm);font-weight:600}.xlinks a:hover{filter:brightness(.9)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="nav"></div>
+  <h1>第9回 インバータと系統連系 — 問題の原因は、制御次第で解決策になる</h1>
+  <div class="xlinks"><a class="n" href="../notes/ch09.html">📖 講義ノート（第9回）</a><a class="e" href="../ex/ch09.html">✍ 演習で確かめる</a></div>
+  <div class="lead">太陽光・風力・蓄電池はすべて<b>インバータ</b>で系統につながります。第7・8回で見た「慣性がない」「電圧を上げる」はインバータの制御方式の帰結で、<b>制御を変えれば同じ機器が慣性も電圧も支えられます</b>。このページでは PWM 波形の生成と高調波分析、合成慣性の周波数シミュレーションをすべてブラウザ内で実計算します。前提は<a href="freq.html">第8回</a>、次は<a href="weather.html">第10回 気象</a>です。</div>
+  <div class="purpose">
+    <div class="prow"><span class="pq">なぜ学ぶ?</span><span>「再エネは系統を不安定にする」で止まると対策が見えません。不安定にしているのは電源ではなく制御方式で、それは変えられます。</span></div>
+    <div class="prow"><span class="pq">一言で言うと</span><span>スイッチの点滅幅で正弦波を作り、電圧と位相を自在に決められる。だから P も Q も慣性も「ソフトウェアで」出せる。</span></div>
+    <div class="prow"><span class="pq">どこで使われる?</span><span>太陽光パワーコンディショナ（PCS）、蓄電池 PCS、風車の可変速制御、HVDC 変換所、STATCOM。</span></div>
+  </div>
+  <div class="stage">
+    <div class="stepper" id="stepper"></div>
+    <div class="body">
+      <div class="vis"><canvas id="cv" width="360" height="430"></canvas><div class="mini" id="mini"></div><div class="legend" id="legend"></div></div>
+      <div class="explain" id="explain"></div>
+    </div>
+    <div class="bar">
+      <button id="prevBtn">◀ 前へ</button><button class="primary" id="nextBtn">次へ ▶</button><button id="autoBtn">⏵ 自動</button><button id="resetBtn">↻ 最初から</button>
+      <span class="spacer"></span>
+      <label>m<sub>a</sub> <input type="range" id="maRange" min="0.1" max="1.5" step="0.05" value="0.9"> <span id="maVal">0.90</span></label>
+      <label>m<sub>f</sub> <select id="mfSel"><option value="15" selected>15</option><option value="21">21</option><option value="63">63</option></select></label>
+      <label>H<sub>v</sub> <input type="range" id="hvRange" min="0" max="4" step="0.5" value="2"> <span id="hvVal">2.0</span></label>
+      <label>K<sub>v</sub> <input type="range" id="kvRange" min="0" max="150" step="10" value="80"> <span id="kvVal">80</span></label>
+    </div>
+  </div>
+  <div class="aha"><div class="aha-h">💡 見方が変わる一文</div><p>同期発電機の慣性は<b>物理法則として瞬時に</b>効きますが、合成慣性は「測ってから」応答します — この遅れの有無が、<b>本物と模造品の境目</b>です。</p></div>
+  <div class="myth"><div class="myth-h">⚠ よくある誤解</div>
+    <div class="row"><span class="x">✗</span>合成慣性を入れれば、再エネ 100% でも同期発電機と同じ安定性が得られる。</div>
+    <div class="row"><span class="o">✓</span>合成慣性は df/dt を<b>測定してから</b>出力するので数十〜数百 ms 遅れます。さらに直流側にエネルギー余裕（蓄電池）がないと出せません。太陽光単体は最大出力点で運転しているため、慣性を出すには<b>あらかじめ出力を絞る</b>必要があります。</div>
+    <div class="row"><span class="x">✗</span>スイッチング周波数は高いほど良い。</div>
+    <div class="row"><span class="o">✓</span>高調波は高い次数に移ってフィルタは小さくて済みますが、<b>スイッチング損失が周波数に比例して増えます</b>。大容量機は 1〜4 kHz、住宅用は 10〜20 kHz と用途で使い分けます。</div>
+  </div>
+  <details><summary>もっと詳しく：PWM の理論値・dq 変換・単独運転検出</summary><div class="det">
+    線形領域（<i>m<sub>a</sub></i> ≤ 1）の三相線間電圧基本波実効値は <i>V</i><sub>LL,1</sub> = (√3/2√2)<i>m<sub>a</sub>V</i><sub>dc</sub> = 0.612 <i>m<sub>a</sub>V</i><sub>dc</sub>。方形波（1 パルス）運転の極限では (√6/π)<i>V</i><sub>dc</sub> = 0.78 <i>V</i><sub>dc</sub>。<i>m<sub>f</sub></i> を 3 の奇数倍にすると線間電圧で第 3 調波とその倍数が相殺されます。
+    dq 変換（Park 変換）は系統電圧の位相に同期して回転する座標系で三相を見るもので、平衡三相の正弦波が直流量になります。<i>d</i> 軸を電圧に合わせると <i>P</i> = (3/2)<i>v<sub>d</sub>i<sub>d</sub></i>、<i>Q</i> = −(3/2)<i>v<sub>d</sub>i<sub>q</sub></i> で独立制御できます。位相は PLL で検出しますが、短絡容量の小さい弱系統では PLL 自体が不安定要因になります。
+    単独運転検出は受動的方式（位相跳躍・RoCoF・3 次高調波）と能動的方式（無効電力変動・周波数シフト）を併用します。「系統が消えたら止まれ」という単独運転検出と「系統を作れ」というグリッドフォーミングは思想が正面衝突し、マイクログリッドの規程整備が進んでいます。
+    <b>限界：</b>このページの PWM は理想スイッチ・デッドタイムなし。合成慣性のシミュレーションは集中定数の周波数モデルで、電圧・位相のダイナミクスは含みません。
+  </div></details>
+</div>
+<script>
+"use strict";
+let seed = 314; const rng = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+/* ---- PWM（実計算） ---- */
+let MA = 0.9, MF = 15, HV = 2.0, KV = 80; const VDC = 2.0;   // レグ電圧 ±Vdc/2 = ±1
+function pwm(ma, mf, N = 3072) { const va = [], vab = []; for (let k = 0; k < N; k++) { const t = k / N; const car = 2 * Math.abs(2 * ((t * mf) % 1) - 1) - 1; const ra = ma * Math.sin(2 * Math.PI * t), rb = ma * Math.sin(2 * Math.PI * t - 2 * Math.PI / 3); const a = ra > car ? 1 : -1, b = rb > car ? 1 : -1; va.push(a); vab.push(a - b); } return { va, vab }; }
+function spectrum(sig, nh = 90) { const N = sig.length, amps = [0]; for (let n = 1; n <= nh; n++) { let re = 0, im = 0; for (let k = 0; k < N; k++) { const ph = 2 * Math.PI * n * k / N; re += sig[k] * Math.cos(ph); im -= sig[k] * Math.sin(ph); } amps.push(2 / N * Math.hypot(re, im)); } return amps; }
+function thd(amps) { let s = 0; for (let n = 2; n < amps.length; n++) s += amps[n] ** 2; return Math.sqrt(s) / amps[1] * 100; }
+let CACHE = {}; function analyze(ma, mf) { const key = ma.toFixed(2) + '_' + mf; if (!CACHE[key]) { const w = pwm(ma, mf); const amps = spectrum(w.vab); CACHE[key] = { w, amps, thd: thd(amps), v1rms: amps[1] / Math.SQRT2 / VDC }; } return CACHE[key]; }
+const vllTheory = ma => Math.min(0.612 * ma, Math.sqrt(6) / Math.PI);
+/* ---- dq 変換 ---- */
+function dq(theta, amp = [1, 1, 1]) { const va = amp[0] * Math.cos(theta), vb = amp[1] * Math.cos(theta - 2 * Math.PI / 3), vc = amp[2] * Math.cos(theta + 2 * Math.PI / 3); const al = (2 * va - vb - vc) / 3, be = (vb - vc) / Math.sqrt(3); return { d: al * Math.cos(theta) + be * Math.sin(theta), q: -al * Math.sin(theta) + be * Math.cos(theta) }; }
+function dqStats(amp) { let dmin = 9, dmax = -9, qmin = 9, qmax = -9; for (let k = 0; k < 360; k++) { const r = dq(k * Math.PI / 180, amp); dmin = Math.min(dmin, r.d); dmax = Math.max(dmax, r.d); qmin = Math.min(qmin, r.q); qmax = Math.max(qmax, r.q); } return { dmin, dmax, qmin, qmax }; }
+/* ---- 合成慣性シミュレーション（第8回の続き） ---- */
+const FN = 60, S = 1500, DP = 250, KG = 90, KL = 30, TG = 8, HLOW = 2.0, TMEAS = 0.15;
+function simSI(Hv, Kv) { const dt = 0.02, T = 60; let y = [0, 0, 0]; const t = [], F = []; let nadir = 0;
+  const f = (tt, s) => { const [dF, Pg, dFf] = s; const Psi = -2 * Hv * S / FN * dFf, Pdr = -Kv * dF; const Pnet = -DP + Pg + Psi + Pdr - KL * dF; const ddF = FN * Pnet / (2 * HLOW * S); return [ddF, (-KG * dF - Pg) / TG, (ddF - dFf) / TMEAS]; };
+  for (let tt = 0, k = 0; tt <= T; tt += dt, k++) { if (k % 3 === 0) { t.push(tt); F.push(FN + y[0]); } nadir = Math.min(nadir, y[0]); const k1 = f(tt, y), k2 = f(tt + dt / 2, y.map((v, i) => v + dt / 2 * k1[i])), k3 = f(tt + dt / 2, y.map((v, i) => v + dt / 2 * k2[i])), k4 = f(tt + dt, y.map((v, i) => v + dt * k3[i])); y = y.map((v, i) => v + dt / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])); }
+  return { t, F, nadir: FN + nadir, ss: FN + y[0] }; }
+/* ---- Volt-Var（第6回の 2 母線モデル・配電線） ---- */
+const RL = 0.10, XL = 0.10; function vr2(P, Q) { const a = RL * P + XL * Q, b = RL * Q - XL * P; const B2 = 2 * a - 1, C = a * a + b * b, disc = B2 * B2 - 4 * C; if (disc < 0) return null; return Math.sqrt((-B2 + Math.sqrt(disc)) / 2); }
+function vrMode(Ppv, mode) { if (mode === 0) return vr2(-Ppv, 0); if (mode === 1) return vr2(-Ppv, Ppv * Math.tan(Math.acos(.95))); let v = 1.0; for (let k = 0; k < 40; k++) { const q = Ppv * 0.48 * Math.max(0, Math.min(1, (v - 1.02) / 0.04)); const nv = vr2(-Ppv, q); if (nv === null) return null; v = nv; } return v; }
+function hostMode(mode) { for (let p = 0; p <= 3; p += .005) { const v = vrMode(p, mode); if (v === null || v > 1.05) return Math.max(0, p - .005); } return 3; }
+const f1 = x => x.toFixed(1), f2 = x => x.toFixed(2), f3 = x => x.toFixed(3);
+
+const CHAPTERS = [ { t: 'Ⅰ 問題', c: 'var(--neg)', start: 0 }, { t: 'Ⅱ PWM', c: 'var(--upd)', start: 2 }, { t: 'Ⅲ 制御', c: 'var(--loss)', start: 6 }, { t: 'Ⅳ 解決策', c: 'var(--accent)', start: 10 } ];
+const SLIDES = [
+  { legend: '第6〜8回で見た 3 つの問題。すべてインバータの制御方式に由来する',
+    html() { return '<h3>問題：再エネの「3 つの困りごと」は全部インバータの話だった</h3><div class="eq curr">慣性なし（<i>H</i>=0）　／　ガバナなし（<i>K<sub>G</sub></i> に寄与しない）　／　力率 1 固定で逆潮流 → 電圧上昇<span class="read">読み：第7回 t_cr∝√H、第8回 ΔF=ΔP/K、第6回 ρ≈1。どれも「インバータがそう制御されている」ことの帰結。</span></div><div class="desc">太陽光は回転体を持たず、力率 1 で「電力を注ぐだけ」の制御をしています。それは<b>そう設計したから</b>であって、物理的な宿命ではありません。この回はまずインバータの中身（PWM）を見てから、制御を変えることで 3 つの問題が緩和されることを、第6・8回と同じ数値モデルで確かめます。</div>'; },
+    draw() { drawProblems(); caption('原因 = 制御方式。制御は変えられる'); } },
+  { legend: 'インバータ：直流を交流に変える。系統でインバータが要る 5 つの場面',
+    html() { return '<h3>インバータとは：DC → AC の変換装置</h3><div class="eq curr">順変換（AC→DC）＝コンバータ・整流器　／　逆変換（DC→AC）＝<b>インバータ</b><span class="read">読み：太陽光と蓄電池は直流、風車は周波数が風で変わる。どれも一度直流にして、系統周波数の交流に「作り直す」必要がある。</span></div><div class="desc">太陽光 PCS、蓄電池 PCS、可変速風車、HVDC の受電端、STATCOM — 系統の新しい設備はほぼすべてインバータです。中身は<b>オン・オフしかできない半導体スイッチ</b>（IGBT など）。それでどうやって滑らかな正弦波を作るのか、が次の章です。</div>'; },
+    draw() { drawUses(); caption('新しい設備はほぼ全部インバータ'); } },
+
+  { legend: '上：変調波（正弦波）と搬送波（三角波）の比較。下：出力パルス（幅が正弦波状に変わる）',
+    mini: () => '<div>m<sub>a</sub> <b>' + f2(MA) + '</b></div><div>m<sub>f</sub> <b>' + MF + '</b></div>',
+    html() { return '<h3>PWM：三角波と正弦波を比べるだけで、正弦波ができる</h3><div class="eq curr">変調波 <i>m<sub>a</sub></i> sin ω<i>t</i> ＞ 搬送波（三角波） なら ON、そうでなければ OFF<span class="read">読み：正弦波が三角波より高い時間だけスイッチを入れる。ON の時間幅が正弦波状に変化するので、平均すれば正弦波になる。</span></div><div class="desc">図の上段で 2 つの波を比べ、下段がその結果のパルス列です。<b>パルスの幅が正弦波の高さに比例して変わる</b>ことが見えます。<i>m<sub>a</sub></i>（振幅変調率）で出力電圧の大きさ、変調波の位相で出力の位相が決まります。第3回の式に照らせば、<b>P と Q を独立に作れる</b>ということです。</div>'; },
+    draw() { drawPWMwave(); caption('幅を変える = 平均を正弦波にする'); } },
+  { legend: '横軸=m_a。曲線=理論 0.612·m_a·Vdc、●=このページで DFT した実測値',
+    mini: () => { const a = analyze(MA, MF); return '<div>実測 V₁/V<sub>dc</sub> <b>' + f3(a.v1rms) + '</b></div><div>理論 <b>' + f3(vllTheory(MA)) + '</b></div>'; },
+    html() { const a = analyze(MA, MF); return '<h3>変調率 m<sub>a</sub> で出力電圧が決まる（実測 vs 理論）</h3><div class="eq curr"><i>V</i><sub>LL,1</sub> = 0.612 <i>m<sub>a</sub> V</i><sub>dc</sub>　→　<i>m<sub>a</sub></i> = ' + f2(MA) + '：理論 <b class="res">' + f3(vllTheory(MA)) + '</b>,　DFT 実測 <b class="res">' + f3(a.v1rms) + '</b>（<i>V</i><sub>dc</sub> 基準）<span class="read">読み：生成したパルス列を離散フーリエ変換して基本波（60 Hz 成分）を取り出した値。線形領域では理論式と一致する。</span></div><div class="desc"><i>m<sub>a</sub></i> スライダを動かしてください。1.0 までは実測が理論の直線に乗り、<b>1.0 を超えると（過変調）頭打ち</b>になります。系統電圧 200 V に連系するには 0.612 × <i>V</i><sub>dc</sub> ≥ 200 → <i>V</i><sub>dc</sub> ≥ 327 V。太陽光の直流電圧が数百 V に設計される理由です。</div>'; },
+    draw() { drawModCurve(); caption('m_a ≤ 1 は直線、超えると飽和'); } },
+  { legend: 'A/B：m_f=15（左）vs 63（右）の高調波スペクトル。THD は実測',
+    mini: () => '<div>m<sub>f</sub>=15 THD <b>' + f1(analyze(MA, 15).thd) + '%</b></div><div>m<sub>f</sub>=63 THD <b>' + f1(analyze(MA, 63).thd) + '%</b></div>',
+    html() { const a = analyze(MA, 15), b = analyze(MA, 63); return '<h3>A/B：m<sub>f</sub> を上げると高調波が「遠く」へ移る</h3><div class="eq curr">THD = √(Σ<sub>n≥2</sub><i>V<sub>n</sub></i>²) / <i>V</i><sub>1</sub>　→　<i>m<sub>f</sub></i>=15：<b class="res">' + f1(a.thd) + '%</b>　／　<i>m<sub>f</sub></i>=63：<b class="res">' + f1(b.thd) + '%</b>（<i>m<sub>a</sub></i>=' + f2(MA) + '）<span class="read">読み：全高調波歪率。フィルタ前の値なのでどちらも大きいが、m_f が大きいと高調波が高次（m_f の周辺）に集まる。</span></div><div class="desc">スペクトルを見ると、高調波は<b><i>m<sub>f</sub></i> とその整数倍の周辺</b>に固まっています。<i>m<sub>f</sub></i> = 63 なら 3.8 kHz 付近なので小さな LC フィルタで落とせます。代わりにスイッチング回数が 4 倍になり損失が増える。これがトレードオフです。<i>m<sub>f</sub></i> を 3 の奇数倍（15, 21, 63）に選ぶと線間電圧で第 3 調波が相殺されます。</div>'; },
+    draw() { drawSpectrumAB(); caption('高調波は m_f の周りに集まる → 高いほどフィルタが楽'); } },
+  { legend: '過変調：m_a>1 で基本波は伸びるが、低次高調波が急増する',
+    mini: () => { const a = analyze(MA, MF); return '<div>THD <b>' + f1(a.thd) + '%</b></div><div>V₁/V<sub>dc</sub> <b>' + f3(a.v1rms) + '</b></div>'; },
+    html() { const a = analyze(Math.max(MA, 1.3), MF), b = analyze(0.9, MF); return '<h3>過変調：出力を稼ぐと歪みが増える</h3><div class="eq curr">方形波の極限：<i>V</i><sub>LL,1</sub> = (√6/π) <i>V</i><sub>dc</sub> = 0.78 <i>V</i><sub>dc</sub>　　<i>m<sub>a</sub></i>=0.9：THD ' + f1(b.thd) + '% → <i>m<sub>a</sub></i>=1.3：THD <b class="res">' + f1(a.thd) + '%</b><span class="read">読み：m_a を 1 より大きくすると基本波はなお少し増えるが、5 次・7 次などの低次高調波が出てフィルタで落とせなくなる。</span></div><div class="desc">通常運転は <i>m<sub>a</sub></i> ≤ 1 の線形領域に収めます。過変調は直流電圧が足りないときの非常手段で、第1回で述べた電力品質（高圧で歪率 5% 以下）を守るには避けたい領域です。</div>'; },
+    draw() { drawOvermod(); caption('m_a>1：稼げるが汚れる'); } },
+
+  { legend: '上：三相の正弦波（abc）。下：dq 変換後（平衡なら直流の水平線）',
+    mini: () => { const s = dqStats([1, 1, 1]); return '<div>v<sub>d</sub> <b>' + f3(s.dmin) + '〜' + f3(s.dmax) + '</b></div><div>v<sub>q</sub> <b>' + f3(s.qmin) + '〜' + f3(s.qmax) + '</b></div>'; },
+    html() { const s = dqStats([1, 1, 1]), u = dqStats([1, .8, 1]); return '<h3>dq 変換：回転する座標から見れば、交流は直流になる</h3><div class="eq curr">abc → αβ（Clarke）→ dq（Park）　平衡三相：<i>v<sub>d</sub></i> = <b class="res">' + f3(s.dmax) + '</b>（一定）,　<i>v<sub>q</sub></i> = <b class="res">' + f3(s.qmax) + '</b><span class="read">読み：系統周波数で回る座標系に乗ると、正弦波は止まって見える。直流量なら PI 制御で定常偏差なく追従できる。</span></div><div class="desc"><i>d</i> 軸を電圧に合わせると <i>P</i> = (3/2)<i>v<sub>d</sub>i<sub>d</sub></i>、<i>Q</i> = −(3/2)<i>v<sub>d</sub>i<sub>q</sub></i>。<b><i>i<sub>d</sub></i> で有効電力、<i>i<sub>q</sub></i> で無効電力を独立に制御</b>できます。不平衡（1 相が 0.8 倍）にすると <i>v<sub>q</sub></i> が ±' + f3(Math.max(Math.abs(u.qmin), u.qmax)) + ' で脈動し、直流でなくなります。これが不平衡時に制御が難しくなる理由です。</div>'; },
+    draw() { drawDQ(); caption('回転座標 = 交流を「止めて」見る'); } },
+  { legend: 'PLL：系統電圧の位相を追いかける。弱い系統では自分の出力が電圧を動かし不安定に',
+    html() { return '<h3>PLL：位相を知らないと dq 変換できない</h3><div class="eq curr">v<sub>q</sub> → PI → Δω → ∫ → θ　（<i>v<sub>q</sub></i> = 0 になるよう回転速度を調整）<span class="read">読み：dq 変換した q 成分がゼロなら座標が電圧に同期している。ずれをフィードバックして位相を追従させる回路。</span></div><div class="desc">グリッドフォロイング（追従型）インバータは PLL が命綱です。ところが短絡容量の小さい<b>弱系統</b>（第6回）では、インバータ自身の出力電流で系統電圧の位相が動き、PLL が追いかける対象を自分で揺らす悪循環が起きます。再エネ比率が高い系統でこの問題が顕在化しています。</div>'; },
+    draw() { drawPLL(); caption('追従型の弱点：基準を自分で揺らしてしまう'); } },
+  { legend: 'グリッドフォロイング（電流源・追従）vs グリッドフォーミング（電圧源・自ら作る）',
+    html() { return '<h3>フォロイング vs フォーミング：追う側か、作る側か</h3><div class="eq curr">フォロイング：電流源・PLL で追従・単独運転不可・慣性なし　／　フォーミング：電圧源・自ら基準を作る・慣性を模擬できる<span class="read">読み：現在の太陽光 PCS はほぼ全部フォロイング。同期発電機が減ると「基準を作る主体」が足りなくなる。</span></div><div class="desc">全員が追従者では誰も基準を出せません。<b>グリッドフォーミング</b>は電圧源として振る舞い、内部で第7回の動揺方程式をソフトウェアで解く（仮想同期発電機 VSG）方式が代表です。<i>H</i><sub>virtual</sub> は設定値なので、物理的な回転体なしに慣性を持たせられます — ただし直流側にエネルギーの裏付け（蓄電池）が要ります。</div>'; },
+    draw() { drawGFL(); caption('同期機が減るなら、インバータが同期機の役を担う'); } },
+  { legend: '単独運転：系統が停電しても分散電源が供給を続けてしまう状態',
+    html() { return '<h3>単独運転検出：「系統が消えたら止まれ」</h3><div class="eq curr">受動的（位相跳躍・RoCoF・3 次高調波）＋能動的（Q 変動・周波数シフト）を併用<span class="read">読み：受動は系統を乱さないが不感帯がある。能動はわざと揺さぶって応答を見るが多数台で干渉する。</span></div><div class="desc">感電・機器損傷・再閉路時の位相ずれ事故を防ぐため、系統連系規程は単独運転の速やかな検出と解列を求めます。<b>ここに思想の対立があります</b>：フォーミング型は「系統を作る」のが役目で、マイクログリッドの計画的な単独運転と正面から衝突します。規程の見直しが進行中の論点です。</div>'; },
+    draw() { drawIslanding(); caption('止まれ vs 作れ — 規程の最前線'); } },
+
+  { legend: 'A/B：太陽光の逆潮流（配電線）。力率 1 ／ 0.95 進み ／ Volt-Var（電圧が高いときだけ Q 吸収）',
+    mini: () => '<div>力率1 <b>' + f3(hostMode(0)) + '</b></div><div>0.95 <b>' + f3(hostMode(1)) + '</b></div><div>Volt-Var <b>' + f3(hostMode(2)) + '</b></div>',
+    html() { const h0 = hostMode(0), h1 = hostMode(1), h2 = hostMode(2); return '<h3>解決策①（電圧）：Volt-Var 制御で連系可能量 ' + (h2 / h0).toFixed(2) + ' 倍</h3><div class="eq curr">Q(V)：V ≤ 1.02 → 0，V ≥ 1.06 → 最大吸収　　連系可能量（V ≤ 1.05）：力率 1 <b class="res">' + f3(h0) + '</b>　0.95 進み <b class="res">' + f3(h1) + '</b>　Volt-Var <b class="res">' + f3(h2) + '</b><span class="read">読み：第6回の 2 母線モデル（配電線 R=X=0.1）。Volt-Var は自端電圧を見て必要な分だけ Q を吸う。常時 0.95 より損失が少ない。</span></div><div class="desc">第6回の VQC をインバータ自身が分散して行うのが Volt-Var です。<b>設備を増やさず制御だけで連系可能量が伸びる</b>。優先順位は Volt-Var → 力率一定 → 有効電力抑制（最終手段）です。</div>'; },
+    draw() { drawVoltVar(); caption('電圧が高いときだけ Q を吸う → 損失を抑えて連系量を稼ぐ'); } },
+  { legend: 'A/B：合成慣性 なし（赤）／ H_v（緑）。H_sys=2.0 s の低慣性系統に 250 MW 脱落',
+    mini: () => { const a = simSI(0, 0), b = simSI(HV, 0); return '<div>なし nadir <b>' + f2(a.nadir) + '</b></div><div>H<sub>v</sub>=' + f1(HV) + ' <b>' + f2(b.nadir) + '</b></div>'; },
+    html() { const a = simSI(0, 0), b = simSI(HV, 0); return '<h3>解決策②（周波数）：合成慣性は「落ち方」を緩める</h3><div class="eq curr">Δ<i>P</i><sub>SI</sub> = −2<i>H</i><sub>v</sub><i>S</i>/<i>F<sub>N</sub></i> · d<i>F</i>/d<i>t</i>　→　nadir：なし <b class="res">' + f2(a.nadir) + '</b> Hz　／　<i>H</i><sub>v</sub>=' + f1(HV) + ' <b class="res">' + f2(b.nadir) + '</b> Hz　定常はどちらも ' + f2(a.ss) + ' Hz<span class="read">読み：周波数変化率を測って比例した電力を出す。初期の急落（RoCoF）は緩むが、df/dt が 0 になれば出力も 0 なので定常偏差は改善しない。</span></div><div class="desc"><i>H</i><sub>v</sub> スライダを上げると最低点が浅くなりますが、<b>60 秒後の定常値は変わりません</b>。第8回の H と K の役割の違いそのものです。測定遅れ 150 ms を入れてあり、本物の慣性より効きが鈍い点も再現しています。</div>'; },
+    draw() { drawSIab(); caption('慣性は「速さ」を、ガバナは「深さ」を直す'); } },
+  { legend: '4 ケース：なし／合成慣性のみ／疑似ガバナのみ／両方。両方で nadir と定常の両方が改善',
+    mini: () => { const d = simSI(HV, KV); return '<div>両方 nadir <b>' + f2(d.nadir) + '</b></div><div>定常 <b>' + f2(d.ss) + '</b></div>'; },
+    html() { const a = simSI(0, 0), b = simSI(HV, 0), c = simSI(0, KV), d = simSI(HV, KV); return '<h3>合成慣性＋疑似ガバナ：両方あって初めて速さも深さも直る</h3><div class="eq curr">Δ<i>P</i><sub>droop</sub> = −<i>K</i><sub>v</sub>Δ<i>F</i>　→　nadir/定常：なし ' + f2(a.nadir) + '/' + f2(a.ss) + '　慣性のみ ' + f2(b.nadir) + '/' + f2(b.ss) + '　ガバナのみ ' + f2(c.nadir) + '/' + f2(c.ss) + '　両方 <b class="res">' + f2(d.nadir) + '/' + f2(d.ss) + '</b><span class="read">読み：疑似ガバナは周波数偏差に比例して出力するので定常偏差を減らす。合成慣性は初期の傾きを緩める。役割が違うので両方要る。</span></div><div class="desc">蓄電池 PCS にこの 2 つを持たせるのが現実解です。<b>合成慣性は df/dt の測定遅れがあり真の慣性とは等価でない</b>こと、直流側に余裕がなければ出せないことが限界です。グリッドフォーミング制御なら電圧源として遅れなく応答でき、これが次世代の本命です。</div>'; },
+    draw() { drawSI4(); caption('速さ（H_v）＋深さ（K_v）の 2 本立て'); } },
+  { legend: '第6・7・8回の 3 つの問題と、この回の 3 つの解決策の対応',
+    html() { return '<h3>まとめ：原因だった機器が、制御を変えると解決策になる</h3><div class="eq curr">電圧上昇 → Volt-Var　／　慣性ゼロ → 合成慣性・グリッドフォーミング　／　ガバナなし → 疑似ガバナ（droop）<span class="read">読み：3 つの問題にそれぞれ制御的な解がある。共通の代償は「直流側のエネルギー余裕（蓄電池）」と「測定遅れ」。</span></div><div class="desc">PWM で電圧と位相を自在に作れる → dq 変換で P と Q を独立制御できる → だから慣性も無効電力もソフトウェアで出せる。ここまでで系統の物理と制御は一通り扱いました。しかし再エネには<b>出力を自分で決められない</b>というもう 1 つの性質があります。次回から 3 回、<b>予測</b>を扱います（第10回 気象）。</div>'; },
+    draw() { drawSummaryMap(); caption('物理と制御は揃った。次は「予測」'); } },
+];
+
+/* ---- 描画 ---- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d'); const CW = cv.width, CH = cv.height;
+const getCSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888';
+const FONT = '"Hiragino Sans","Noto Sans JP",sans-serif';
+function drawGridBg() { ctx.save(); ctx.strokeStyle = getCSS('--grid'); ctx.lineWidth = 1; for (let x = 0; x <= CW; x += 30) { ctx.beginPath(); ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, CH); ctx.stroke(); } for (let y = 0; y <= CH; y += 30) { ctx.beginPath(); ctx.moveTo(0, y + .5); ctx.lineTo(CW, y + .5); ctx.stroke(); } ctx.restore(); }
+function caption(t) { ctx.save(); ctx.font = '11px ui-monospace,monospace'; ctx.fillStyle = getCSS('--muted'); ctx.textAlign = 'center'; ctx.fillText(t, CW / 2, CH - 8); ctx.restore(); }
+function txt(s, x, y, o = {}) { ctx.save(); ctx.font = (o.bold ? 'bold ' : '') + (o.size || 11) + 'px ' + (o.mono ? 'ui-monospace,monospace' : FONT); ctx.fillStyle = o.color || getCSS('--text'); ctx.textAlign = o.align || 'left'; ctx.fillText(s, x, y); ctx.restore(); }
+function line(pts, color, w = 2, dash) { ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore(); }
+function rect(x, y, w, h, color, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); ctx.restore(); }
+function dot(x, y, r, color, stroke) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } ctx.restore(); }
+function axes(L, T, R, B, xl, yl) { line([[L, T], [L, B], [R, B]], getCSS('--faint'), 1); if (xl) txt(xl, R, B + 14, { align: 'right', color: getCSS('--muted'), size: 10 }); if (yl) txt(yl, L, T - 6, { color: getCSS('--muted'), size: 10 }); }
+function drawProblems() { const rows = [['第6回', '逆潮流で電圧上昇', '力率 1 固定（Q=0）', '--neg'], ['第7回', 't_cr ∝ √H が縮む', 'H = 0（回転体なし）', '--neg'], ['第8回', 'ΔF=ΔP/K が深い', 'ガバナに寄与しない', '--neg']]; rows.forEach(([a, b, c, col], i) => { const y = 80 + i * 80; rect(20, y - 25, 320, 60, getCSS(col), .12); txt(a, 40, y, { size: 11, bold: true, color: getCSS(col) }); txt(b, 100, y - 4, { size: 11, bold: true }); txt('原因：' + c, 100, y + 16, { size: 10, color: getCSS('--muted') }); }); txt('すべて「そう制御しているから」', CW / 2, 340, { align: 'center', size: 11.5, bold: true, color: getCSS('--accent') }); }
+function drawUses() { const items = ['太陽光 PCS', '蓄電池 PCS', '可変速風車', 'HVDC 受電端', 'STATCOM']; const cx = 180, cy = 190; rect(cx - 45, cy - 22, 90, 44, getCSS('--upd'), .8); txt('DC → AC', cx, cy + 5, { align: 'center', size: 12, bold: true, color: '#fff' }); items.forEach((s, i) => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5, x = cx + 125 * Math.cos(a), y = cy + 110 * Math.sin(a); line([[cx, cy], [x, y]], getCSS('--faint'), 1); rect(x - 42, y - 14, 84, 28, getCSS('--panel'), 1); line([[x - 42, y - 14], [x + 42, y - 14], [x + 42, y + 14], [x - 42, y + 14], [x - 42, y - 14]], getCSS('--text'), 1); txt(s, x, y + 4, { align: 'center', size: 9.5 }); }); }
+function drawPWMwave() { const a = analyze(MA, MF); const N = a.w.va.length; const L = 20, R = 340; const T1 = 40, B1 = 190, m1 = 115, amp1 = 65; line([[L, m1], [R, m1]], getCSS('--faint'), 1); const car = [], ref = []; for (let k = 0; k < N; k += 2) { const t = k / N, x = L + t * (R - L); car.push([x, m1 - amp1 * (2 * Math.abs(2 * ((t * MF) % 1) - 1) - 1)]); ref.push([x, m1 - amp1 * Math.min(1.1, MA * Math.sin(2 * Math.PI * t))]); } line(car, getCSS('--faint'), 1); line(ref, getCSS('--upd'), 2.5); txt('変調波 m_a=' + f2(MA), L + 4, T1 + 12, { size: 10, color: getCSS('--upd'), bold: true }); txt('搬送波 m_f=' + MF, L + 130, T1 + 12, { size: 10, color: getCSS('--muted') }); const T2 = 215, B2 = 395, m2 = 305, amp2 = 70; line([[L, m2], [R, m2]], getCSS('--faint'), 1); ctx.save(); ctx.fillStyle = getCSS('--accent'); ctx.globalAlpha = .55; for (let k = 0; k < N; k++) { if (a.w.va[k] > 0) ctx.fillRect(L + k / N * (R - L), m2 - amp2, (R - L) / N + .6, amp2); else ctx.fillRect(L + k / N * (R - L), m2, (R - L) / N + .6, amp2); } ctx.restore(); const fund = []; for (let k = 0; k <= 200; k++) { const t = k / 200; fund.push([L + t * (R - L), m2 - amp2 * a.amps[1] / Math.sqrt(3) * Math.sin(2 * Math.PI * t)]); } line(fund, getCSS('--neg'), 2); txt('出力パルス（レグ電圧）と基本波（赤）', L + 4, T2 + 12, { size: 10 }); }
+function drawModCurve() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, 'm_a', 'V₁ / V_dc'); const xOf = m => L + m / 1.5 * (R - L), yOf = v => B - v / 0.9 * (B - T); const th = []; for (let m = 0; m <= 1.5; m += .02) th.push([xOf(m), yOf(vllTheory(m))]); line(th, getCSS('--faint'), 2, [5, 4]); const pts = []; for (let m = .1; m <= 1.5; m += .1) { const v = analyze(+m.toFixed(2), MF).v1rms; pts.push([xOf(m), yOf(v)]); } line(pts, getCSS('--upd'), 2); pts.forEach(p => dot(p[0], p[1], 3, getCSS('--upd'))); const cur = analyze(MA, MF).v1rms; dot(xOf(MA), yOf(cur), 7, getCSS('--neg')); txt('m_a=' + f2(MA) + ' → ' + f3(cur), xOf(MA) + (MA > 1 ? -10 : 10), yOf(cur) - 12, { align: MA > 1 ? 'right' : 'left', size: 10.5, bold: true, color: getCSS('--neg') }); line([[xOf(1), T], [xOf(1), B]], getCSS('--faint'), 1, [3, 3]); txt('線形 | 過変調', xOf(1), T + 12, { align: 'center', size: 9.5, color: getCSS('--muted') }); line([[L, yOf(Math.sqrt(6) / Math.PI)], [R, yOf(Math.sqrt(6) / Math.PI)]], getCSS('--warm'), 1, [4, 3]); txt('方形波限界 0.78', R - 4, yOf(Math.sqrt(6) / Math.PI) - 5, { align: 'right', size: 9, color: getCSS('--warm') }); [0, .5, 1, 1.5].forEach(m => txt(m, xOf(m), B + 14, { align: 'center', size: 9, mono: true })); [0, .3, .6, .9].forEach(v => txt(v.toFixed(1), L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); txt('点線=線形領域の式 0.612·m_a（過変調では不成立）／ ●=DFT 実測（m_f=' + MF + '）', L, 340, { size: 9.5, color: getCSS('--muted') }); }
+function drawSpectrumAB() { const a = analyze(MA, 15), b = analyze(MA, 63); const L = 40, R = 335; [[a, 40, 190, 'm_f=15', '--neg'], [b, 220, 370, 'm_f=63', '--accent']].forEach(([s, T, B, lab, c]) => { axes(L, T, R, B, '次数', ''); const nh = 90; const xOf = n => L + n / nh * (R - L), yOf = v => B - Math.min(v, 1.8) / 1.8 * (B - T); for (let n = 1; n <= nh; n++) { const v = s.amps[n]; if (v < .01) continue; line([[xOf(n), B], [xOf(n), yOf(v)]], getCSS(n === 1 ? '--upd' : c), n === 1 ? 3 : 2); } txt(lab + '  THD=' + f1(s.thd) + '%', L + 6, T + 12, { size: 10.5, bold: true, color: getCSS(c) }); [1, 15, 30, 45, 60, 75, 90].forEach(n => txt(n, xOf(n), B + 12, { align: 'center', size: 8.5, mono: true })); }); txt('青=基本波（1 次）', L + 200, 52, { size: 9.5, color: getCSS('--upd') }); }
+function drawOvermod() { const L = 40, T = 50, R = 335, B = 300; axes(L, T, R, B, '次数', '振幅'); const s = analyze(Math.max(MA, 1.3), MF); const nh = 40; const xOf = n => L + n / nh * (R - L), yOf = v => B - Math.min(v, 1.9) / 1.9 * (B - T); for (let n = 1; n <= nh; n++) { const v = s.amps[n]; if (v < .01) continue; const low = n > 1 && n < MF - 2; line([[xOf(n), B], [xOf(n), yOf(v)]], getCSS(n === 1 ? '--upd' : (low ? '--neg' : '--faint')), n === 1 ? 3 : 2.5); if (low && v > .08) txt(n, xOf(n), yOf(v) - 6, { align: 'center', size: 9, mono: true, color: getCSS('--neg'), bold: true }); } [1, 10, 20, 30, 40].forEach(n => txt(n, xOf(n), B + 14, { align: 'center', size: 9, mono: true })); txt('m_a=' + f2(Math.max(MA, 1.3)) + '：赤=低次高調波（5, 7, 11…）', L + 6, T + 12, { size: 10.5, bold: true, color: getCSS('--neg') }); txt('低次はフィルタで落とせない', CW / 2, 340, { align: 'center', size: 10.5 }); }
+function drawDQ() { const L = 30, R = 335; const T1 = 40, B1 = 190, m1 = 115, a1 = 62; line([[L, m1], [R, m1]], getCSS('--faint'), 1); [['--accent', 0], ['--warm', -2 * Math.PI / 3], ['--upd', 2 * Math.PI / 3]].forEach(([c, ph]) => { const pts = []; for (let k = 0; k <= 200; k++) { const th = k / 200 * 4 * Math.PI; pts.push([L + k / 200 * (R - L), m1 - a1 * Math.cos(th + ph)]); } line(pts, getCSS(c), 2); }); txt('abc：3 本の正弦波', L + 4, T1 + 12, { size: 10, bold: true }); const T2 = 215, B2 = 395, m2 = 305, a2 = 62; line([[L, m2], [R, m2]], getCSS('--faint'), 1); const pd = [], pq = []; for (let k = 0; k <= 200; k++) { const th = k / 200 * 4 * Math.PI; const r = dq(th); pd.push([L + k / 200 * (R - L), m2 - a2 * r.d]); pq.push([L + k / 200 * (R - L), m2 - a2 * r.q]); } line(pd, getCSS('--accent'), 2.5); line(pq, getCSS('--upd'), 2.5); txt('v_d = 1（直流）', L + 4, m2 - a2 - 6, { size: 10, bold: true, color: getCSS('--accent') }); txt('v_q = 0', L + 4, m2 + 14, { size: 10, bold: true, color: getCSS('--upd') }); txt('dq：回転座標から見ると水平線', L + 4, T2 + 12, { size: 10, bold: true }); }
+function drawPLL() { const c = getCSS('--text'); const boxes = [['系統電圧', 40, 180], ['dq 変換', 120, 180], ['PI', 200, 180], ['∫', 270, 180]]; boxes.forEach(([t, x, y]) => { rect(x - 28, y - 16, 56, 32, getCSS('--panel'), 1); line([[x - 28, y - 16], [x + 28, y - 16], [x + 28, y + 16], [x - 28, y + 16], [x - 28, y - 16]], c, 1); txt(t, x, y + 4, { align: 'center', size: 10, bold: true }); }); [[68, 92], [148, 172], [228, 242]].forEach(([a, b]) => line([[a, 180], [b, 180]], c, 1.5)); txt('v_q', 160, 168, { align: 'center', size: 9, mono: true }); txt('Δω', 235, 168, { align: 'center', size: 9, mono: true }); txt('θ', 305, 184, { size: 11, mono: true, bold: true }); line([[298, 180], [320, 180], [320, 240], [120, 240], [120, 196]], c, 1.5, [4, 3]); txt('θ をフィードバック', 220, 255, { align: 'center', size: 9.5, color: getCSS('--muted') }); txt('v_q → 0 になるよう θ を回す', CW / 2, 300, { align: 'center', size: 11 }); txt('弱系統：出力電流 → 電圧位相が動く → PLL が揺れる', CW / 2, 330, { align: 'center', size: 10, color: getCSS('--neg') }); }
+function drawGFL() { rect(20, 50, 150, 260, getCSS('--warm'), .1); rect(190, 50, 150, 260, getCSS('--accent'), .1); txt('フォロイング', 95, 75, { align: 'center', size: 12, bold: true, color: getCSS('--warm') }); txt('フォーミング', 265, 75, { align: 'center', size: 12, bold: true, color: getCSS('--accent') }); [['電流源', '電圧源'], ['PLL で追従', '自ら基準を作る'], ['単独運転 不可', '単独運転 可能'], ['慣性 なし', '慣性 模擬できる'], ['ほぼ全ての PCS', '実証〜一部実用'], ['弱系統に弱い', '弱系統に強い']].forEach(([a, b], i) => { const y = 108 + i * 32; txt('・' + a, 30, y, { size: 10 }); txt('・' + b, 200, y, { size: 10 }); }); txt('VSG：内部で動揺方程式を解く', CW / 2, 345, { align: 'center', size: 10.5, color: getCSS('--accent'), bold: true }); }
+function drawIslanding() { const c = getCSS('--text'); line([[30, 150], [150, 150]], c, 3); txt('系統', 40, 138, { size: 10 }); rect(150, 140, 20, 20, getCSS('--neg'), .9); txt('✕ 停電', 160, 130, { align: 'center', size: 10, color: getCSS('--neg'), bold: true }); line([[170, 150], [320, 150]], c, 3); dot(230, 200, 18, getCSS('--warm'), c); txt('PV', 230, 205, { align: 'center', size: 11, bold: true }); line([[230, 182], [230, 150]], c, 2); ctx.save(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(290, 150); ctx.lineTo(290, 180); ctx.moveTo(278, 180); ctx.lineTo(302, 180); ctx.lineTo(290, 198); ctx.closePath(); ctx.stroke(); ctx.restore(); txt('負荷', 290, 215, { align: 'center', size: 9.5 }); rect(175, 100, 150, 130, getCSS('--neg'), .08); txt('島（islanding）', 250, 95, { align: 'center', size: 10.5, color: getCSS('--neg'), bold: true }); txt('系統は死んでいるのに、島の中は生きている', CW / 2, 280, { align: 'center', size: 10.5 }); txt('感電・機器損傷・再閉路事故 → 検出して解列', CW / 2, 305, { align: 'center', size: 10, color: getCSS('--muted') }); txt('vs フォーミング「系統を作れ」', CW / 2, 340, { align: 'center', size: 10.5, color: getCSS('--accent'), bold: true }); }
+function drawVoltVar() { const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, '太陽光 P_pv [p.u.]', 'V_r'); const xOf = p => L + p / 1.5 * (R - L), yOf = v => B - (v - .95) / .25 * (B - T); [[0, '--neg', '力率 1'], [1, '--warm', '0.95 進み'], [2, '--accent', 'Volt-Var']].forEach(([m, c, lab]) => { const pts = []; for (let p = 0; p <= 1.5; p += .02) { const v = vrMode(p, m); if (v !== null) pts.push([xOf(p), yOf(v)]); } line(pts, getCSS(c), 2.5); const h = hostMode(m); txt(lab + ' ' + f2(h), xOf(Math.min(h, 1.4)) + 4, yOf(1.05) - 8 - m * 14, { size: 9.5, color: getCSS(c), bold: true }); }); line([[L, yOf(1.05)], [R, yOf(1.05)]], getCSS('--neg'), 1.5, [4, 3]); txt('上限 1.05', L + 3, yOf(1.05) - 4, { size: 9.5, mono: true, color: getCSS('--neg') }); [0, .5, 1, 1.5].forEach(p => txt(p, xOf(p), B + 14, { align: 'center', size: 9, mono: true })); [.95, 1.0, 1.05, 1.1, 1.15].forEach(v => txt(v.toFixed(2), L - 4, yOf(v) + 4, { align: 'right', size: 9, mono: true })); txt('配電線 R=X=0.1・数字は連系可能量', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawSIab() { const a = simSI(0, 0), b = simSI(HV, 0); const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, 't [s]', 'F [Hz]'); const fmin = Math.min(a.nadir - .3, 56.5); const xOf = t => L + t / 60 * (R - L), yOf = f => B - (f - fmin) / (60.2 - fmin) * (B - T); line(a.t.map((t, k) => [xOf(t), yOf(a.F[k])]), getCSS('--neg'), 2.2); line(b.t.map((t, k) => [xOf(t), yOf(b.F[k])]), getCSS('--accent'), 2.5); line([[L, yOf(60)], [R, yOf(60)]], getCSS('--faint'), 1, [4, 3]); line([[L, yOf(57)], [R, yOf(57)]], getCSS('--neg'), 1, [4, 3]); txt('UFR 57', L + 3, yOf(57) - 4, { size: 9, mono: true, color: getCSS('--neg') }); txt('なし nadir ' + f2(a.nadir), xOf(20), yOf(a.nadir) + 16, { size: 10, mono: true, color: getCSS('--neg'), bold: true }); txt('H_v=' + f1(HV) + ' nadir ' + f2(b.nadir), xOf(20), yOf(b.nadir) - 8, { size: 10, mono: true, color: getCSS('--accent'), bold: true }); [0, 20, 40, 60].forEach(t => txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true })); txt('定常はどちらも ' + f2(a.ss) + ' Hz（慣性は深さを直さない）', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawSI4() { const cases = [[simSI(0, 0), '--neg', 'なし'], [simSI(HV, 0), '--warm', '慣性のみ'], [simSI(0, KV), '--upd', 'ガバナのみ'], [simSI(HV, KV), '--accent', '両方']]; const L = 50, T = 40, R = 335, B = 300; axes(L, T, R, B, 't [s]', 'F [Hz]'); const fmin = Math.min(cases[0][0].nadir - .3, 56.5); const xOf = t => L + t / 60 * (R - L), yOf = f => B - (f - fmin) / (60.2 - fmin) * (B - T); cases.forEach(([s, c, lab], i) => { line(s.t.map((t, k) => [xOf(t), yOf(s.F[k])]), getCSS(c), i === 3 ? 2.8 : 1.8); txt(lab + ' ' + f2(s.nadir) + '/' + f2(s.ss), L + 8, T + 14 + i * 14, { size: 9.5, mono: true, color: getCSS(c), bold: i === 3 }); }); line([[L, yOf(60)], [R, yOf(60)]], getCSS('--faint'), 1, [4, 3]); line([[L, yOf(57)], [R, yOf(57)]], getCSS('--neg'), 1, [4, 3]); [0, 20, 40, 60].forEach(t => txt(t, xOf(t), B + 14, { align: 'center', size: 9, mono: true })); txt('H_v=' + f1(HV) + ' s, K_v=' + KV + ' MW/Hz（nadir/定常）', CW / 2, 340, { align: 'center', size: 10, color: getCSS('--muted') }); }
+function drawSummaryMap() { const c = getCSS('--text'); const rows = [['電圧上昇', 'Volt-Var', '--accent'], ['慣性ゼロ', '合成慣性 / GFM', '--upd'], ['ガバナなし', '疑似ガバナ', '--warm']]; rows.forEach(([a, b, col], i) => { const y = 80 + i * 80; rect(20, y - 22, 130, 48, getCSS('--neg'), .12); rect(210, y - 22, 130, 48, getCSS(col), .18); txt(a, 85, y + 6, { align: 'center', size: 11, bold: true }); txt(b, 275, y + 6, { align: 'center', size: 11, bold: true, color: getCSS(col) }); line([[152, y + 2], [206, y + 2]], c, 2); txt('▶', 200, y + 6, { size: 10 }); }); txt('代償：蓄電池（直流側の余裕）＋測定遅れ', CW / 2, 335, { align: 'center', size: 10.5, color: getCSS('--muted') }); }
+/* ---- エンジン ---- */
+function chOf(i) { let c = 0; CHAPTERS.forEach((ch, k) => { if (i >= ch.start) c = k; }); return c; }
+let slideIdx = 0, auto = false, autoT = null;
+function renderStepper() { const el = document.getElementById('stepper'), cur2 = chOf(slideIdx); el.innerHTML = CHAPTERS.map((ch, i) => '<div class="stp ' + (i === cur2 ? 'active' : (i < cur2 ? 'done' : '')) + '" data-i="' + i + '" style="--c:' + ch.c + '"><div class="n">' + (i < cur2 ? '✓' : (i + 1)) + '</div><div class="t">' + ch.t + '</div></div>').join(''); el.querySelectorAll('.stp').forEach(d => d.onclick = () => { stopAuto(); goSlide(CHAPTERS[+d.dataset.i].start); }); }
+function renderExplain() { const el = document.getElementById('explain'), ch = CHAPTERS[chOf(slideIdx)]; el.style.setProperty('--c', ch.c); el.innerHTML = '<span class="lbl">SLIDE ' + (slideIdx + 1) + ' / ' + SLIDES.length + ' — ' + ch.t + '</span>' + SLIDES[slideIdx].html(); }
+function renderMini() { const m = SLIDES[slideIdx].mini; document.getElementById('mini').innerHTML = typeof m === 'function' ? m() : (m || ''); }
+function renderLegend() { document.getElementById('legend').textContent = SLIDES[slideIdx].legend || ''; }
+function renderAll() { renderStepper(); renderMini(); renderLegend(); renderExplain(); document.getElementById('prevBtn').disabled = (slideIdx === 0); document.getElementById('nextBtn').disabled = (slideIdx === SLIDES.length - 1); }
+function draw_() { ctx.clearRect(0, 0, CW, CH); drawGridBg(); SLIDES[slideIdx].draw(); }
+function goSlide(i) { slideIdx = Math.max(0, Math.min(SLIDES.length - 1, i)); if (SLIDES[slideIdx].enter) SLIDES[slideIdx].enter(); renderAll(); draw_(); }
+function stopAuto() { auto = false; clearTimeout(autoT); document.getElementById('autoBtn').textContent = '⏵ 自動'; }
+function autoTick() { if (!auto) return; if (slideIdx < SLIDES.length - 1) { goSlide(slideIdx + 1); autoT = setTimeout(autoTick, 4200); } else stopAuto(); }
+document.getElementById('nextBtn').onclick = () => { stopAuto(); if (slideIdx < SLIDES.length - 1) goSlide(slideIdx + 1); };
+document.getElementById('prevBtn').onclick = () => { stopAuto(); if (slideIdx > 0) goSlide(slideIdx - 1); };
+function sync() { document.getElementById('maVal').textContent = MA.toFixed(2); document.getElementById('hvVal').textContent = HV.toFixed(1); document.getElementById('kvVal').textContent = KV; }
+document.getElementById('resetBtn').onclick = () => { stopAuto(); seed = 314; MA = .9; MF = 15; HV = 2; KV = 80; document.getElementById('maRange').value = .9; document.getElementById('mfSel').value = '15'; document.getElementById('hvRange').value = 2; document.getElementById('kvRange').value = 80; sync(); goSlide(0); };
+document.getElementById('autoBtn').onclick = () => { if (auto) { stopAuto(); return; } if (slideIdx === SLIDES.length - 1) goSlide(0); auto = true; document.getElementById('autoBtn').textContent = '⏸ 停止'; autoT = setTimeout(autoTick, 900); };
+document.getElementById('maRange').oninput = e => { MA = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('mfSel').onchange = e => { MF = +e.target.value; renderAll(); draw_(); };
+document.getElementById('hvRange').oninput = e => { HV = +e.target.value; sync(); renderAll(); draw_(); };
+document.getElementById('kvRange').oninput = e => { KV = +e.target.value; sync(); renderAll(); draw_(); };
+sync(); goSlide(0);
+</script>
+<script src="site.js"></script><script src="nav.js"></script><script src="terms.js"></script>
+</body>
+</html>
