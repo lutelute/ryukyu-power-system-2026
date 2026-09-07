@@ -428,7 +428,7 @@ def fig_lstm():
 
 
 # ==================================================== 11. たとえ話の対応表
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 
 def fig_analogy():
@@ -455,6 +455,23 @@ def fig_myth():
         note="どれも「検証で満点＝実力」と思い込んだことから来ている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch12_deriv_boost_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① まず平均で予測する',
+                r"$F_0 = \bar{y}$",
+                '最初のモデルは全データの平均。\n残差 r = y − F₀ がまだ説明できていない分'),
+               ('② 残差を浅い木で学ぶ',
+                r"$F_1 = F_0 + \nu\,h_1$",
+                '深さ 2〜6 の木で残差を近似する。\nν は学習率で 0.05〜0.3'),
+               ('③ 繰り返す',
+                r"$F_m = F_{m-1} + \nu\,h_m$",
+                '二乗誤差なら残差は損失の負の勾配。\n関数空間で勾配降下をしている')],
+            result='弱い学習器を足し続けることが、そのまま勾配降下になっている')
+
+
 if __name__ == "__main__":
     fig_split(); fig_boosting(); fig_learning_curve(); fig_linear_vs_tree(); fig_extrapolation()
     fig_leak(); fig_quantile(); fig_importance(); fig_compare(); fig_lstm()
@@ -468,6 +485,7 @@ if __name__ == "__main__":
     print(f"線形 {rl_:.1f} MW vs ブースティング {rt_:.1f} MW（{(1-rt_/rl_)*100:.0f}% 改善）")
     print(f"外挿（40 °C）: 線形 {OUT['extrap'][0]:.0f} MW、木 {OUT['extrap'][1]:.0f} MW")
     v, o, o3, sl = OUT["leak"]
+    fig_derivations()
     print(f"気温: 実測 {v:.1f} → 予報σ1.5 {o:.1f} MW（{o/v:.1f} 倍）、σ3.0 で {o3:.1f} MW。感度 {sl:.0f} MW/°C")
     print(f"予測区間: PICP {OUT['picp'][0]*100:.1f}%、PINAW {OUT['picp'][1]:.3f}")
     print("重要度 上位: " + "、".join(f"{n} +{v:.1f}" for n, v in OUT["imp"]))

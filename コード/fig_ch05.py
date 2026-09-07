@@ -467,7 +467,7 @@ def first_iteration():
 
 
 # ==================================================== 11. たとえ話の対応表
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 
 def fig_analogy():
@@ -494,6 +494,36 @@ def fig_myth():
         note="どれも「反復回数を決めているのは何か」を取り違えたことから来ている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch05_deriv_quad_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① テイラー展開で 1 次まで取る',
+                r"$f(x+\Delta x) \approx f(x) + f'(x)\,\Delta x$",
+                '2 次以降を捨てると f′Δx = −f。\n多変数では f′ が行列 J になる'),
+               ('② 捨てた項が、そのまま次の誤差になる',
+                r"$e_{n+1} \approx \dfrac{f''}{2f'}\,e_n^{2}$",
+                '1 次の項は接線で消え、残るのは\n誤差の 2 乗に比例する項だけ'),
+               ('③ 桁が倍々に増える',
+                r"$10^{-2} \to 10^{-4} \to 10^{-8} \to 10^{-16}$",
+                '1e-8 まで 4 回、1e-16 でも 5 回。\n母線数は式に出てこない')],
+            result='規模によらず 3〜5 回で収束する。これが 2 次収束の正体')
+
+    for i in (1, 2, 3):
+        derivation_figure(f"ch05_deriv_jacobian_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 何を何で微分するか',
+                r"$H = \dfrac{\partial P}{\partial \theta}, \quad L = V\dfrac{\partial Q}{\partial V}$",
+                '未知数は (θ, V)、式は (ΔP, ΔQ)。\n4 つのブロック H, N, M, L に分かれる'),
+               ('② 非対角（i ≠ j）',
+                r"$H_{ij} = V_iV_j\,(G_{ij}\sin\theta_{ij} - B_{ij}\cos\theta_{ij})$",
+                '∂θ_ij/∂θ_j = −1 なので、出てくるのは\nQ_i の j 番目の項そのもの'),
+               ('③ 対角（i = j）',
+                r"$H_{ii} = -Q_i - B_{ii}V_i^{2}, \quad L_{ii} = Q_i - B_{ii}V_i^{2}$",
+                '対角は P_i, Q_i で書ける。ミスマッチ計算の\n値をそのまま使い回せる')],
+            result='ヤコビアンは新しい計算ではなく、潮流の式を微分しただけ')
+
+
 if __name__ == "__main__":
     ths, fs, dfs, th_star = fig_newton1d()
     (V_nr, th_nr, it_nr, h_nr), gs = fig_gs_vs_nr()
@@ -507,6 +537,7 @@ if __name__ == "__main__":
     ok_frac, it_max, it_min = fig_initial_guess()
     P0, Q0, mis0, H0, N0, M0, L0, dx0, Bp, Bpp = first_iteration()
     fig_analogy(); fig_myth()
+    fig_derivations()
 
     print("\n==== 主要な数値（スライドはこの値を使う）====")
     print("[1 変数] f(θ) = 5 sin θ − 0.8, θ₀ = 0")

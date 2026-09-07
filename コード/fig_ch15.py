@@ -406,7 +406,7 @@ def fig_map():
 
 
 # ============================================================ 11. たとえ話の対応表
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 
 def fig_analogy():
@@ -433,6 +433,23 @@ def fig_myth():
         note="どれも「今の律速はどれか」を見ずに判断していることから来ている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch15_deriv_hosting_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 制約はすべて満たす必要がある',
+                '電圧・線路容量・N-1・周波数・安定度・最低出力',
+                '6 つのうち 1 つでも破れば\n系統は運用できない'),
+               ('② 各制約が許す最大量を求める',
+                r"$P_1,\ P_2,\ \ldots,\ P_6$",
+                '太陽光を 0 から増やしていき、\nその制約が最初に破れる量を上限とする'),
+               ('③ 連系可能量は最小値',
+                r"$P_{PV} = \min(P_1, P_2, \ldots, P_6)$",
+                '最小値を与える制約が「律速」。\n対策はそこにしか効かない')],
+            result='律速でない制約をいくら対策しても、1 MW も増えない')
+
+
 if __name__ == "__main__":
     fig_system(); fig_limits_base(); fig_curves(); fig_hk(); fig_freq_response()
     fig_measures(); fig_measure_map(); fig_duck(); fig_battery(); fig_map()
@@ -451,4 +468,5 @@ if __name__ == "__main__":
     dmin, nl600 = OUT["duck"]
     print(f"日負荷: 最小需要 {dmin:.0f} MW、太陽光 600 MW で正味需要 {nl600:.0f} MW（最低出力 {PMIN_TH:.0f} MW）")
     K400, kbat, pbat = OUT["battery"]
+    fig_derivations()
     print(f"蓄電池: 太陽光 400 MW で K = {K400:.0f} MW/Hz、ΔF 1.0 Hz に抑えるには K_bat {kbat:.0f} MW/Hz（{pbat:.0f} MW）")

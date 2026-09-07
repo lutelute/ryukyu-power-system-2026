@@ -319,6 +319,30 @@
   12.8,
   5.9
  ],
+ "ch05_deriv_jacobian_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_deriv_jacobian_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_deriv_jacobian_3.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_deriv_quad_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_deriv_quad_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch05_deriv_quad_3.png": [
+  12.8,
+  5.9
+ ],
  "ch05_fdlf_flow.png": [
   7.1,
   4.2
@@ -371,6 +395,30 @@
   7.1,
   4.2
  ],
+ "ch06_deriv_dv_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_deriv_dv_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_deriv_dv_3.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_deriv_pvnose_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_deriv_pvnose_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch06_deriv_pvnose_3.png": [
+  12.8,
+  5.9
+ ],
  "ch06_devices.png": [
   7.1,
   4.2
@@ -422,6 +470,30 @@
  "ch07_damping.png": [
   7.1,
   4.2
+ ],
+ "ch07_deriv_area_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch07_deriv_area_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch07_deriv_area_3.png": [
+  12.8,
+  5.9
+ ],
+ "ch07_deriv_swing_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch07_deriv_swing_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch07_deriv_swing_3.png": [
+  12.8,
+  5.9
  ],
  "ch07_equal_area.png": [
   7.1,
@@ -555,6 +627,18 @@
   7.1,
   4.2
  ],
+ "ch09_deriv_pwm_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch09_deriv_pwm_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch09_deriv_pwm_3.png": [
+  12.8,
+  5.9
+ ],
  "ch09_dq.png": [
   12.8,
   5.9
@@ -610,6 +694,18 @@
  "ch10_curtail.png": [
   7.1,
   4.2
+ ],
+ "ch10_deriv_shear_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_deriv_shear_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch10_deriv_shear_3.png": [
+  12.8,
+  5.9
  ],
  "ch10_ensemble.png": [
   7.1,
@@ -671,6 +767,18 @@
   12.8,
   5.9
  ],
+ "ch11_deriv_split_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_deriv_split_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch11_deriv_split_3.png": [
+  12.8,
+  5.9
+ ],
  "ch11_metrics.png": [
   12.8,
   5.9
@@ -714,6 +822,18 @@
  "ch12_compare.png": [
   7.1,
   4.2
+ ],
+ "ch12_deriv_boost_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch12_deriv_boost_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch12_deriv_boost_3.png": [
+  12.8,
+  5.9
  ],
  "ch12_extrapolation.png": [
   7.1,
@@ -766,6 +886,18 @@
  "ch13_bad_data.png": [
   7.1,
   4.2
+ ],
+ "ch13_deriv_wls_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_deriv_wls_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch13_deriv_wls_3.png": [
+  12.8,
+  5.9
  ],
  "ch13_gnn.png": [
   12.8,
@@ -823,6 +955,30 @@
   12.8,
   5.9
  ],
+ "ch14_deriv_lambda_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_deriv_lambda_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_deriv_lambda_3.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_deriv_lmp_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_deriv_lmp_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch14_deriv_lmp_3.png": [
+  12.8,
+  5.9
+ ],
  "ch14_dispatch_curve.png": [
   12.8,
   5.9
@@ -868,6 +1024,18 @@
   5.9
  ],
  "ch15_curves.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_deriv_hosting_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_deriv_hosting_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch15_deriv_hosting_3.png": [
   12.8,
   5.9
  ],

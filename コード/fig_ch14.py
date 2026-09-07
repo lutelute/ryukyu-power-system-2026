@@ -360,7 +360,7 @@ def fig_ems():
 
 
 # ============================================================ 11. たとえ話の対応表
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 
 def fig_analogy():
@@ -387,6 +387,36 @@ def fig_myth():
         note="どれも「限界費用は出力とともに動く」ことを見落としている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch14_deriv_lambda_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 問題を書く',
+                r"$\min \sum_i C_i(P_i) \quad \mathrm{s.t.}\ \sum_i P_i = D$",
+                '総費用を最小に、需給は一致。\n制約付きの最小化になる'),
+               ('② ラグランジュ関数を微分する',
+                r"$L = \sum_i C_i(P_i) - \lambda\left(\sum_i P_i - D\right)$",
+                'P_i で偏微分して 0 と置くと、すべての i で\ndC/dP が等しくなる'),
+               ('③ 等 λ 条件',
+                r"$\dfrac{dC_i}{dP_i} = \lambda \quad (\forall i)$",
+                'λ が違えば、安いほうを増やして高いほうを\n減らすだけで総費用が下がる')],
+            result='λ は「あと 1 MWh の値段」。これが市場価格の正体')
+
+    for i in (1, 2, 3):
+        derivation_figure(f"ch14_deriv_lmp_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① LMP の定義',
+                r"$LMP_i = \dfrac{\partial C_{total}}{\partial D_i}$",
+                'その地点で需要を 1 MW 増やしたときの総費用の増分。\n混雑がなければ全地点で同じ値になる'),
+               ('② 混雑すると安い電気が届かない',
+                r"$P_{line} = P_{line}^{max}$",
+                '線路が満杯だと、その先の需要はその地点側の\n高い電源で賄うしかない'),
+               ('③ 3 つの成分に分解できる',
+                'LMP ＝ λ ＋ 混雑成分 ＋ 損失成分',
+                '混雑レント =（LMP の差）×（潮流）が、\n送電線を増強する価値の目安になる')],
+            result='値段が地点で違うのは、電気が自由に動けないから')
+
+
 if __name__ == "__main__":
     fig_cost_curves(); fig_equal_lambda(); fig_lambda_iteration(); fig_dispatch_curve()
     fig_merit_order(); fig_price_curve(); fig_carbon(); fig_lmp(); fig_congestion(); fig_ems()
@@ -404,4 +434,5 @@ if __name__ == "__main__":
     print(f"DC-OPF 混雑なし: 母線1 {free[1]:.0f} MW / 母線2 {free[2]:.0f} MW、費用 {free[0]/1000:.2f} 百万円/h、LMP {lf:.2f}")
     print(f"      混雑あり: 母線1 {cong[1]:.0f} MW / 母線2 {cong[2]:.0f} MW、費用 {cong[0]/1000:.2f} 百万円/h、LMP {lc:.2f}")
     c0, k0, c1, k1 = OUT["cong_curve"]
+    fig_derivations()
     print(f"容量 {c0:.0f} MW で {k0:.2f}、{c1:.0f} MW で {k1:.2f} 百万円/h")

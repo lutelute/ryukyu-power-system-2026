@@ -361,7 +361,7 @@ def fig_verify():
 
 
 # ============================================================ 11. たとえ話の対応表
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 
 def fig_analogy():
@@ -388,6 +388,36 @@ def fig_myth():
         note="電圧は P ではなく Q が決める、が今日いちばん外してはいけない点。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch06_deriv_dv_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 線路を流れる電流を書く',
+                r"$\dot{I} = \dfrac{P - jQ}{\dot{V}^{*}}$",
+                '受電端で P + jQ を消費する。\n線路は R + jX'),
+               ('② 電圧降下を実部と虚部に分ける',
+                r"$\Delta V = \dfrac{RP + XQ}{V} + j\,\dfrac{XP - RQ}{V}$",
+                '位相差が小さければ、大きさの変化は\n実部だけで決まる'),
+               ('③ 実用形にする',
+                r"$\Delta V \approx \dfrac{RP + XQ}{V}$",
+                '送電線は X ≫ R なので XQ が支配。\n配電線は R が大きく RP も効く')],
+            result='太陽光の逆潮流で電圧が上がるのは、この式の P が負になるから')
+
+    for i in (1, 2, 3):
+        derivation_figure(f"ch06_deriv_pvnose_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 2 母線・R = 0・力率 1 で解く',
+                r"$V_r^{4} - V_s^{2}V_r^{2} + (XP)^{2} = 0$",
+                'V_r² についての 2 次方程式になる'),
+               ('② 判別式を見ると解が 2 つ',
+                r"$V_s^{4} - 4(XP)^{2} \geq 0$",
+                '上枝（運用点）と下枝（不安定）。\n同じ P に対して電圧が 2 通りある'),
+               ('③ 判別式が 0 になる点が鼻先',
+                r"$P_{max} = \dfrac{V_s^{2}}{2X}, \quad V_r = \dfrac{V_s}{\sqrt{2}}$",
+                'V_r = 0.707 V_s。\nこれを超えると解そのものが存在しない')],
+            result='収束しないのは解法の失敗ではなく、解が消えたから')
+
+
 if __name__ == "__main__":
     fig_tables(); fig_sign(); fig_profile(); fig_pvcurve(); fig_sensitivity()
     fig_approx(); fig_hosting(); fig_ieee14(); fig_devices(); fig_verify()
@@ -403,4 +433,5 @@ if __name__ == "__main__":
     pm, vmin, vmax, ploss, over = OUT["ieee14"]
     print(f"IEEE14: 最大潮流 {pm:.1f} MW, 電圧 {vmin:.3f}〜{vmax:.3f}（上限超過 {over}）, 総損失 {ploss:.2f} MW")
     it, dv, dth = OUT["verify"]
+    fig_derivations()
     print(f"照合: 自作 NR {it} 回、|ΔV|max = {dv:.2e}、|Δθ|max = {dth:.2e}")

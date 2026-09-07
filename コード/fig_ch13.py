@@ -415,7 +415,7 @@ def fig_pipeline():
 
 
 # ============================================================ 11. たとえ話の対応表
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 
 def fig_analogy():
@@ -442,6 +442,23 @@ def fig_myth():
         note="どれも「AI に任せれば物理は要らない」という思い込みから来ている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch13_deriv_wls_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 計測は誤差を含む',
+                r"$z = h(x) + e$",
+                '計測 z と状態 x を結ぶのが潮流の式。\n誤差の分散は計器ごとに違う'),
+               ('② 精度の良い計測を重く扱う',
+                r"$J(x) = \sum_i \dfrac{(z_i - h_i(x))^{2}}{\sigma_i^{2}}$",
+                'σ が小さい計測ほど、ずれたときの\nペナルティが大きい'),
+               ('③ 反復で解く',
+                r"$(H^{T}R^{-1}H)\,\Delta x = H^{T}R^{-1}(z - h(x))$",
+                '形は第5回のニュートン法と同じ。\n計測が未知数より多いことが前提')],
+            result='状態推定は「解く」のではなく「もっともらしい値を選ぶ」')
+
+
 if __name__ == "__main__":
     fig_graph(); fig_gnn(); fig_oversmooth(); fig_state_estimation(); fig_bad_data()
     fig_pca(); fig_autoencoder(); fig_rl(); fig_pinn(); fig_pipeline()
@@ -455,6 +472,7 @@ if __name__ == "__main__":
     z1, z2, xw, xa, xt = OUT["wls"]
     print(f"WLS: 計測 {z1:.4f}/{z2:.4f} → 推定 {xw:.4f}（単純平均 {xa:.4f}、真値 {xt:.2f}）")
     cum, det, fp = OUT["pca"]
+    fig_derivations()
     print(f"PCA: 5 主成分で {cum:.1f}% 説明、線路故障の検出率 {det:.0f}%、誤検出 {fp:.0f}%")
     print(f"強化学習: 逸脱 {OUT['rl'][0]:.0f}% → {OUT['rl'][1]:.1f}%")
     print(f"PINN: データのみ {OUT['pinn'][0]:.2f} → 物理項あり {OUT['pinn'][1]:.2f} p.u.")

@@ -9,7 +9,7 @@ warnings.filterwarnings("ignore")
 import numpy as np
 from pws_common import (setup_japanese_font, savefig, solar_position, clear_sky_ghi,
                         pv_power, wind_shear, wind_power_curve)
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 plt = setup_japanese_font()
 from matplotlib.patches import FancyBboxPatch, Rectangle
 
@@ -316,6 +316,23 @@ def fig_myth():
         note="どれも、数字の意味を確かめずに鵜呑みにしたことから来ている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch10_deriv_shear_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 地表付近の風は高さで変わる',
+                r"$v(z) = v_{10}\left(\dfrac{z}{10}\right)^{\alpha}$",
+                'α は地表の粗さ。海上 0.10、\n開けた土地 0.14、市街地 0.30 以上'),
+               ('② 風のパワーは風速の 3 乗',
+                r"$P = \frac{1}{2}\rho A v^{3} C_p$",
+                '高さ補正で風速が 1.33 倍になれば、\n出力は 1.33³ = 2.4 倍になる'),
+               ('③ 実機はパワーカーブで頭打ち',
+                r"$3 \to 12 \to 25\ \mathrm{m/s}$",
+                'カットイン・定格・カットアウト。\n3 乗則が効くのは定格まで')],
+            result='高さの補正を間違えると、出力は 2 倍以上ずれる')
+
+
 if __name__ == "__main__":
     fig_pipeline(); fig_clearsky(); fig_pv_temp(); fig_pv_day(); fig_shear()
     fig_weibull(); fig_metrics(); fig_smoothing(); fig_ensemble(); fig_curtail()
@@ -331,6 +348,7 @@ if __name__ == "__main__":
     E, cf = OUT["wind_cf"]
     print(f"風力（ワイブル k=2, c=7）: 期待出力 {E:.2f} MW、設備利用率 {cf*100:.0f}%")
     mae, rmse, nrmse = OUT["metrics"]
+    fig_derivations()
     print(f"誤差指標: MAE {mae:.3f} MW、RMSE {rmse:.3f} MW、nRMSE {nrmse:.1f}%")
     for rho, s in OUT["smooth"]:
         print(f"  平滑化 9 地点・ρ={rho}: nRMSE {s:.1f}%（1 地点は 15.0%）")

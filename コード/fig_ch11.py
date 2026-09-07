@@ -8,7 +8,7 @@ import warnings
 warnings.filterwarnings("ignore")
 import numpy as np
 from pws_common import setup_japanese_font, savefig, make_okinawa_demand, thi_index
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 plt = setup_japanese_font()
 from matplotlib.patches import FancyBboxPatch, Rectangle
 
@@ -391,6 +391,23 @@ def fig_myth():
         note="モデルを複雑にする前に、特徴量の設計と検証の設計を疑う。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch11_deriv_split_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 時系列は隣が似ている',
+                r"$\rho(1\ \mathrm{h}) \approx 1$",
+                '1 時間前との相関はほぼ 1。ランダムに\n分けると、検証の隣が学習に入る'),
+               ('② それは実質的に答えを見ている',
+                'リーク（情報の漏れ）',
+                '未来の情報が学習に混ざると、\n検証精度は現実より良く出る'),
+               ('③ だから時間順に切る',
+                r"$41.7 \to 36.1\ \mathrm{MW}$",
+                'ランダム分割は RMSE を 14% 過小に見せる。\n運用では出ない性能である')],
+            result='過去で学び、未来で試す。時系列ではこれが唯一の分け方')
+
+
 if __name__ == "__main__":
     fig_decompose(); fig_temp_scatter(); fig_degree_thi(); fig_regression(); fig_coefficients()
     fig_metrics(); fig_split(); fig_acf(); fig_residual(); fig_reserve()
@@ -407,6 +424,7 @@ if __name__ == "__main__":
         print(f"  係数 {k}: {v:+.2f}")
     print(f"RMSE/MAE 比: 外れ値なし {OUT['ratio'][0]:.2f} → 1 点あり {OUT['ratio'][1]:.2f}")
     ts, rd, tsl, rdl = OUT["split"]
+    fig_derivations()
     print(f"分割: 時系列 {ts:.1f} / ランダム {rd:.1f} MW、ラグ追加で 時系列 {tsl:.1f} / ランダム {rdl:.1f} MW")
     print(f"自己相関: 24 h {OUT['acf'][0]:.3f}、168 h {OUT['acf'][1]:.3f}")
     print(f"残差の標準偏差 {OUT['res_std']:.1f} MW")

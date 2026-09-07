@@ -298,7 +298,7 @@ def fig_phase():
 
 
 # ============================================================ 11. たとえ話の対応表
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 
 def fig_analogy():
@@ -325,6 +325,36 @@ def fig_myth():
         note="どれも「角度」と「時間」、「切ったか」と「間に合ったか」を取り違えたことから来ている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch07_deriv_swing_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 回転体の運動方程式',
+                r"$J\,\ddot{\theta} = T_m - T_e$",
+                '慣性モーメント J のロータに、\n機械トルクと電気トルクがかかる'),
+               ('② トルクを電力に直す',
+                r"$(J\omega_0)\,\ddot{\delta} = P_m - P_e$",
+                'P = ωT の両辺を ω で割る。\n定格の近くでは ω を ω₀ とみなせる'),
+               ('③ 単位法にする',
+                r"$\dfrac{2H}{\omega_0}\,\ddot{\delta} = P_m - P_e$",
+                'H は「定格出力で何秒回り続けられるか」。\n単位は秒')],
+            result='回転版の F = ma。教科書の M = 2H/ω₀ はこの係数')
+
+    for i in (1, 2, 3):
+        derivation_figure(f"ch07_deriv_area_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 動揺方程式に δ′ を掛ける',
+                r"$\dfrac{2H}{\omega_0}\,\dot{\delta}\,\ddot{\delta} = (P_m - P_e)\,\dot{\delta}$",
+                '左辺は運動エネルギーの\n時間変化そのもの'),
+               ('② dt を dδ に変える',
+                r"$\dfrac{H}{\omega_0}\,\dot{\delta}^{2} = \int (P_m - P_e)\,d\delta$",
+                'δ′dt = dδ を使う。\n右辺は P–δ 平面の面積になる'),
+               ('③ 戻れる条件を読む',
+                r"$A_1 = A_2$",
+                '加速で貯めた面積を減速で使い切れば\n速度が 0 になり、戻ってくる')],
+            result='面積がエネルギー。だから等面積法で安定かどうかが判定できる')
+
+
 if __name__ == "__main__":
     fig_system(); fig_equal_area(); fig_swing(); fig_sweep(); fig_inertia()
     fig_three_curves(); fig_timescale(); fig_measures(); fig_damping(); fig_phase()
@@ -335,6 +365,7 @@ if __name__ == "__main__":
     print(f"RK4 スイープで安定だった最大除去時間 = {OUT['sweep_last_stable']:.0f} ms")
     print(f"H = 2 s のときの t_cr = {OUT['tcr_H2']*1000:.0f} ms（{OUT['tcr_H2']/OUT['tcr']:.3f} 倍 = √(2/4)）")
     pre, f, post, d0, dcr, dmax = OUT["three"]
+    fig_derivations()
     print(f"1 回線開放: P_max 事故前 {pre:.2f} → 事故中 {f:.2f} → 除去後 {post:.2f}")
     print(f"  δ0 = {d0:.1f}°, δ_cr = {dcr:.1f}°, δ_max = {dmax:.1f}°")
     for n, t in OUT["measures"]:

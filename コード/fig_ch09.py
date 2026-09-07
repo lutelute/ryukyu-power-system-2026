@@ -318,7 +318,7 @@ def fig_lcl():
 
 
 # ============================================================ 11. たとえ話の対応表
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 
 def fig_analogy():
@@ -345,10 +345,28 @@ def fig_myth():
         note="どれも「回転体があるかのように振る舞わせている」という制御の正体を見落としたことから来ている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch09_deriv_pwm_{i}.png", reveal=i, width=11.8, height=5.8,
+            steps=[('① 1 スイッチング周期の平均を見る',
+                r"$\bar{v} \propto m\,\sin\omega t$",
+                '三角波なら ON の時間の割合は\n変調波の値に線形に比例する'),
+               ('② 相電圧の基本波',
+                r"$\hat{V}_1 = m\,\dfrac{V_{dc}}{2}$",
+                '振れ幅は ±V_dc/2。変調率 m が\nその何割まで使うかを決める'),
+               ('③ 線間の実効値に直す',
+                r"$V_{LL} = \dfrac{\sqrt{3}}{\sqrt{2}}\,m\,\dfrac{V_{dc}}{2} \approx 0.612\,m\,V_{dc}$",
+                '600 V・m = 0.9 なら 328 V。\n400 V 系統には少し足りない')],
+            result='直流電圧が足りなければ、いくら変調しても交流電圧は出ない')
+
+
 if __name__ == "__main__":
     fig_pwm(); fig_spectrum(); fig_modulation(); fig_dq(); fig_gfl_gfm()
     fig_voltvar(); fig_synthetic_inertia(); fig_delay(); fig_islanding(); fig_lcl()
     fig_analogy(); fig_myth()
+    fig_derivations()
     print("\n===== スライドに書く数値 =====")
     print(f"Vdc = {VDC:.0f} V、m = 0.9 → 相電圧の基本波振幅 {OUT['v1_09']:.0f} V、線間実効値 {OUT['vll_09']:.0f} V")
     for mf, v in OUT["thd"].items():
