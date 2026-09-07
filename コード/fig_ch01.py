@@ -285,10 +285,28 @@ def fig_deriv_carnot():
                           result=result, reveal=i, width=11.6, height=5.8)
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch01_deriv_betz_{i}.png", reveal=i, width=11.6, height=5.8,
+        steps=[("① 風を減速させて取り出す",
+                r"$v = \dfrac{v_1 + v_2}{2}, \quad a = \dfrac{v_1 - v}{v_1}$",
+                "ロータ面の風速は上下流の平均。\n減速の割合 a を誘導係数と呼ぶ"),
+               ("② 取り出す仕事率を a で書く",
+                r"$P = \frac{1}{2}\rho A v_1^{3} \cdot 4a(1-a)^{2}$",
+                "P = 力 × 速度 に v₂ = v₁(1−2a) を代入。\n4a(1−a)² が取り出せる割合 C_p"),
+               ("③ C_p を最大にする a を探す",
+                r"$\dfrac{dC_p}{da} = 0 \;\Rightarrow\; a = \dfrac{1}{3}$",
+                "風を止めきると後ろへ流れ込めず、\nかえって取れる量は減る")],
+        result=(r"$C_{p,\max} = \dfrac{16}{27} = 0.593$",
+                "ベッツの限界。風の 6 割弱までしか取り出せない"))
+
+
 if __name__ == "__main__":
     e = fig_chain(); fig_carnot_curve(); fig_carnot_ts(); fig_methods(); fig_hydro()
     vr, A = fig_wind(); fig_betz(); u = fig_pv_spectrum(); fig_quality(); fig_units()
-    fig_analogy(); fig_myth(); fig_deriv_carnot()
+    fig_analogy(); fig_myth(); fig_deriv_carnot(); fig_derivations()
     TL = 303.15
     print(f"連鎖の総合効率 {e[-1]/100:.4f}")
     for th in (285, 540, 600, 1400, 1600):

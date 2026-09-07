@@ -6,7 +6,7 @@ import numpy as np
 from pws_common import setup_japanese_font, savefig, OKINAWA_BUSES, OKINAWA_LINES, OKINAWA_LOADS
 plt = setup_japanese_font()
 from matplotlib.patches import FancyBboxPatch, Circle, Rectangle
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 # ---- 共通スタイル（スライドの terracotta パレットに合わせる）----
 C_MAIN, C_ACC, C_SEC, C_GREY, C_LIGHT = "#7C332A", "#B85042", "#5C7268", "#6E6A60", "#DCD8CC"
@@ -432,6 +432,36 @@ def fig_myth():
         note="「高電圧・ループ・連系」はどれも万能薬ではなく、効く条件と限界がある。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch02_deriv_loss_{i}.png", reveal=i, width=11.6, height=5.8,
+        steps=[("① 三相電力から電流を出す",
+                r"$I = \dfrac{P}{\sqrt{3}\,V\cos\varphi}$",
+                "送る電力 P と線間電圧 V を決めると\n電流が決まる。同じ P なら I は V に反比例"),
+               ("② ジュール損に代入する",
+                r"$P_{loss} = 3I^{2}R = \dfrac{R\,P^{2}}{V^{2}\cos^{2}\varphi}$",
+                "三相分の 3 が約分で消え、\n分母に V² と cos²φ が残る"),
+               ("③ 何が効くかを読む",
+                r"$P_{loss} \;\propto\; \dfrac{1}{V^{2}}$",
+                "R は 1 乗、V と cosφ は 2 乗。\n275 → 500 kV で 0.30 倍になる")],
+        result="電線を太くするより、電圧を上げるほうがはるかに効く")
+
+    for i in (1, 2, 3):
+        derivation_figure(f"ch02_deriv_parallel_{i}.png", reveal=i, width=11.6, height=5.8,
+        steps=[("① 両端の電圧が共通",
+                r"$Z_1 I_1 = Z_2 I_2$",
+                "並列の 2 回線は同じ母線をつなぐので、\n電圧降下が等しい"),
+               ("② 全電流を逆比で割り付ける",
+                r"$I_1 = I\,\dfrac{Z_2}{Z_1 + Z_2}$",
+                "Z₁ = 10 Ω、Z₂ = 15 Ω、I = 1,000 A なら\nI₁ = 600 A、I₂ = 400 A"),
+               ("③ 1 回線を失うと",
+                r"$I_2 = I = 1000\ \mathrm{A}$",
+                "定格 700 A なら 143% の過負荷。\n保護が動いて、さらに次へ波及する")],
+        result="分流を決めるのは運転者ではなく、キルヒホッフの法則")
+
+
 if __name__ == "__main__":
     V = fig_hierarchy(); lv = fig_loss_voltage(); lp = fig_loss_pf(); fig_sld()
     I1, I2, ov = fig_parallel(); a, It1, It2, Z1, pu1, pu2 = fig_transformer(); ok = fig_okinawa()
@@ -448,5 +478,6 @@ if __name__ == "__main__":
           f"Z₁ = {Z1.real:.2f} + j{Z1.imag:.1f} Ω, p.u. 一次 {pu1:.4f} / 二次 {pu2:.4f}")
     print(f"沖縄 5 母線（直流法）：注入 P = {np.round(ok['P'], 0)} MW, θ = {np.round(np.rad2deg(ok['theta']), 2)} °, "
           f"線路潮流 = {np.round(ok['flows'], 1)} MW（{[f'L{f+1}-{t+1}' for f, t, L, par in OKINAWA_LINES]}）")
+    fig_derivations()
     print(f"予備率：{res:.2f}%、最大機脱落後 {res_n1:.2f}%、N-1 を満たす供給力 {need:.0f} MW（予備率 {res_need:.2f}%）")
     print(f"信頼度：放射状 (1−0.01)³ = {pr:.4f}、ループ 1 − 0.01² = {pl:.4f}")

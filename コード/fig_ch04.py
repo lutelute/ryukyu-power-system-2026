@@ -6,7 +6,7 @@ import numpy as np
 from pws_common import setup_japanese_font, savefig, build_ybus, power_injection
 plt = setup_japanese_font()
 from matplotlib.patches import FancyBboxPatch, Rectangle, FancyArrowPatch, Circle
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 # ---- 共通スタイル（スライドの terracotta パレットに合わせる）----
 C_MAIN, C_ACC, C_SEC, C_GREY, C_LIGHT = "#7C332A", "#B85042", "#5C7268", "#6E6A60", "#DCD8CC"
@@ -385,6 +385,49 @@ def fig_myth():
         note="どれも、単純な直流回路のイメージをそのまま潮流計算に持ち込んだことから来ている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch04_deriv_ybus_{i}.png", reveal=i, width=11.8, height=5.8,
+        steps=[("① 線路を流れる電流",
+                r"$I_{ij} = y_{ij}\,(V_i - V_j)$",
+                "線路は直列アドミタンス y = 1/z。\n両端の電圧差に比例した電流が流れる"),
+               ("② 母線で電流則を立てる",
+                r"$I_i = \left(\sum_j y_{ij}\right)V_i - \sum_j y_{ij}V_j$",
+                "V_i の係数が対角、\nV_j の係数が非対角になる"),
+               ("③ 全母線を縦に並べる",
+                r"$Y_{ii} = \sum_j y_{ij} + y_{i0}, \quad Y_{ij} = -y_{ij}$",
+                "線路のない i–j は 0。\nここから「疎で対称」が出てくる")],
+        result=(r"$I = Y_{bus}\,V$", "回路のつながり方が、そのまま行列になる"))
+
+    for i in (1, 2, 3):
+        derivation_figure(f"ch04_deriv_pq_{i}.png", reveal=i, width=11.8, height=5.8,
+        steps=[("① 複素電力の定義から出発",
+                r"$S_i = P_i + jQ_i = V_i I_i^{*}$",
+                "母線 i に注入する電力。\nI_i は Y_bus V で電圧に置き換わる"),
+               ("② 代入する",
+                r"$S_i = V_i \sum_j Y_{ij}^{*}\,V_j^{*}$",
+                "極形式を入れると、\n電圧の積 V_i V_j がここで生まれる"),
+               ("③ オイラーで実部と虚部へ",
+                r"$P_i = V_i\sum_j V_j\,(G_{ij}\cos\theta_{ij} + B_{ij}\sin\theta_{ij})$",
+                "Q_i も同じ形。母線ごとに\nP の式と Q の式が 1 本ずつ立つ")],
+        result="未知数の積と三角関数。ここで方程式が非線形になる")
+
+    for i in (1, 2, 3):
+        derivation_figure(f"ch04_deriv_dcpf_{i}.png", reveal=i, width=11.8, height=5.8,
+        steps=[("近似 1：R を 0 とみなし、対地分も無視",
+                r"$Y_{bus} = jB$",
+                "架空送電線は X/R ≈ 5〜15。\ncos の項（Q 側）が消える"),
+               ("近似 2：V を 1.0 p.u. とみなす",
+                r"$P_i = \sum_j B_{ij}\sin\theta_{ij}$",
+                "電圧の積が 1 になり、\n未知数は θ だけになる"),
+               ("近似 3：sin θ を θ とみなす",
+                r"$P_i = \sum_j \dfrac{\theta_i - \theta_j}{x_{ij}}$",
+                "位相差が小さいことを使う。\n30° でも誤差は 4.7%")],
+        result=(r"$P = B'\theta$", "線形なので反復が要らない。直流回路と同じ形"))
+
+
 if __name__ == "__main__":
     Y_A = fig_ybus3(); fig_add_line()
     stats = fig_spy()
@@ -400,6 +443,7 @@ if __name__ == "__main__":
     ac, dc, loss_ac, names, k, (vmin, vmax, thmin) = fig_ac_vs_dc()
     P, Q = fig_injection()
     fig_analogy(); fig_myth()
+    fig_derivations()
 
     print("\n==== 計算値 ====")
     print("Y_bus(3 母線, x12=0.2, x13=0.25, x23=0.1) の虚部:\n", np.round(Y_A.imag, 3))

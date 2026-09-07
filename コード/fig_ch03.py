@@ -7,7 +7,7 @@ import numpy as np
 from pws_common import setup_japanese_font, savefig
 plt = setup_japanese_font()
 from matplotlib.patches import Arc, Circle, FancyBboxPatch
-from pws_eqfig import analogy_figure
+from pws_eqfig import analogy_figure, derivation_figure
 
 # ---- 共通スタイル（スライドの terracotta パレットに合わせる）----
 C_MAIN, C_ACC, C_SEC, C_GREY, C_LIGHT = "#7C332A", "#B85042", "#5C7268", "#6E6A60", "#DCD8CC"
@@ -366,6 +366,50 @@ def fig_myth():
         note="どれも、直流回路や実数の感覚をそのまま交流・単位法に持ち込んだことから来ている。")
 
 
+# ==================================================== 導出の段階開示（1 手ずつ出す 3 枚組）
+def fig_derivations():
+    """文字だけだった導出スライドを、1 手ずつ出す図版に置き換えるための図"""
+    for i in (1, 2, 3):
+        derivation_figure(f"ch03_deriv_spower_{i}.png", reveal=i, width=11.8, height=5.8,
+        steps=[("① 瞬時電力を展開する",
+                r"$p(t) = VI\cos\varphi - VI\cos(2\omega t - \varphi)$",
+                "積和の公式で展開する。\n平均は VI cos φ で、これが有効電力 P"),
+               ("② 2 つの項に分ける",
+                r"$p(t) = P(1 - \cos 2\omega t) - Q\sin 2\omega t$",
+                "第 1 項は常に 0 以上で平均 P。\n第 2 項は平均 0 で振幅 Q"),
+               ("③ フェーザで 1 つにまとめる",
+                r"$S = \dot{V}\,\dot{I}^{*} = VI\angle\varphi$",
+                "共役を取るから、角度が φ になる")],
+        result=(r"$S = VI\cos\varphi + jVI\sin\varphi = P + jQ$",
+                "遅れ負荷は Q > 0、進みは Q < 0"))
+
+    for i in (1, 2, 3):
+        derivation_figure(f"ch03_deriv_zbase_{i}.png", reveal=i, width=11.8, height=5.8,
+        steps=[("① 基準は 2 つだけ選ぶ",
+                r"$I_{base} = \dfrac{S_{base}}{\sqrt{3}\,V_{base}}$",
+                "S_base（三相合計）と V_base（線間）を選べば、\n残りは自動で決まる"),
+               ("② Z_base を作る",
+                r"$Z_{base} = \dfrac{V_{base}/\sqrt{3}}{I_{base}} = \dfrac{V_{base}^{2}}{S_{base}}$",
+                "相電圧 ÷ 電流。√3 が約分で消える。\n66 kV・100 MVA なら 43.6 Ω"),
+               ("③ 銘板値を系統基準に直す",
+                r"$Z_{new} = Z_{old}\,\dfrac{S_{new}}{S_{old}}\left(\dfrac{V_{old}}{V_{new}}\right)^{2}$",
+                "60 MVA・%Z 12% の変圧器は、\n100 MVA 基準で 0.200 p.u.")],
+        result="基準を揃えれば、変圧器の両側で同じ数値になる")
+
+    for i in (1, 2, 3):
+        derivation_figure(f"ch03_deriv_ptrans_{i}.png", reveal=i, width=11.8, height=5.8,
+        steps=[("① 電流を書く",
+                r"$\dot{I} = \dfrac{V_s\angle\delta - V_r}{jX}$",
+                "電圧の差をリアクタンスで割る。\nδ は 2 母線の位相のずれ（相差角）"),
+               ("② 受電端の複素電力にする",
+                r"$S_r = \dot{V}_r\,\dot{I}^{*}$",
+                "共役で ∠δ が ∠−δ になり、\n1/(−j) = j でまとめる"),
+               ("③ 実部と虚部に分ける",
+                r"$P = \dfrac{V_sV_r\sin\delta}{X}, \quad Q_r = \dfrac{V_sV_r\cos\delta - V_r^{2}}{X}$",
+                "δ が小さければ P ≒ V_sV_r δ/X、\nQ_r ≒ V_r(V_s − V_r)/X")],
+        result="P は位相差 δ で決まり、Q は電圧の差で決まる")
+
+
 if __name__ == "__main__":
     P, Q, neg, pmin, pmax = fig_inst_power(0.8)
     print(f"[1] 瞬時電力 力率 0.8: P = {P:.3f}, Q = {Q:.3f}, p<0 の割合 = {neg*100:.1f}%, p の範囲 {pmin:.2f}〜{pmax:.2f}")
@@ -389,3 +433,4 @@ if __name__ == "__main__":
     I, Sr = fig_twobus()
     print(f"[9] 2 母線 X=0.3 δ=15°: I = {abs(I):.4f}∠{np.degrees(np.angle(I)):.2f}°, S_r = {Sr.real:.4f} + j{Sr.imag:.4f}")
     fig_analogy(); fig_myth()
+    fig_derivations()

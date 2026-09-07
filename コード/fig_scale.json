@@ -19,6 +19,18 @@
   7.1,
   4.2
  ],
+ "ch01_deriv_betz_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch01_deriv_betz_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch01_deriv_betz_3.png": [
+  12.8,
+  5.9
+ ],
  "ch01_deriv_carnot_1.png": [
   12.8,
   5.9
@@ -67,6 +79,30 @@
   12.8,
   5.9
  ],
+ "ch02_deriv_loss_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_deriv_loss_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_deriv_loss_3.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_deriv_parallel_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_deriv_parallel_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch02_deriv_parallel_3.png": [
+  12.8,
+  5.9
+ ],
  "ch02_hierarchy.png": [
   12.8,
   5.9
@@ -112,6 +148,42 @@
   3.9
  ],
  "ch03_analogy.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_deriv_ptrans_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_deriv_ptrans_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_deriv_ptrans_3.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_deriv_spower_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_deriv_spower_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_deriv_spower_3.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_deriv_zbase_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_deriv_zbase_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch03_deriv_zbase_3.png": [
   12.8,
   5.9
  ],
@@ -176,6 +248,42 @@
   5.9
  ],
  "ch04_dcpf3.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_deriv_dcpf_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_deriv_dcpf_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_deriv_dcpf_3.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_deriv_pq_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_deriv_pq_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_deriv_pq_3.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_deriv_ybus_1.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_deriv_ybus_2.png": [
+  12.8,
+  5.9
+ ],
+ "ch04_deriv_ybus_3.png": [
   12.8,
   5.9
  ],
